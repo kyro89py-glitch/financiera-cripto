@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block titulo %}Contraseña temporal{% endblock %}
+{% block contenido %}
+<h2>{{ "Cliente creado" if nuevo else "Contraseña temporal generada" }}</h2>
+<section class="card col">
+  <p><b>{{ cli.nombre }}</b> ingresa con <b>{{ cli.email }}</b> y esta contraseña temporal:</p>
+  <div class="row"><div class="clave" style="flex:1">{{ clave }}</div><button class="btn" type="button" data-copiar="{{ clave }}">Copiar</button></div>
+  <p class="small muted">Se muestra solo esta vez. Entrégala por un canal seguro y separado del correo. Al ingresar se le pedirá elegir una contraseña propia.</p>
+  <a class="btn primary" href="{{ url_for('equipo.cliente', cid=cli.id) }}">Ir a la ficha del cliente</a>
+</section>
+{% endblock %}

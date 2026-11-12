@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block titulo %}Ingresar{% endblock %}
+{% block contenido %}
+<div class="auth">
+  <div>
+    <h2>Ingresar</h2>
+    <p class="muted">Portal de clientes y panel del equipo.</p>
+  </div>
+  {% if vencida %}<div class="flash">Tu sesión se cerró por inactividad. Vuelve a ingresar.</div>{% endif %}
+  {% if error %}<div class="flash error" role="alert">{{ error }}</div>{% endif %}
+  <form class="card col" method="post" action="{{ url_for('auth.ingresar') }}" autocomplete="on">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <input type="hidden" name="siguiente" value="{{ siguiente }}">
+    <label class="field" for="email">Correo
+      <input id="email" name="email" type="email" autocomplete="username" required value="{{ email }}" autofocus>
+    </label>
+    <label class="field" for="clave">Contraseña
+      <input id="clave" name="clave" type="password" autocomplete="current-password" required>
+    </label>
+    <button class="btn primary block" type="submit">Ingresar</button>
+  </form>
+  <p class="note">Si olvidaste tu contraseña, pide una temporal a la empresa. Por seguridad, la cuenta se bloquea unos minutos tras {{ config.INTENTOS_LOGIN }} intentos fallidos.</p>
+</div>
+{% endblock %}

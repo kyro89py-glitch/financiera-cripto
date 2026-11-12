@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>{% block titulo %}{% endblock %} · {{ config.NOMBRE }}</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231D3FE0'/%3E%3Ccircle cx='16' cy='16' r='8' fill='none' stroke='white' stroke-width='3'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+<script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+{% block cabeza %}{% endblock %}
+</head>
+<body>
+{% if config.ENTORNO != 'produccion' %}<div class="entorno">Entorno de {{ config.ENTORNO }}: no usar con dinero ni datos reales.</div>{% endif %}
+<header class="top">
+  <div class="topin">
+    <a class="brand" href="{{ url_for('inicio') }}"><span class="logo" aria-hidden="true"></span><h1>{{ config.NOMBRE }}</h1></a>
+    {% if usuario %}
+    <span class="rolchip">{{ ROLES[usuario.rol] }}</span>
+    <details class="cuenta">
+      <summary aria-label="Mi cuenta"><span class="avatar">{{ iniciales(usuario.nombre) }}</span></summary>
+      <div class="menu">
+        <b>{{ usuario.nombre }}</b>
+        <span class="small muted">{{ usuario.email }} · {{ ROLES[usuario.rol] }}</span>
+        <a href="{{ url_for('auth.seguridad') }}">Verificación en dos pasos</a>
+        <a href="{{ url_for('auth.clave') }}">Cambiar contraseña</a>
+        <form method="post" action="{{ url_for('auth.salir') }}">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <button class="btn sm block" type="submit">Cerrar sesión</button>
+        </form>
+      </div>
+    </details>
+    {% endif %}
+  </div>
+</header>
+{% set nav = navegacion() %}
+<div class="app{% if not nav %} sola{% endif %}">
+  {% if nav %}
+  <nav class="tabs" aria-label="Secciones">
+    {% for item in nav %}<a href="{{ item.url }}"{% if item.activo %} aria-current="page"{% endif %}>{{ icono(item.icono) }}<span>{{ item.texto }}</span></a>{% endfor %}
+  </nav>
+  {% endif %}
+  <main>
+    {% with mensajes = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in mensajes %}<div class="flash {{ cat }}" role="status">{{ msg }}</div>{% endfor %}
+    {% endwith %}
+    {% block contenido %}{% endblock %}
+  </main>
+</div>
+{% block pie %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,36 @@
+{% macro pill(clase, texto) -%}<span class="pill {{ clase }}">{{ texto }}</span>{%- endmacro %}
+
+{% macro estado(op) -%}{{ pill(ESTADOS[op.estado][0], ESTADOS[op.estado][1]) }}{%- endmacro %}
+
+{% macro kyc(cli) -%}{{ pill(KYC[cli.kyc_estado][0], KYC[cli.kyc_estado][1]) }}{%- endmacro %}
+
+{% macro riesgo(r) -%}
+<span class="risk" role="img" aria-label="Riesgo {{ r }} de 5">{% for i in range(1, 6) %}<i class="{{ 'on' if i <= r }}"></i>{% endfor %}</span>
+{%- endmacro %}
+
+{% macro barra(partes) -%}
+<div class="alloc" aria-hidden="true">{% for p in partes %}<span style="width:{{ '%.3f'|format(p.peso * 100) }}%;background:{{ p.color }}"></span>{% endfor %}</div>
+{%- endmacro %}
+
+{% macro grafico(g) -%}
+{% set color = 'var(--up)' if g.sube else 'var(--down)' %}
+<svg class="chart" viewBox="0 0 {{ g.ancho }} {{ g.alto }}" preserveAspectRatio="none" role="img" aria-label="Evolución del valor en los últimos 7 días">
+  <polygon points="{{ g.area }}" fill="{{ color }}" opacity=".13"/>
+  <polyline points="{{ g.puntos }}" fill="none" stroke="{{ color }}" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+</svg>
+<div class="row spread small muted mono"><span>hace 7 d · mín. {{ g.min|usd(0) }}</span><span>máx. {{ g.max|usd(0) }} · hoy</span></div>
+{%- endmacro %}
+
+{% macro escena3d(datos) -%}
+<div class="stage" data-escena3d="datos-3d">
+  <canvas class="c-pts"></canvas><canvas class="c-glow" aria-hidden="true"></canvas>
+  <canvas class="c-ovl" aria-label="Vista 3D giratoria: cada punto representa una porción igual de dinero. Toca un grupo para ver su monto."></canvas>
+  <div class="hud"><b></b><span class="mono"></span></div>
+  <div class="s3ctl"></div>
+</div>
+<script type="application/json" id="datos-3d">{{ datos|tojson }}</script>
+{%- endmacro %}
+
+{% macro check(estado, texto) -%}
+<li class="{{ 'si' if estado == true else ('no' if estado == false else 'info') }}">{{ texto }}</li>
+{%- endmacro %}

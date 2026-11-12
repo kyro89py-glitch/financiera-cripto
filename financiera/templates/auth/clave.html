@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block titulo %}Cambiar contraseña{% endblock %}
+{% block contenido %}
+<div class="auth">
+  <div>
+    <h2>{{ "Elige tu contraseña" if forzado else "Cambiar contraseña" }}</h2>
+    <p class="muted">{% if forzado %}Estás usando una contraseña temporal. Elige una propia para continuar.{% else %}Al cambiarla se cierran tus sesiones en otros dispositivos.{% endif %}</p>
+  </div>
+  {% if error %}<div class="flash error" role="alert">{{ error }}</div>{% endif %}
+  <form class="card col" method="post" action="{{ url_for('auth.clave') }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <input type="text" name="usuario" autocomplete="username" value="{{ usuario.email }}" class="oculto" tabindex="-1" aria-hidden="true">
+    <label class="field" for="actual">{{ "Contraseña temporal" if forzado else "Contraseña actual" }}
+      <input id="actual" name="actual" type="password" autocomplete="current-password" required>
+    </label>
+    <label class="field" for="nueva">Contraseña nueva
+      <input id="nueva" name="nueva" type="password" autocomplete="new-password" minlength="10" required>
+    </label>
+    <label class="field" for="repetir">Repite la contraseña nueva
+      <input id="repetir" name="repetir" type="password" autocomplete="new-password" minlength="10" required>
+    </label>
+    <p class="small muted">Al menos 10 caracteres, con letras y números.</p>
+    <button class="btn primary block" type="submit">Guardar contraseña</button>
+  </form>
+</div>
+{% endblock %}

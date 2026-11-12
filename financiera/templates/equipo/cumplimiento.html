@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% from "macros.html" import kyc, pill %}
+{% block titulo %}Cumplimiento{% endblock %}
+{% block contenido %}
+<div class="row spread"><h2>Cumplimiento</h2><a class="btn sm" href="{{ url_for('equipo.bitacora') }}">Bitácora</a></div>
+
+<section class="card col">
+  <div class="row spread"><h3>Integridad de la bitácora</h3>{{ pill('ok', 'Íntegra') if cadena.ok else pill('bad', 'Alterada') }}</div>
+  {% if cadena.ok %}
+    <p class="small">Se recalcularon las huellas de los {{ cadena.registros }} registros y la cadena está completa: ningún registro fue modificado ni borrado.</p>
+    <p class="huella">Última huella: {{ cadena.ultimo }}</p>
+  {% else %}
+    <p class="small down">La cadena se rompe en el registro {{ cadena.fallo }}. Alguien modificó o borró registros directamente en la base de datos. Conserva una copia de la base y avisa a la dirección.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <div class="row spread"><h3>Alertas abiertas</h3>{{ pill('warn' if alertas else 'ok', alertas|length ~ (' abierta' if alertas|length == 1 else ' abiertas')) }}</div>
+  <div class="list" style="margin-top:4px">
+  {% for nivel, texto, enlace in alertas %}
+    {% set url = url_for('equipo.operacion', opid=enlace[1]) if enlace[0] == 'op' else (url_for('equipo.cliente', cid=enlace[1]) if enlace[0] == 'cliente' else (url_for('admin.precios') if puede('precios.editar') else none)) %}
+    {% if url %}<a class="item" href="{{ url }}">{% else %}<div class="item">{% endif %}
+      <i class="dot" style="background:var(--{{ 'down' if nivel == 'alta' else ('warn' if nivel == 'media' else 'accent') }})"></i><div class="grow t">{{ texto }}</div>
+    {% if url %}</a>{% else %}</div>{% endif %}
+  {% else %}<div class="empty">Sin alertas abiertas.</div>{% endfor %}
+  </div>
+</section>
+
+<section class="card">
+  <h3>Verificaciones por resolver</h3>
+  <div class="list" style="margin-top:4px">
+  {% for c in pendientes %}
+    <a class="item" href="{{ url_for('equipo.cliente', cid=c.id) }}"><div class="grow"><div class="t">{{ c.nombre }} {{ kyc(c) }}</div><div class="d">{{ c.documento }}{% if c.kyc_nota %} · {{ c.kyc_nota }}{% endif %}</div></div></a>
+  {% else %}<div class="empty">Todos los clientes están verificados.</div>{% endfor %}
+  </div>
+</section>
+
+{% if puede('reportes.exportar') %}
+<section class="card col">
+  <h3>Reporte de operaciones</h3>
+  <p class="small muted">Exporta las operaciones del período en CSV (separado por punto y coma) para controles internos y para preparar las declaraciones informativas.</p>
+  <form class="row" method="get" action="{{ url_for('equipo.reporte_operaciones') }}">
+    <label class="field" for="desde">Desde<input id="desde" name="desde" type="date" required></label>
+    <label class="field" for="hasta">Hasta<input id="hasta" name="hasta" type="date" required></label>
+    <button class="btn" type="submit" style="align-self:flex-end">Descargar CSV</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

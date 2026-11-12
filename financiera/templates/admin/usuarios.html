@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block titulo %}Usuarios del equipo{% endblock %}
+{% block contenido %}
+<div class="chips">
+  <a href="{{ url_for('admin.precios') }}" aria-current="false">Precios</a>
+  <a href="{{ url_for('admin.usuarios') }}" aria-current="true">Usuarios del equipo</a>
+</div>
+<h2>Usuarios del equipo</h2>
+<section class="card">
+  <div class="list">
+  {% for u in lista %}
+    <div class="item wrap">
+      <span class="avatar">{{ iniciales(u.nombre) }}</span>
+      <div class="grow">
+        <div class="t">{{ u.nombre }} <span class="pill info">{{ ROLES[u.rol] }}</span>{% if not u.activo %} <span class="pill bad">Desactivado</span>{% endif %}{% if u.totp_secreto %} <span class="pill ok">2 pasos</span>{% endif %}</div>
+        <div class="d">{{ u.email }} · último ingreso {{ u.ultimo_ingreso|fecha if u.ultimo_ingreso else "nunca" }}</div>
+      </div>
+      {% if u.id != usuario.id %}
+      <div class="acts">
+        <form method="post" action="{{ url_for('admin.usuario_clave', uid=u.id) }}" data-confirmar="¿Restablecer el acceso de {{ u.nombre }}? Se le pedirá una contraseña nueva y volver a activar la verificación en dos pasos.">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn sm" type="submit">Restablecer acceso</button>
+        </form>
+        <form method="post" action="{{ url_for('admin.usuario_estado', uid=u.id) }}" data-confirmar="¿{{ 'Desactivar' if u.activo else 'Reactivar' }} a {{ u.nombre }}?">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn sm {{ 'danger' if u.activo }}" type="submit">{{ "Desactivar" if u.activo else "Reactivar" }}</button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+  {% endfor %}
+  </div>
+</section>
+
+<section class="card col">
+  <h3>Agregar a alguien del equipo</h3>
+  {% if error %}<div class="flash error" role="alert">{{ error }}</div>{% endif %}
+  <form class="col" method="post" action="{{ url_for('admin.usuarios') }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <div class="form">
+      <label class="field" for="nombre">Nombre<input id="nombre" name="nombre" required maxlength="120" value="{{ form.nombre }}"></label>
+      <label class="field" for="email">Correo<input id="email" name="email" type="email" required maxlength="200" value="{{ form.email }}"></label>
+      <label class="field full" for="rol">Rol
+        <select id="rol" name="rol">
+          <option value="operador" {{ 'selected' if form.rol == 'operador' }}>Operaciones: aprueba aportes y retiros, da de alta clientes</option>
+          <option value="cumplimiento" {{ 'selected' if form.rol == 'cumplimiento' }}>Cumplimiento: verifica identidades, segunda firma, bitácora y reportes</option>
+          <option value="admin" {{ 'selected' if form.rol == 'admin' }}>Administración: todo lo anterior, precios y usuarios</option>
+        </select>
+      </label>
+    </div>
+    <button class="btn primary" type="submit">Crear usuario</button>
+  </form>
+</section>
+{% endblock %}

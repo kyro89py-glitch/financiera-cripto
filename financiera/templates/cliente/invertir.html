@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% from "macros.html" import riesgo %}
+{% block titulo %}Invertir{% endblock %}
+{% block contenido %}
+<h2>Invertir</h2>
+{% if g.cliente.kyc_estado != 'verificado' %}
+<div class="flash error">Tu identidad todavía no está verificada. Puedes enviar la solicitud, pero el equipo no podrá aprobarla hasta completar la verificación.</div>
+{% endif %}
+{% if error %}<div class="flash error" role="alert">{{ error }}</div>{% endif %}
+
+<form class="col" method="post" action="{{ url_for('cliente.invertir') }}">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <section class="card col">
+    <h3>1. Elige una cartera</h3>
+    <div class="models" role="radiogroup" aria-label="Cartera">
+    {% for m in modelos %}
+      <label class="model">
+        <input type="radio" name="modelo" value="{{ m.codigo }}" {{ 'checked' if m.codigo == form.modelo }}>
+        <div class="row spread"><b>{{ m.nombre }}</b>{{ riesgo(m.riesgo) }}</div>
+        <div class="alloc" aria-hidden="true">{% for a, pb in m.pesos %}<span style="width:{{ pb / 100 }}%;background:{{ info[a].color }}"></span>{% endfor %}</div>
+        <span class="small muted">{% for a, pb in m.pesos %}{{ a }} {{ (pb / 100)|int }}%{{ " · " if not loop.last }}{% endfor %}</span>
+        <span class="small">{{ m.descripcion }}</span>
+      </label>
+    {% endfor %}
+    </div>
+  </section>
+
+  <section class="card col">
+    <h3>2. Indica el monto del aporte</h3>
+    <label class="field" for="monto">Monto en dólares
+      <input id="monto" name="monto" inputmode="decimal" autocomplete="off" required value="{{ form.monto }}" placeholder="Mínimo {{ (config.APORTE_MINIMO_USD * 100)|usd(0) }}">
+    </label>
+    <div class="chips">{% for n in [100, 500, 1000, 5000] %}<button type="button" data-monto="{{ n }}" aria-pressed="false">{{ (n * 100)|usd(0) }}</button>{% endfor %}</div>
+    <div id="previa" aria-live="polite"></div>
+    <label class="field" for="referencia">Comprobante de la transferencia
+      <input id="referencia" name="referencia" maxlength="80" autocomplete="off" value="{{ form.referencia }}" placeholder="Número de operación del banco">
+    </label>
+    <p class="small muted">{{ config.INSTRUCCIONES_DEPOSITO }}</p>
+    <button class="btn primary" type="submit">Enviar solicitud de aporte</button>
+    <p class="note">La compra se hace al precio del momento en que el equipo aprueba el aporte, que puede ser distinto del que ves ahora.</p>
+  </section>
+</form>
+
+<section class="card col" id="retirar">
+  <h3>Retirar</h3>
+  <p class="small muted">Disponible: <span class="num">{{ disponible|usd }}</span>. El retiro usa primero tu saldo en dólares y luego vende una parte proporcional de cada moneda.</p>
+  <form class="col" method="post" action="{{ url_for('cliente.retiro') }}" data-confirmar="¿Enviar la solicitud de retiro?">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <label class="field" for="retiro">Monto a retirar en dólares<input id="retiro" name="monto" inputmode="decimal" autocomplete="off" required></label>
+    <button class="btn" type="submit">Solicitar retiro</button>
+  </form>
+</section>
+<p class="note">Invertir en criptomonedas implica riesgo: su precio puede bajar con fuerza y puedes perder parte o todo lo invertido. El nivel de riesgo de cada cartera es una referencia, no una garantía.</p>
+<script type="application/json" id="datos-invertir">{{ datos|tojson }}</script>
+{% endblock %}

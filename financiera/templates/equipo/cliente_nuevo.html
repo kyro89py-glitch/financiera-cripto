@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block titulo %}Nuevo cliente{% endblock %}
+{% block contenido %}
+<a class="small" href="{{ url_for('equipo.clientes') }}">← Clientes</a>
+<h2>Nuevo cliente</h2>
+{% if error %}<div class="flash error" role="alert">{{ error }}</div>{% endif %}
+<form class="card col" method="post" action="{{ url_for('equipo.cliente_nuevo') }}">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <div class="form">
+    <label class="field full" for="nombre">Nombre completo o razón social<input id="nombre" name="nombre" required maxlength="120" value="{{ form.nombre }}"></label>
+    <label class="field" for="tipo">Tipo
+      <select id="tipo" name="tipo">{% for v, t in [('persona', 'Persona'), ('empresa', 'Empresa')] %}<option value="{{ v }}" {{ 'selected' if form.tipo == v }}>{{ t }}</option>{% endfor %}</select>
+    </label>
+    <label class="field" for="documento">Documento (CI o RUC)<input id="documento" name="documento" required maxlength="40" value="{{ form.documento }}"></label>
+    <label class="field" for="email">Correo para ingresar al portal<input id="email" name="email" type="email" required maxlength="200" value="{{ form.email }}"></label>
+    <label class="field" for="telefono">Teléfono<input id="telefono" name="telefono" maxlength="40" value="{{ form.telefono }}"></label>
+    <label class="field" for="perfil_riesgo">Perfil de riesgo
+      <select id="perfil_riesgo" name="perfil_riesgo">{% for v, t in PERFILES.items() %}<option value="{{ v }}" {{ 'selected' if form.perfil_riesgo == v }}>{{ t }}</option>{% endfor %}</select>
+    </label>
+    <label class="field" for="modelo">Cartera inicial
+      <select id="modelo" name="modelo">{% for m in modelos %}<option value="{{ m.codigo }}" {{ 'selected' if form.modelo == m.codigo }}>{{ m.nombre }} (riesgo {{ m.riesgo }} de 5)</option>{% endfor %}</select>
+    </label>
+  </div>
+  <p class="small muted">Se crea el acceso al portal con una contraseña temporal que el cliente cambia al ingresar. La identidad queda pendiente hasta que Cumplimiento la verifique.</p>
+  <button class="btn primary" type="submit">Crear cliente</button>
+</form>
+{% endblock %}

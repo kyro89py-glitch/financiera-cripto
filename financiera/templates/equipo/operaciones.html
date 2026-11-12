@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% from "macros.html" import estado, pill %}
+{% block titulo %}Operaciones{% endblock %}
+{% block contenido %}
+<h2>Operaciones</h2>
+<div class="chips">
+  {% for v, t in [('abiertas', 'Por aprobar'), ('liquidadas', 'Liquidadas'), ('rechazadas', 'Rechazadas y canceladas'), ('todas', 'Todas')] %}
+  <a href="{{ url_for('equipo.operaciones', ver=v) }}" aria-current="{{ 'true' if filtro == v else 'false' }}">{{ t }}</a>
+  {% endfor %}
+</div>
+<section class="card">
+  <div class="list">
+  {% for o in ops %}
+    <a class="item" href="{{ url_for('equipo.operacion', opid=o.id) }}">
+      <div class="grow">
+        <div class="t">{{ o.nombre }} · {{ "Aporte" if o.tipo == "aporte" else "Retiro" }} #{{ o.id }}</div>
+        <div class="d">{{ o.creado|fecha }} · {{ o.creado|hace }}</div>
+        <div class="row" style="gap:6px;margin-top:4px">
+          {{ estado(o) }}
+          {% if o.estado in ('pendiente', 'primera_firma') %}
+            {% if o.kyc_estado != 'verificado' %}{{ pill('bad', 'Identidad sin verificar') }}{% endif %}
+            {% if requiere_origen(o) and not o.origen_fondos %}{{ pill('warn', 'Falta origen de fondos') }}{% endif %}
+            {% if requiere_doble(o) and o.estado == 'pendiente' %}{{ pill('info', 'Requiere dos firmas') }}{% endif %}
+          {% endif %}
+        </div>
+      </div>
+      <div class="amt num {{ 'up' if o.tipo == 'aporte' else 'down' }}">{{ ("+" if o.tipo == "aporte" else "−") }}{{ o.monto_cent|usd }}</div>
+    </a>
+  {% else %}
+    <div class="empty">{{ "No hay solicitudes por aprobar." if filtro == 'abiertas' else "No hay operaciones para mostrar." }}</div>
+  {% endfor %}
+  </div>
+</section>
+<p class="note">Reglas: no se aprueba sin identidad verificada; los aportes desde {{ (config.UMBRAL_ORIGEN_FONDOS_USD * 100)|usd(0) }} necesitan el origen de los fondos registrado; desde {{ (config.UMBRAL_DOBLE_FIRMA_USD * 100)|usd(0) }} se necesitan dos firmas de personas distintas, la segunda de Cumplimiento.</p>
+{% endblock %}

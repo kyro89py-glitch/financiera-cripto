@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block titulo %}Verificación en dos pasos{% endblock %}
+{% block contenido %}
+<div class="auth">
+  <div>
+    <h2>Verificación en dos pasos</h2>
+    <p class="muted">Además de la contraseña, al ingresar se pide un código que cambia cada 30 segundos en tu teléfono.</p>
+  </div>
+  {% if error %}<div class="flash error" role="alert">{{ error }}</div>{% endif %}
+  {% if activa %}
+    <div class="card col">
+      <div class="row spread"><b>Estado</b><span class="pill ok">Activada</span></div>
+      {% if obligatorio %}
+        <p class="small muted">Para el equipo es obligatoria. Si cambias de teléfono, pide a un administrador que restablezca tu acceso.</p>
+      {% else %}
+      <form class="col" method="post" action="{{ url_for('auth.seguridad') }}" data-confirmar="¿Desactivar la verificación en dos pasos?">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <input type="hidden" name="accion" value="desactivar">
+        <label class="field" for="clave">Contraseña<input id="clave" name="clave" type="password" autocomplete="current-password" required></label>
+        <label class="field" for="codigo">Código actual<input id="codigo" name="codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required></label>
+        <button class="btn danger" type="submit">Desactivar</button>
+      </form>
+      {% endif %}
+    </div>
+  {% else %}
+    {% if obligatorio %}<div class="flash">Para entrar al panel del equipo tienes que activarla.</div>{% endif %}
+    <div class="card col">
+      <ol class="col small" style="margin:0;padding-left:18px">
+        <li>Instala una aplicación de autenticación (Google Authenticator, Microsoft Authenticator, 1Password u otra).</li>
+        <li>Desde este teléfono, toca <a href="{{ enlace }}">agregar a la aplicación</a>. Desde otro equipo, agrega una cuenta nueva y escribe esta clave:</li>
+      </ol>
+      <div class="clave">{{ secreto }}</div>
+      <form class="col" method="post" action="{{ url_for('auth.seguridad') }}">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <input type="hidden" name="accion" value="activar">
+        <label class="field" for="codigo">Código que muestra la aplicación
+          <input id="codigo" name="codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required>
+        </label>
+        <button class="btn primary block" type="submit">Activar</button>
+      </form>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% from "macros.html" import kyc, estado, barra, check %}
+{% block titulo %}{{ cli.nombre }}{% endblock %}
+{% block contenido %}
+<a class="small" href="{{ url_for('equipo.clientes') }}">← Clientes</a>
+<div class="row spread"><h2>{{ cli.nombre }}</h2>{{ kyc(cli) }}</div>
+<p class="muted small">{{ cli.documento }} · {{ "Empresa" if cli.tipo == 'empresa' else "Persona" }} · perfil {{ PERFILES[cli.perfil_riesgo]|lower }} · {{ cli.email or "sin acceso al portal" }}{% if cli.telefono %} · {{ cli.telefono }}{% endif %} · cliente desde {{ cli.creado|dia }}</p>
+
+<div class="g2">
+  <div class="col">
+    <div class="kpis" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+      <div class="kpi"><span class="lab">Valor actual</span><b class="num">{{ total|usd }}</b><span class="s">cartera {{ modelo.nombre }}</span></div>
+      <div class="kpi"><span class="lab">Aportado neto</span><b class="num">{{ aportado|usd }}</b><span class="s {{ 'up' if total - aportado >= 0 else 'down' }}">resultado {{ (total - aportado)|usd }}</span></div>
+    </div>
+    {% if filas %}
+    <section class="card col">
+      <h3>Posiciones</h3>
+      {{ barra(filas) }}
+      <div class="list">{% for f in filas %}
+        <div class="item"><i class="dot" style="background:{{ f.color }}"></i><div class="grow"><div class="t">{{ f.nombre }}</div><div class="d num">{% if f.activo != 'USD' %}{{ f.unidades|unidades(f.activo) }}{% endif %}</div></div><div class="amt num">{{ f.valor|usd }}<span class="muted">{{ (f.peso * 100)|pct(1, false) }}</span></div></div>
+      {% endfor %}</div>
+    </section>
+    {% endif %}
+    <section class="card">
+      <h3>Operaciones</h3>
+      <div class="list" style="margin-top:4px">{% for o in ops %}
+        <a class="item" href="{{ url_for('equipo.operacion', opid=o.id) }}"><div class="grow"><div class="t">{{ "Aporte" if o.tipo == "aporte" else "Retiro" }} #{{ o.id }} {{ estado(o) }}</div><div class="d">{{ o.creado|fecha }}</div></div>
+          <div class="amt num {{ 'up' if o.tipo == 'aporte' else 'down' }}">{{ ("+" if o.tipo == "aporte" else "−") }}{{ o.monto_cent|usd }}</div></a>
+      {% else %}<div class="empty">Sin operaciones.</div>{% endfor %}</div>
+    </section>
+  </div>
+
+  <div class="col">
+    <section class="card col">
+      <h3>Legajo</h3>
+      <ul class="checks">
+        {{ check(cli.kyc_estado == 'verificado', "Identidad verificada" if cli.kyc_estado == 'verificado' else ("Verificación observada" if cli.kyc_estado == 'observado' else "Identidad sin verificar")) }}
+        {{ check(cli.origen_fondos is not none, "Origen de los fondos registrado" if cli.origen_fondos else "Origen de los fondos sin registrar") }}
+      </ul>
+      {% if cli.kyc_nota %}<p class="small"><span class="lab">Nota de verificación</span><br>{{ cli.kyc_nota }}{% if cli.kyc_por %} · {{ usuarios[cli.kyc_por].nombre }}, {{ cli.kyc_fecha|fecha }}{% endif %}</p>{% endif %}
+      {% if cli.origen_fondos %}<p class="small"><span class="lab">Origen de los fondos</span><br>{{ cli.origen_fondos }} · {{ usuarios[cli.origen_fondos_por].nombre }}, {{ cli.origen_fondos_fecha|fecha }}</p>{% endif %}
+    </section>
+
+    {% if puede('clientes.kyc') %}
+    <section class="card col">
+      <h3>Verificación de identidad</h3>
+      <form class="col" method="post" action="{{ url_for('equipo.cliente_kyc', cid=cli.id) }}">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <label class="field" for="estado">Estado
+          <select id="estado" name="estado">{% for v in ('verificado', 'observado', 'pendiente') %}<option value="{{ v }}" {{ 'selected' if cli.kyc_estado == v }}>{{ KYC[v][1] }}</option>{% endfor %}</select>
+        </label>
+        <label class="field" for="nota">Nota (obligatoria si se observa)<textarea id="nota" name="nota" maxlength="300">{{ cli.kyc_nota or '' }}</textarea></label>
+        <button class="btn" type="submit">Guardar verificación</button>
+      </form>
+    </section>
+    {% endif %}
+
+    {% if puede('clientes.origen') %}
+    <section class="card col">
+      <h3>Origen de los fondos</h3>
+      <form class="col" method="post" action="{{ url_for('equipo.cliente_origen', cid=cli.id) }}">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <label class="field" for="origen">Origen y respaldo presentado<textarea id="origen" name="origen" maxlength="400" required placeholder="Ej.: venta de inmueble, presentó escritura y extracto bancario.">{{ cli.origen_fondos or '' }}</textarea></label>
+        <button class="btn" type="submit">Registrar origen</button>
+      </form>
+    </section>
+    {% endif %}
+
+    {% if puede('clientes.clave') and cli.usuario_id %}
+    <section class="card col">
+      <h3>Acceso al portal</h3>
+      <p class="small muted">Genera una contraseña temporal y cierra las sesiones abiertas del cliente.</p>
+      <form method="post" action="{{ url_for('equipo.cliente_clave', cid=cli.id) }}" data-confirmar="¿Generar una contraseña temporal para {{ cli.nombre }}?">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <button class="btn" type="submit">Generar contraseña temporal</button>
+      </form>
+    </section>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

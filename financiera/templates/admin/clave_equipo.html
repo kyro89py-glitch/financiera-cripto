@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block titulo %}Contraseña temporal{% endblock %}
+{% block contenido %}
+<h2>{{ "Acceso restablecido" if restablecida else "Usuario creado" }}</h2>
+<section class="card col">
+  <p><b>{{ u.nombre }}</b> ({{ ROLES[u.rol] }}) ingresa con <b>{{ u.email }}</b> y esta contraseña temporal:</p>
+  <div class="row"><div class="clave" style="flex:1">{{ clave }}</div><button class="btn" type="button" data-copiar="{{ clave }}">Copiar</button></div>
+  <p class="small muted">Se muestra solo esta vez. Entrégala en persona o por un canal seguro. Al ingresar elegirá su propia contraseña{% if config.EXIGIR_2FA_EQUIPO %} y activará la verificación en dos pasos{% endif %}.</p>
+  <a class="btn primary" href="{{ url_for('admin.usuarios') }}">Volver a usuarios</a>
+</section>
+{% endblock %}

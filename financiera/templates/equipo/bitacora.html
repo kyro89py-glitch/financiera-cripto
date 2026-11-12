@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block titulo %}Bitácora{% endblock %}
+{% block contenido %}
+<a class="small" href="{{ url_for('equipo.cumplimiento') }}">← Cumplimiento</a>
+<h2>Bitácora</h2>
+<p class="small muted">Cada acción queda registrada con su autor, hora y dirección IP. Los registros no se pueden modificar ni borrar, y cada uno guarda la huella del anterior.</p>
+<form class="row" method="get" action="{{ url_for('equipo.bitacora') }}" role="search">
+  <label class="field" for="q" style="flex:1"><span class="oculto">Buscar</span><input id="q" name="q" value="{{ q }}" placeholder="Buscar por persona, acción o texto"></label>
+  <button class="btn" type="submit">Buscar</button>
+</form>
+<section class="card">
+  <div class="tablewrap"><table>
+    <thead><tr><th>#</th><th>Fecha</th><th>Quién</th><th>Qué pasó</th><th>IP</th></tr></thead>
+    <tbody>
+    {% for f in filas %}
+      <tr><td class="num">{{ f.id }}</td><td class="num" style="white-space:nowrap">{{ f.ts|fecha }}</td><td>{{ f.actor }}</td><td>{{ texto(f) }}<div class="huella">{{ f.accion }} · {{ f.hash[:16] }}</div></td><td class="num small">{{ f.ip or "—" }}</td></tr>
+    {% else %}
+      <tr><td colspan="5" class="empty">Sin registros.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</section>
+<div class="pag">
+  {% if pagina > 1 %}<a class="btn sm" href="{{ url_for('equipo.bitacora', q=q, p=pagina - 1) }}">← Más recientes</a>{% else %}<span></span>{% endif %}
+  {% if hay_mas %}<a class="btn sm" href="{{ url_for('equipo.bitacora', q=q, p=pagina + 1) }}">Más antiguos →</a>{% endif %}
+</div>
+{% endblock %}

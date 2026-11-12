@@ -1,0 +1,35 @@
+# Servidor completo con HTTPS automático (Caddy obtiene y renueva el certificado).
+# Uso: copia .env.example a .env, complétalo y ejecuta: docker compose up -d
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - datos:/datos
+
+  precios:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - datos:/datos
+    entrypoint: ["sh", "-c", "while true; do flask --app financiera actualizar-precios || true; sleep 300; done"]
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMINIO: ${DOMINIO}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_datos:/data
+    depends_on:
+      - app
+
+volumes:
+  datos:
+  caddy_datos:

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% from "macros.html" import barra, escena3d %}
+{% block titulo %}Resumen{% endblock %}
+{% block cabeza %}<script src="{{ url_for('static', filename='js/escena3d.js') }}" defer></script>{% endblock %}
+{% block contenido %}
+<h2>Resumen de la casa</h2>
+<div class="kpis">
+  <div class="kpi"><span class="lab">Activos bajo gestión</span><b class="num">{{ casa.total|usd(0) }}</b><span class="s">{{ con_saldo }} clientes con saldo</span></div>
+  <div class="kpi"><span class="lab">Clientes</span><b class="num">{{ clientes|length }}</b><span class="s">{{ clientes|selectattr('kyc_estado', 'equalto', 'verificado')|list|length }} verificados</span></div>
+  <div class="kpi"><span class="lab">Por aprobar</span><b class="num">{{ abiertas|length }}</b><span class="s"><a href="{{ url_for('equipo.operaciones') }}">Revisar operaciones</a></span></div>
+  <div class="kpi"><span class="lab">Flujo neto pendiente</span><b class="num {{ 'up' if neto >= 0 else 'down' }}">{{ neto|usd(0) }}</b><span class="s">aportes menos retiros</span></div>
+</div>
+
+{% if alertas %}
+<section class="card">
+  <div class="row spread"><h3>Atención</h3>{% if puede('cumplimiento.ver') %}<a class="small" href="{{ url_for('equipo.cumplimiento') }}">Ver todas</a>{% endif %}</div>
+  <div class="list" style="margin-top:4px">
+  {% for nivel, texto, enlace in alertas %}
+    {% set url = url_for('equipo.operacion', opid=enlace[1]) if enlace[0] == 'op' else (url_for('equipo.cliente', cid=enlace[1]) if enlace[0] == 'cliente' else (url_for('admin.precios') if puede('precios.editar') else none)) %}
+    {% if url %}<a class="item" href="{{ url }}">{% else %}<div class="item">{% endif %}
+      <i class="dot" style="background:var(--{{ 'down' if nivel == 'alta' else ('warn' if nivel == 'media' else 'accent') }})"></i><div class="grow t">{{ texto }}</div>
+    {% if url %}</a>{% else %}</div>{% endif %}
+  {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<div class="g2">
+  <section class="card col">
+    <div class="row spread"><h3>Activos en 3D</h3>
+      <div class="chips">
+        {% for v, t in [('activo', 'Por activo'), ('modelo', 'Por cartera'), ('cliente', 'Por cliente')] %}
+        <a href="{{ url_for('equipo.resumen', vista=v) }}" aria-current="{{ 'true' if vista == v else 'false' }}">{{ t }}</a>
+        {% endfor %}
+      </div>
+    </div>
+    {{ escena3d(datos3d) }}
+    <p class="small muted">Cada punto es una porción igual del dinero bajo gestión. Toca un grupo para ver su monto.</p>
+  </section>
+  <div class="col">
+    <section class="card col">
+      <h3>Exposición por activo</h3>
+      {{ barra(casa.activos) }}
+      <div class="list">
+      {% for a in casa.activos %}
+        <div class="item"><i class="dot" style="background:{{ a.color }}"></i><div class="grow"><div class="t">{{ a.activo if a.activo != 'USD' else 'Dólares' }}</div><div class="d">{{ a.nombre }}</div></div>
+          <div class="amt num">{{ a.valor|usd(0) }}<span class="muted">{{ (a.peso * 100)|pct(1, false) }}</span></div></div>
+      {% else %}<div class="empty">Todavía no hay dinero invertido.</div>{% endfor %}
+      </div>
+    </section>
+    <section class="card">
+      <h3>Mayores clientes</h3>
+      <div class="list" style="margin-top:4px">
+      {% for v, c in top if v > 0 %}
+        <a class="item" href="{{ url_for('equipo.cliente', cid=c.id) }}"><div class="grow"><div class="t">{{ c.nombre }}</div></div>
+          <div class="amt num">{{ v|usd(0) }}<span class="muted">{{ (v / casa.total * 100)|pct(1, false) }}</span></div></a>
+      {% else %}<div class="empty">Sin clientes con saldo.</div>{% endfor %}
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

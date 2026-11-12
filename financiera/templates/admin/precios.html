@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block titulo %}Precios{% endblock %}
+{% block contenido %}
+<div class="chips">
+  <a href="{{ url_for('admin.precios') }}" aria-current="true">Precios</a>
+  <a href="{{ url_for('admin.usuarios') }}" aria-current="false">Usuarios del equipo</a>
+</div>
+<div class="row spread"><h2>Precios</h2>
+  <form method="post" action="{{ url_for('admin.precio_coingecko') }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <button class="btn primary" type="submit">Actualizar desde CoinGecko</button>
+  </form>
+</div>
+<p class="small muted">Las operaciones solo se aprueban si el precio de cada activo involucrado tiene menos de {{ config.PRECIO_MAX_MINUTOS }} minutos. En producción conviene programar <span class="mono">flask actualizar-precios</span> cada 5 minutos.</p>
+<section class="card">
+  <div class="list">
+  {% for a in activos %}
+    {% set p = vig.get(a.codigo) %}
+    <div class="item wrap">
+      <i class="dot" style="background:{{ a.color }}"></i>
+      <div class="grow">
+        <div class="t">{{ a.codigo }} · {{ a.nombre }}
+          {% if a.codigo in viejos %}<span class="pill bad">{{ "Sin precio" if viejos[a.codigo] is none else "Desactualizado" }}</span>{% else %}<span class="pill ok">Vigente</span>{% endif %}</div>
+        <div class="d">{% if p %}{{ p.fuente }} · {{ p.ts|fecha }} ({{ p.ts|hace }}){% else %}Nunca se cargó{% endif %}</div>
+      </div>
+      <div class="amt num">{% if p %}{{ p.precio|precio }}{% if p.cambio is not none %}<span class="{{ 'up' if p.cambio >= 0 else 'down' }}">{{ p.cambio|pct }}</span>{% endif %}{% else %}—{% endif %}</div>
+      <form class="acts" method="post" action="{{ url_for('admin.precio_manual') }}">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="activo" value="{{ a.codigo }}">
+        <label class="field" for="p-{{ a.codigo }}" style="flex:1"><span class="oculto">Precio manual de {{ a.codigo }}</span><input id="p-{{ a.codigo }}" name="precio" inputmode="decimal" placeholder="Precio manual en US$" required></label>
+        <button class="btn sm" type="submit" style="flex:none">Cargar</button>
+      </form>
+    </div>
+  {% endfor %}
+  </div>
+</section>
+{% endblock %}

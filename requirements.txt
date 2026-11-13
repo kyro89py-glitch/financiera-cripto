@@ -1,3 +1,5 @@
 Flask>=3.1,<4
 requests>=2.32,<3
-gunicorn>=23,<24
+gunicorn>=23,<24; platform_system != "Windows"
+# Zonas horarias en Windows, que no trae la base de datos de husos horarios
+tzdata>=2024.1

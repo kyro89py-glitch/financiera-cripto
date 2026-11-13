@@ -18,7 +18,9 @@ Con una cuenta de GitHub, abre [este enlace](https://codespaces.new/kyro89py-gli
 
 ## Probarlo en tu computadora
 
-Necesitas Python 3.11 o superior.
+**La forma fácil:** instala Python desde https://www.python.org/downloads/ (en Windows, marca *Add python.exe to PATH*), descarga este proyecto (botón verde **Code → Download ZIP**), descomprímelo y haz doble clic en `INICIAR-WINDOWS.bat` o en `INICIAR-MAC.command`. La primera vez instala lo necesario y carga la demostración; después se abre sola en el navegador. En Mac, si aparece un aviso de seguridad, haz clic derecho sobre el archivo → **Abrir**.
+
+**A mano**, con Python 3.11 o superior:
 
 ```bash
 python -m venv .venv

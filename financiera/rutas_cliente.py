@@ -31,7 +31,7 @@ def datos3d(filas, titulo):
 
 
 def _abiertas(cid):
-    return db.todos("SELECT * FROM operaciones WHERE cliente_id = ? AND estado IN ('pendiente', 'primera_firma')"
+    return db.todos("SELECT * FROM operaciones WHERE cliente_id = ? AND estado IN ('pendiente', 'primera_firma', 'ejecutando')"
                     " ORDER BY creado DESC", (cid,))
 
 
@@ -112,7 +112,7 @@ def movimientos():
     filtro = request.args.get("ver", "todos")
     sql = "SELECT * FROM operaciones WHERE cliente_id = ?"
     if filtro == "abiertos":
-        sql += " AND estado IN ('pendiente', 'primera_firma')"
+        sql += " AND estado IN ('pendiente', 'primera_firma', 'ejecutando')"
     ops = db.todos(sql + " ORDER BY creado DESC, id DESC LIMIT 200", (c["id"],))
     ordenes = {}
     for o in db.todos("SELECT * FROM ordenes WHERE cliente_id = ? ORDER BY id", (c["id"],)):

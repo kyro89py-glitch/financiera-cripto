@@ -5,7 +5,7 @@
 {% call ph("Precios", "Las operaciones solo se aprueban si el precio de cada activo involucrado tiene menos de " ~ config.PRECIO_MAX_MINUTOS ~ " minutos.") %}
   <form method="post" action="{{ url_for('admin.precio_coingecko') }}">
     <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-    <button class="btn primary" type="submit">Actualizar desde CoinGecko</button>
+    <button class="btn primary" type="submit">Actualizar desde {{ fuente }}</button>
   </form>
 {% endcall %}
 {% include "admin/_subnav.html" %}

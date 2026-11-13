@@ -7,7 +7,8 @@ from flask import Blueprint, Response, abort, flash, g, redirect, render_templat
 
 from datetime import timedelta
 
-from . import auditoria, cartera, comisiones, conciliacion, cuentas, db, documentos, graficos, operaciones, precios, seguridad
+from . import (auditoria, cartera, comisiones, conciliacion, cuentas, db, documentos, ejecucion, exchange, graficos, operaciones,
+               precios, seguridad)
 from .dinero import fmt_num
 from .formato import ESTADOS, TIPOS_OP, f_fecha, zona
 from .tiempo import ahora_dt, iso, leer
@@ -42,7 +43,7 @@ def resumen():
     vista = request.args.get("vista", "activo")
     clientes = db.todos("SELECT id, nombre, modelo, kyc_estado FROM clientes ORDER BY nombre")
     modelos = {m["codigo"]: m for m in db.todos("SELECT * FROM modelos")}
-    abiertas = db.todos("SELECT * FROM operaciones WHERE estado IN ('pendiente', 'primera_firma')")
+    abiertas = db.todos("SELECT * FROM operaciones WHERE estado IN ('pendiente', 'primera_firma', 'ejecutando')")
     neto = sum(o["monto_cent"] if o["tipo"] == "aporte" else -o["monto_cent"] for o in abiertas)
     if vista == "modelo":
         grupos = [{"label": modelos[k]["nombre"], "value": v, "col": modelos[k]["color"]} for k, v in casa["por_modelo"].items()]
@@ -80,7 +81,7 @@ def resumen():
 @bp.get("/operaciones", endpoint="operaciones")
 def operaciones_lista():
     filtro = request.args.get("ver", "abiertas")
-    condiciones = {"abiertas": "o.estado IN ('pendiente', 'primera_firma')", "liquidadas": "o.estado = 'liquidada'",
+    condiciones = {"abiertas": "o.estado IN ('pendiente', 'primera_firma', 'ejecutando')", "liquidadas": "o.estado = 'liquidada'",
                    "rechazadas": "o.estado IN ('rechazada', 'cancelada')", "todas": "1 = 1"}
     if filtro not in condiciones:
         filtro = "abiertas"
@@ -114,7 +115,20 @@ def operacion(opid):
     modelo = db.uno("SELECT * FROM modelos WHERE codigo = ?", (op["modelo"],)) if op["modelo"] else None
     return render_template("equipo/operacion.html", op=op, cli=cli, usuarios=usuarios, ordenes=ordenes, asientos=asientos,
                            requisitos=operaciones.requisitos(op, cli, g.usuario), plan=plan, valor=valor, modelo=modelo,
-                           doble=operaciones.requiere_doble_firma(op))
+                           doble=operaciones.requiere_doble_firma(op), tramos=ejecucion.tramos(opid),
+                           estados_tramo=ejecucion.ESTADOS_TRAMO, pausada=ejecucion.pausada(), modo=exchange.modo())
+
+
+@bp.post("/operaciones/<int:opid>/reintentar", endpoint="reintentar")
+@seguridad.requiere("operaciones.aprobar")
+def reintentar(opid):
+    try:
+        r = ejecucion.reintentar(opid, g.usuario)
+        flash("Ejecución completada y operación liquidada." if r == "liquidada" else
+              "La ejecución sigue incompleta. Revisa la nota de cada tramo.", "ok" if r == "liquidada" else "error")
+    except ejecucion.ErrorEjecucion as e:
+        flash(str(e), "error")
+    return redirect(url_for("equipo.operacion", opid=opid))
 
 
 @bp.post("/operaciones/<int:opid>/aprobar")
@@ -122,8 +136,11 @@ def operacion(opid):
 def aprobar(opid):
     try:
         r = operaciones.aprobar(opid, g.usuario)
-        flash("Primera firma registrada. Falta la segunda firma de Cumplimiento." if r == "primera_firma"
-              else f"Operación #{opid} aprobada y liquidada.", "ok")
+        if r == "incompleta":
+            flash(f"Operación #{opid} aprobada, pero la ejecución quedó incompleta. Revisa los tramos y reintenta.", "error")
+        else:
+            flash("Primera firma registrada. Falta la segunda firma de Cumplimiento." if r == "primera_firma"
+                  else f"Operación #{opid} aprobada y liquidada.", "ok")
     except operaciones.ErrorNegocio as e:
         flash(str(e), "error")
     return redirect(url_for("equipo.operacion", opid=opid))
@@ -325,9 +342,16 @@ def conciliacion_ver():
             return redirect(url_for("equipo.conciliacion"))
         except conciliacion.ErrorConciliacion as e:
             error = str(e)
+    elif request.args.get("desde") == "exchange" and exchange.modo() == "binance":
+        try:
+            valores = conciliacion.valores_exchange()
+            flash("Saldos de Binance cargados en el formulario. Completa el saldo bancario en dólares, revisa y registra.", "ok")
+        except exchange.ErrorExchange as e:
+            error = f"No se pudieron traer los saldos de Binance: {e}"
     info = cartera.info_activos()
     return render_template("equipo/conciliacion.html", libro=conciliacion.saldos_libro(), activos=conciliacion.activos_a_conciliar(),
-                           info=info, historial=conciliacion.historial(), estado=conciliacion.estado(), error=error, valores=valores)
+                           info=info, historial=conciliacion.historial(), estado=conciliacion.estado(), error=error, valores=valores,
+                           modo=exchange.modo())
 
 
 

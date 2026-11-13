@@ -2,6 +2,20 @@
 
 Este proyecto sigue [versionado semántico](https://semver.org/lang/es/). Las fechas son de Paraguay.
 
+## [0.3.0] - 2026-11-13
+
+### Nuevo
+- **Ejecución real en Binance** (red de pruebas por defecto): órdenes de mercado contra USDT con la API REST firmada; el libro se asienta con cantidades, precios promedio y comisiones reales, y guarda el número de orden de Binance.
+- **Motor de ejecución en dos fases** con tramos por activo, id de orden fijo y consulta antes de reenviar: un corte de red o una respuesta perdida nunca duplica una orden. Ejecuciones parciales, comisiones en el activo, en USDT o en BNB, importes mínimos e incrementos de cantidad del par.
+- Verificación de USDT libre antes de aprobar un aporte; los tramos menores al mínimo quedan en dólares y, en retiros, se juntan en la venta más grande.
+- Operaciones **En ejecución** con detalle de cada tramo, alerta alta y botón de reintento.
+- **Ajustes → Ejecución:** ejecutor y modo, prueba de conexión y de permisos de la clave (retiros deshabilitados, IP restringida), saldos del exchange contra el libro, últimas órdenes y **pausa de emergencia** (Cumplimiento puede activarla; solo Administración la levanta).
+- **Precios desde Binance** (`FUENTE_PRECIOS`), y conciliación con los saldos traídos de Binance.
+- Migración 0002 que reconstruye la tabla de operaciones conservando los datos; el migrador verifica las claves foráneas antes de confirmar.
+
+### Pruebas
+- 79 pruebas automáticas, con una imitación de la API de Binance que verifica la firma HMAC, los filtros del par, las comisiones y las fallas de red.
+
 ## [0.2.0] - 2026-11-13
 
 ### Nuevo

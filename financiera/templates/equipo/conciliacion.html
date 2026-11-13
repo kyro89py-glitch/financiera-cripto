@@ -12,7 +12,8 @@
 <div class="g2">
   <form class="card flush conc" method="post" action="{{ url_for('equipo.conciliacion') }}">
     <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-    <div class="ch"><h3>Nueva conciliación</h3><span class="meta">saldos al {{ ahora()|fecha }}</span></div>
+    <div class="ch"><h3>Nueva conciliación</h3>
+      {% if modo == 'binance' and puede('conciliacion.registrar') %}<a class="btn sm" href="{{ url_for('equipo.conciliacion', desde='exchange') }}">Traer saldos de Binance</a>{% else %}<span class="meta">saldos al {{ ahora()|fecha }}</span>{% endif %}</div>
     <div class="tablewrap"><table class="tabla">
       <thead><tr><th>Activo</th><th class="r">Según el libro</th><th class="r">Saldo real</th></tr></thead>
       <tbody>

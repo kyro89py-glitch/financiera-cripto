@@ -5,7 +5,7 @@ from decimal import ROUND_HALF_UP, Decimal
 import click
 from flask import current_app
 
-from . import auditoria, cartera, db, notificaciones, precios
+from . import auditoria, cartera, db, ejecucion, precios
 from .dinero import fmt_usd
 from .formato import MESES, zona
 from .tiempo import ahora, ahora_dt, leer
@@ -65,7 +65,11 @@ def cobrar(periodo, usuario=None, ts=None, precios_usar=None):
         except precios.ErrorPrecio as e:
             raise ErrorComision(str(e)) from None
         pr = precios.vigentes()
-    cobradas, total, ya = 0, 0, 0
+    try:
+        ejecucion.exigir_activa()
+    except ejecucion.ErrorEjecucion as e:
+        raise ErrorComision(str(e)) from None
+    cobradas, total, ya, incompletas, errores = 0, 0, 0, 0, []
     for cli in db.todos("SELECT * FROM clientes ORDER BY id"):
         if db.uno("SELECT 1 FROM operaciones WHERE cliente_id = ? AND tipo = 'comision' AND periodo = ?", (cli["id"], periodo)):
             ya += 1
@@ -75,29 +79,40 @@ def cobrar(periodo, usuario=None, ts=None, precios_usar=None):
         monto = min(calcular(valor, fraccion), actual)
         if monto <= 0:
             continue
-        with db.transaccion() as c:
-            cur = c.execute(
-                "INSERT INTO operaciones (cliente_id, tipo, monto_cent, periodo, estado, creado, creado_por, resuelto_ts, resuelto_por)"
-                " VALUES (?, 'comision', ?, ?, 'liquidada', ?, ?, ?, ?)",
-                (cli["id"], monto, periodo, ts, usuario["id"] if usuario else None, ts, usuario["id"] if usuario else None))
-            opid = cur.lastrowid
-            op = c.execute("SELECT * FROM operaciones WHERE id = ?", (opid,)).fetchone()
-            cobrado = cartera.ejecutar_retiro(c, op, pr, ts, concepto="comision")
-            c.execute("UPDATE operaciones SET liquidado_cent = ? WHERE id = ?", (cobrado, opid))
-            detalle = f"{tasa()} % anual sobre {fmt_usd(valor)}, el valor de tu cartera al cierre del mes"
-            if fraccion < 1:
-                detalle += f", en proporción a {dias} {'día' if dias == 1 else 'días'} invertidos"
-            texto = f"Comisión de gestión de {nombre_periodo(periodo)}: {fmt_usd(cobrado)} ({detalle})."
-            auditoria.registrar("comision.cobrada", f"operacion:{opid}", {"texto": f"{cli['nombre']}: {texto}", "monto_cent": cobrado},
-                                usuario=usuario, ts=ts)
-            if cli["usuario_id"]:
-                notificaciones.notificar(cli["usuario_id"], texto, "/cliente/movimientos", ts=ts)
+        detalle = f"{tasa()} % anual sobre {fmt_usd(valor)}, el valor de tu cartera al cierre del mes"
+        if fraccion < 1:
+            detalle += f", en proporción a {dias} {'día' if dias == 1 else 'días'} invertidos"
+        op = {"id": None, "cliente_id": cli["id"], "tipo": "comision", "monto_cent": monto}
+        try:
+            plan = ejecucion.planificar(op, cli, pr)
+            with db.transaccion() as c:
+                cur = c.execute(
+                    "INSERT INTO operaciones (cliente_id, tipo, monto_cent, periodo, motivo, estado, creado, creado_por)"
+                    " VALUES (?, 'comision', ?, ?, ?, 'pendiente', ?, ?)",
+                    (cli["id"], monto, periodo, detalle, ts, usuario["id"] if usuario else None))
+                op = c.execute("SELECT * FROM operaciones WHERE id = ?", (cur.lastrowid,)).fetchone()
+                ejecucion.registrar_plan(c, op, plan, usuario, ts)
+            resultado = ejecucion.continuar(op["id"], usuario, ts, precios_usar)
+        except ejecucion.ErrorEjecucion as e:
+            errores.append(f"{cli['nombre']}: {e}")
+            continue
+        if resultado != "liquidada":
+            incompletas += 1
+            continue
         cobradas += 1
-        total += cobrado
+        total += db.uno("SELECT liquidado_cent FROM operaciones WHERE id = ?", (op["id"],))["liquidado_cent"]
     auditoria.registrar("comision.periodo", f"periodo:{periodo}",
-                        {"texto": f"Cobró la comisión de {nombre_periodo(periodo)} a {cobradas} clientes por {fmt_usd(total)}.",
-                         "clientes": cobradas, "total_cent": total}, usuario=usuario, ts=ts)
-    return {"cobradas": cobradas, "total": total, "ya_cobradas": ya}
+                        {"texto": f"Cobró la comisión de {nombre_periodo(periodo)} a {cobradas} clientes por {fmt_usd(total)}"
+                                  + (f"; {incompletas} quedaron con la ejecución incompleta" if incompletas else "")
+                                  + (f"; {len(errores)} no se pudieron cobrar" if errores else "") + ".",
+                         "clientes": cobradas, "total_cent": total, "incompletas": incompletas, "errores": errores},
+                        usuario=usuario, ts=ts)
+    r = {"cobradas": cobradas, "total": total, "ya_cobradas": ya}
+    if incompletas:
+        r["incompletas"] = incompletas
+    if errores:
+        r["errores"] = errores
+    return r
 
 
 def resumen_periodos(limite=12):
@@ -115,3 +130,7 @@ def cmd_cobrar(periodo):
     except ErrorComision as e:
         raise click.ClickException(str(e)) from None
     click.echo(f"{nombre_periodo(periodo)}: {r['cobradas']} comisiones por {fmt_usd(r['total'])}; {r['ya_cobradas']} ya estaban cobradas.")
+    if r.get("incompletas"):
+        click.echo(f"Atención: {r['incompletas']} quedaron con la ejecución incompleta. Revísalas en Operaciones.")
+    for e in r.get("errores", []):
+        click.echo(f"No se cobró a {e}")

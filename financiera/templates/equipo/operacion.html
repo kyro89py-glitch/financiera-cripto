@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import estado, kyc, check, ph, tipo_op, riesgo with context %}
+{% from "macros.html" import estado, kyc, check, ph, pill, tipo_op, riesgo with context %}
 {% block titulo %}{{ TIPOS_OP[op.tipo] }} #{{ op.id }}{% endblock %}
 {% block contenido %}
 {% call ph(TIPOS_OP[op.tipo] ~ " #" ~ op.id, "Solicitada el " ~ (op.creado|fecha) ~ " · " ~ (op.creado|hace), volver=url_for('equipo.operaciones'), volver_txt="Operaciones") %}{{ estado(op) }}{% endcall %}
@@ -65,12 +65,44 @@
         {% if op.resuelto_ts %}<li>{{ ESTADOS[op.estado][1] }}<span class="d">{% if op.resuelto_por %}{{ usuarios[op.resuelto_por].nombre }} · {% endif %}{{ op.resuelto_ts|fecha }}</span></li>{% endif %}
       </ul>
     </section>
-    {% if ordenes %}
+    {% if tramos %}
+    <section class="card flush" id="ejecucion">
+      <div class="ch"><h3>Ejecución</h3><span class="meta">{{ tramos|selectattr('estado', 'equalto', 'ejecutada')|list|length }} de {{ tramos|rejectattr('estado', 'equalto', 'omitida')|list|length }} órdenes</span></div>
+      <div class="list">
+      {% for t in tramos %}
+        <div class="item wrap">
+          <div class="grow">
+            <div class="t">{{ "Compra" if t.lado == 'compra' else "Venta" }} de {{ t.activo }} {{ pill(estados_tramo[t.estado][0], estados_tramo[t.estado][1]) }}</div>
+            <div class="d">
+              {% if t.lado == 'compra' %}Pedido {{ t.importe_pedido_cent|usd }}{% else %}Pedido {{ t.cantidad_pedida|unidades(t.activo) }}{% endif %}
+              · {{ "Binance" if t.venue == 'binance' else ("conversión interna" if t.venue == 'interno' else "simulador") }}
+              {% if t.intentos > 1 %} · {{ t.intentos }} intentos{% endif %}
+              · <span class="mono">{{ t.id_orden }}</span>
+            </div>
+            {% if t.estado == 'ejecutada' %}<div class="d num">{{ t.cantidad|unidades(t.activo) }} a {{ t.precio|precio }} = {{ t.importe_cent|usd }}{% if t.comision %} · comisión {{ t.comision }} {{ t.comision_activo }}{% endif %}{% if t.ref_exchange and t.venue == 'binance' %} · orden {{ t.ref_exchange }}{% endif %}</div>{% endif %}
+            {% if t.nota %}<div class="d {{ 'down' if t.estado == 'fallida' else '' }}">{{ t.nota }}</div>{% endif %}
+          </div>
+        </div>
+      {% endfor %}
+      </div>
+      {% if op.estado == 'ejecutando' and puede('operaciones.aprobar') %}
+      <div class="col" style="padding:14px 18px 18px;border-top:1px solid var(--line)">
+        {% if pausada %}<p class="small down">La ejecución está en pausa: no se puede reintentar hasta reanudarla.</p>{% endif %}
+        <form method="post" action="{{ url_for('equipo.reintentar', opid=op.id) }}" data-confirmar="¿Reintentar los tramos pendientes? Los ya ejecutados no se repiten.">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <button class="btn primary block" type="submit" {{ 'disabled' if pausada }}>Reintentar la ejecución</button>
+        </form>
+        <p class="note">Cada tramo tiene un id de orden fijo. Si un envío quedó sin respuesta, primero se consulta al exchange: nunca se compra o vende dos veces.</p>
+      </div>
+      {% endif %}
+    </section>
+    {% endif %}
+    {% if ordenes and not tramos %}
     <section class="card flush">
       <div class="ch"><h3>Órdenes ejecutadas</h3></div>
       <div class="tablewrap"><table class="tabla">
         <thead><tr><th>Activo</th><th>Lado</th><th class="r">Cantidad</th><th class="r">Precio</th><th class="r">Importe</th></tr></thead>
-        <tbody>{% for r in ordenes %}<tr><td><b>{{ r.activo }}</b></td><td>{{ r.lado|capitalize }}</td><td class="r num">{{ r.cantidad|unidades(r.activo) }}</td><td class="r num">{{ r.precio|precio }}</td><td class="r num">{{ r.importe_cent|usd }}</td></tr>{% endfor %}</tbody>
+        <tbody>{% for r in ordenes %}<tr><td><b>{{ r.activo }}</b><span class="sec">{{ r.venue|capitalize }}</span></td><td>{{ r.lado|capitalize }}</td><td class="r num">{{ r.cantidad|unidades(r.activo) }}</td><td class="r num">{{ r.precio|precio }}</td><td class="r num">{{ r.importe_cent|usd }}</td></tr>{% endfor %}</tbody>
       </table></div>
     </section>
     {% endif %}

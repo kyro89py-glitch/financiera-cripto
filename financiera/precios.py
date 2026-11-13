@@ -88,6 +88,34 @@ def actualizar_coingecko(usuario=None):
     return n
 
 
+def actualizar_binance(usuario=None):
+    """Último precio y variación de 24 h de cada activo contra USDT (el USDT vale 1)."""
+    from . import exchange
+    cli = exchange.cliente_binance()
+    try:
+        datos = cli.precios([a["codigo"] for a in activos()])
+    except exchange.ErrorExchange as e:
+        raise ErrorPrecio(f"No se pudo consultar Binance: {e}") from None
+    if not datos:
+        raise ErrorPrecio("Binance no devolvió precios.")
+    ts = ahora()
+    with db.transaccion():
+        for a, (precio, cambio) in datos.items():
+            registrar(a, precio, cambio.quantize(Decimal("0.0001")), "Binance", ts)
+        auditoria.registrar("precio.binance", "precios", {"texto": f"Actualizó {len(datos)} precios desde Binance.",
+                                                           "activos": len(datos)}, usuario=usuario, ts=ts)
+    return len(datos)
+
+
+def fuente():
+    return "Binance" if current_app.config.get("FUENTE_PRECIOS") == "binance" else "CoinGecko"
+
+
+def actualizar(usuario=None):
+    """Actualiza desde la fuente configurada (FUENTE_PRECIOS)."""
+    return actualizar_binance(usuario) if fuente() == "Binance" else actualizar_coingecko(usuario)
+
+
 def antiguos(codigos=None):
     """Lista de (activo, minutos o None) cuyo precio falta o supera la antigüedad permitida."""
     maximo = current_app.config["PRECIO_MAX_MINUTOS"]
@@ -126,9 +154,9 @@ def historial(codigos, desde):
 
 @click.command("actualizar-precios")
 def cmd_actualizar():
-    """Consulta CoinGecko y guarda los precios (pensado para ejecutarse cada pocos minutos)."""
+    """Trae los precios de la fuente configurada (Binance o CoinGecko); pensado para ejecutarse cada pocos minutos."""
     try:
-        n = actualizar_coingecko()
+        n = actualizar()
     except ErrorPrecio as e:
         raise click.ClickException(str(e)) from None
     click.echo(f"{n} precios actualizados.")

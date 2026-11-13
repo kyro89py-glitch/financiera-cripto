@@ -1,7 +1,7 @@
-"""Administración: precios y usuarios del equipo."""
+"""Administración: precios, comisiones, ejecución en el exchange y usuarios del equipo."""
 from flask import Blueprint, abort, flash, g, redirect, render_template, request, url_for
 
-from . import auditoria, comisiones, cuentas, db, precios, seguridad
+from . import auditoria, cartera, comisiones, conciliacion, cuentas, db, ejecucion, exchange, precios, seguridad
 from .dinero import leer_precio
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -12,6 +12,8 @@ def _guardia():
     r = seguridad.exigir_sesion()
     if r:
         return r
+    if request.endpoint == "admin.ejecucion" and seguridad.puede("ejecucion.ver"):
+        return None  # Cumplimiento también puede ver la ejecución y activar la pausa de emergencia
     if g.usuario["rol"] != "admin":
         abort(403)
     return None
@@ -19,7 +21,7 @@ def _guardia():
 
 @bp.get("/precios", endpoint="precios")
 def precios_ver():
-    return render_template("admin/precios.html", activos=precios.activos(), vig=precios.vigentes(),
+    return render_template("admin/precios.html", fuente=precios.fuente(), activos=precios.activos(), vig=precios.vigentes(),
                            viejos=dict(precios.antiguos()))
 
 
@@ -38,8 +40,8 @@ def precio_manual():
 @bp.post("/precios/coingecko")
 def precio_coingecko():
     try:
-        n = precios.actualizar_coingecko(g.usuario)
-        flash(f"{n} precios actualizados desde CoinGecko.", "ok")
+        n = precios.actualizar(g.usuario)
+        flash(f"{n} precios actualizados desde {precios.fuente()}.", "ok")
     except precios.ErrorPrecio as e:
         flash(str(e) + " Puedes cargar los precios a mano.", "error")
     return redirect(url_for("admin.precios"))
@@ -107,9 +109,43 @@ def comisiones_ver():
             r = comisiones.cobrar(periodo, g.usuario)
             flash(f"Comisión de {comisiones.nombre_periodo(periodo)}: se cobró a {r['cobradas']} clientes"
                   + (f"; {r['ya_cobradas']} ya estaban cobrados." if r["ya_cobradas"] else "."), "ok")
+            if r.get("incompletas"):
+                flash(f"{r['incompletas']} cobros quedaron con la ejecución incompleta: revísalos en Operaciones.", "error")
+            for e in r.get("errores", []):
+                flash(f"No se cobró a {e}", "error")
         except comisiones.ErrorComision as e:
             flash(str(e), "error")
         return redirect(url_for("admin.comisiones"))
     return render_template("admin/comisiones.html", periodos=comisiones.resumen_periodos(), sugerido=sugerido,
                            tasa=comisiones.tasa(), nombre_periodo=comisiones.nombre_periodo)
 
+
+
+@bp.route("/ejecucion", methods=["GET", "POST"], endpoint="ejecucion")
+def ejecucion_ver():
+    brk = exchange.broker()
+    controles = saldos = None
+    if request.method == "POST":
+        accion = request.form.get("accion")
+        if accion in ("pausar", "reanudar"):
+            if not seguridad.puede("ejecucion." + accion):
+                abort(403)
+            ejecucion.pausar(accion == "pausar", g.usuario, (request.form.get("motivo") or "").strip()[:200])
+            flash("Ejecución en pausa: no se enviarán órdenes hasta reanudarla." if accion == "pausar"
+                  else "Ejecución reanudada.", "ok")
+            return redirect(url_for("admin.ejecucion"))
+        try:
+            if accion == "probar":
+                controles = brk.verificar()
+            elif accion == "saldos":
+                saldos = brk.saldos()
+        except exchange.ErrorExchange as e:
+            flash(f"{brk.etiqueta}: {e}", "error")
+    pausa = db.uno("SELECT a.*, u.nombre FROM ajustes a LEFT JOIN usuarios u ON u.id = a.por WHERE a.clave = ?", (ejecucion.PAUSA,))
+    recientes = db.todos(
+        "SELECT e.*, o.tipo, o.cliente_id, c.nombre FROM ejecuciones e JOIN operaciones o ON o.id = e.operacion_id"
+        " JOIN clientes c ON c.id = o.cliente_id ORDER BY e.actualizado DESC, e.id DESC LIMIT 25")
+    return render_template("admin/ejecucion.html", brk=brk, modo=exchange.modo(), pausada=ejecucion.pausada(), pausa=pausa,
+                           controles=controles, saldos=saldos, libro=conciliacion.saldos_libro(), info=cartera.info_activos(),
+                           incompletas=ejecucion.incompletas(), recientes=recientes, estados_tramo=ejecucion.ESTADOS_TRAMO,
+                           fuente=precios.fuente())

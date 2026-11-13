@@ -1,10 +1,10 @@
 """Tenencias, valuación y ejecución de compras y ventas sobre el libro contable."""
 from collections import defaultdict
 from datetime import timedelta
-from decimal import ROUND_CEILING, Decimal
+from decimal import Decimal
 
 from . import db, precios as precios_mod
-from .dinero import unidades_por, valor_cent
+from .dinero import valor_cent
 from .tiempo import ahora, ahora_dt, iso, leer
 
 COLOR_USD = "#94A3B8"
@@ -102,70 +102,6 @@ def modelos():
         d["pesos"] = pesos_modelo(m["codigo"])
         out.append(d)
     return out
-
-
-def _asiento(c, cliente_id, activo, cantidad, concepto, operacion_id, ts):
-    c.execute("INSERT INTO libro (cliente_id, activo, cantidad, concepto, operacion_id, ts) VALUES (?, ?, ?, ?, ?, ?)",
-              (cliente_id, activo, cantidad, concepto, operacion_id, ts))
-
-
-def _orden(c, op, activo, lado, cantidad, precio, importe, ts):
-    c.execute("INSERT INTO ordenes (operacion_id, cliente_id, activo, lado, cantidad, precio, importe_cent, ts)"
-              " VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (op["id"], op["cliente_id"], activo, lado, cantidad, str(precio), importe, ts))
-
-
-def ejecutar_aporte(c, op, pesos, precios, ts):
-    """Acredita el depósito y compra según los pesos del modelo. Lo que no alcanza a comprar queda en dólares."""
-    if sum(pb for _, pb in pesos) != 10000:
-        raise ErrorCartera("La cartera modelo está mal configurada: los pesos no suman 100 %.")
-    monto, cid = op["monto_cent"], op["cliente_id"]
-    _asiento(c, cid, "USD", monto, "deposito", op["id"], ts)
-    restante = monto
-    for i, (activo, pb) in enumerate(pesos):
-        usd = restante if i == len(pesos) - 1 else monto * pb // 10000
-        restante -= usd
-        p = precios.get(activo)
-        if not p:
-            raise ErrorCartera(f"No hay precio para {activo}.")
-        unidades = unidades_por(usd, p["precio"])
-        if unidades <= 0:
-            continue
-        _asiento(c, cid, "USD", -usd, "compra", op["id"], ts)
-        _asiento(c, cid, activo, unidades, "compra", op["id"], ts)
-        _orden(c, op, activo, "compra", unidades, p["precio"], usd, ts)
-    return monto
-
-
-def ejecutar_retiro(c, op, precios, ts, concepto="pago_retiro"):
-    """Usa primero el saldo en dólares y vende el resto en proporción a cada tenencia. Devuelve lo pagado.
-
-    También se usa para cobrar la comisión de gestión (concepto='comision')."""
-    cid, monto = op["cliente_id"], op["monto_cent"]
-    ten = tenencias(cid)
-    _, total = posiciones(cid, precios, ten)
-    if monto > total:
-        raise ErrorCartera("El retiro supera el valor actual de la cartera.")
-    caja = ten.get("USD", 0)
-    if caja < monto:
-        resto_cripto = total - caja
-        fraccion = Decimal(monto - caja) / Decimal(resto_cripto)
-        for activo, u in sorted(ten.items()):
-            if activo == "USD" or u <= 0:
-                continue
-            p = precios.get(activo)
-            if not p:
-                raise ErrorCartera(f"No hay precio para {activo}.")
-            vender = min(u, int((Decimal(u) * fraccion).to_integral_value(ROUND_CEILING)))
-            if vender <= 0:
-                continue
-            ingreso = valor_cent(activo, vender, p["precio"])
-            _asiento(c, cid, activo, -vender, "venta", op["id"], ts)
-            _asiento(c, cid, "USD", ingreso, "venta", op["id"], ts)
-            _orden(c, op, activo, "venta", vender, p["precio"], ingreso, ts)
-            caja += ingreso
-    pago = min(monto, caja)
-    _asiento(c, cid, "USD", -pago, concepto, op["id"], ts)
-    return pago
 
 
 def resumen_casa(precios=None):

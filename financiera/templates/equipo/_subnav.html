@@ -1,2 +1,3 @@
 {% from "macros.html" import subnav with context %}
-{{ subnav([("equipo.cumplimiento", "Alertas"), ("equipo.documentos", "Documentos"), ("equipo.conciliacion", "Conciliación"), ("equipo.bitacora", "Bitácora")]) }}
+{% set items = [("equipo.cumplimiento", "Alertas"), ("equipo.documentos", "Documentos"), ("equipo.conciliacion", "Conciliación"), ("equipo.bitacora", "Bitácora")] %}
+{{ subnav(items + ([("admin.ejecucion", "Ejecución")] if puede('ejecucion.ver') and g.usuario.rol != 'admin' else [])) }}

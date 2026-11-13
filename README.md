@@ -4,10 +4,11 @@ Plataforma de inversión en criptomonedas para operar con clientes reales, con d
 
 - **Portal del cliente:** su cartera (también en 3D), aportes y retiros, movimientos, estados de cuenta mensuales para imprimir, su legajo de documentos y avisos.
 - **Panel del equipo:** aprobación de operaciones con controles de cumplimiento y doble firma, fichas de clientes con legajo, revisión de documentos, conciliación de custodia, comisiones de gestión, bitácora inalterable, precios y usuarios.
+- **Ejecución en Binance:** al aprobar, las compras y ventas se envían como órdenes de mercado a Binance (o a su red de pruebas) y el libro se asienta con las cantidades, precios y comisiones reales. Sin Binance configurado, un simulador ejecuta al precio vigente.
 
-Es un sistema propio e independiente: corre en tu servidor y guarda todo en tu base de datos. No depende de Claude ni de servicios externos, salvo CoinGecko para los precios (opcional: también se cargan a mano) y un servidor de correo si quieres avisos por email.
+Es un sistema propio e independiente: corre en tu servidor y guarda todo en tu base de datos. Los únicos servicios externos son opcionales: Binance para ejecutar y cotizar, CoinGecko para los precios cuando no se usa Binance (también se cargan a mano) y un servidor de correo para los avisos por email.
 
-> **Estado:** versión 0.2, lista para pruebas internas con el equipo. Antes de recibir dinero de clientes lee [Antes de operar con dinero real](#antes-de-operar-con-dinero-real).
+> **Estado:** versión 0.3, lista para pruebas internas con el equipo y para operar en la red de pruebas de Binance. Antes de recibir dinero de clientes lee [Antes de operar con dinero real](#antes-de-operar-con-dinero-real).
 
 ---
 
@@ -77,7 +78,19 @@ Al aprobar, el sistema verifica:
 
 ### Conciliación de custodia
 
-Cumplimiento registra los saldos reales del banco y de cada criptomoneda en custodia; el sistema los compara con el libro contable y guarda el resultado sin posibilidad de modificarlo. Si hay diferencias, o si pasan más de 7 días sin conciliar, aparece una alerta en el panel.
+Cumplimiento registra los saldos reales del banco y de cada criptomoneda en custodia; el sistema los compara con el libro contable y guarda el resultado sin posibilidad de modificarlo. Si hay diferencias, o si pasa más de un día sin conciliar, aparece una alerta en el panel. Con Binance conectado, el botón **Traer saldos de Binance** completa el formulario con los saldos de la cuenta; el saldo bancario en dólares se sigue cargando a mano.
+
+### Ejecución de órdenes
+
+Cada operación aprobada se divide en **tramos**, uno por activo, y pasa por estos pasos:
+
+1. **Plan:** con los precios vigentes y las reglas del par en Binance (importe mínimo por orden, incremento de cantidad). En un aporte, si un tramo no llega al mínimo del exchange, ese dinero queda en dólares. En un retiro, los tramos chicos se juntan en la venta de la tenencia más grande. Antes de aprobar un aporte se verifica que haya USDT libre suficiente en la cuenta.
+2. **Envío:** cada tramo tiene un id de orden propio y fijo (`fc-<operación>-<C|V>-<activo>`). Antes de enviarlo se marca como *enviado*; si la respuesta se pierde, al reintentar primero se consulta a Binance. **Nunca se compra ni se vende dos veces lo mismo.**
+3. **Liquidación:** cuando todos los tramos terminaron, se asientan en el libro las cantidades netas de comisión, el precio promedio y el número de orden de Binance. Una comisión cobrada en BNB la absorbe la casa.
+
+Si Binance rechaza un tramo (saldo insuficiente, filtro del par, mantenimiento), la operación queda **En ejecución** con una alerta alta, y se reintenta desde su pantalla sin repetir lo ya ejecutado. Desde **Ajustes → Ejecución**, Administración y Cumplimiento pueden activar una **pausa de emergencia** que detiene todo envío; solo Administración la levanta.
+
+El USDT es la moneda contra la que se opera en Binance: el tramo de USDT de una cartera es una conversión interna 1:1, sin orden. El dinero que llega al banco en dólares se convierte a USDT y se deposita en Binance antes de aprobar los aportes; al pagar retiros, el USDT de las ventas se convierte y se transfiere desde el banco. Esa tesorería es manual.
 
 Los umbrales se cambian en la configuración.
 
@@ -98,19 +111,21 @@ financiera/
   seguridad.py       contraseñas (scrypt), sesiones, CSRF, dos pasos, permisos, condiciones
   auditoria.py       bitácora encadenada
   operaciones.py     reglas de aportes y retiros, idoneidad, doble firma, alertas
-  cartera.py         tenencias, valuación, ejecución, estados de cuenta mensuales
+  ejecucion.py       motor de ejecución en dos fases: plan, envío idempotente, liquidación, pausa
+  exchange.py        conexión con Binance (API REST firmada) y simulador con la misma interfaz
+  cartera.py         tenencias, valuación, estados de cuenta mensuales
   comisiones.py      comisión de gestión mensual
   conciliacion.py    conciliación del libro con los saldos reales
   documentos.py      legajo: validación de archivos, revisión, faltantes
   notificaciones.py  avisos en el portal y cola de correos
   graficos.py        geometría de los gráficos SVG
-  precios.py         precios manuales o desde CoinGecko, historial y antigüedad
+  precios.py         precios manuales, desde Binance o desde CoinGecko, historial y antigüedad
   cuentas.py         alta de usuarios y clientes, verificaciones
   demo.py            datos de demostración
   rutas_*.py         pantallas de acceso, cliente, equipo, administración y documentos
   templates/         pantallas
   static/            estilos y JavaScript (sin recursos externos)
-tests/               56 pruebas automáticas
+tests/               79 pruebas automáticas (incluye una imitación completa de la API de Binance)
 ```
 
 ### Seguridad incluida
@@ -166,6 +181,16 @@ Programa este comando todos los días y copia el archivo fuera del servidor (otr
 | `flask --app financiera verificar-bitacora` | Comprueba que nadie alteró la bitácora |
 | `flask --app financiera respaldar destino.db` | Copia consistente de la base en caliente |
 
+### Conectar Binance
+
+Empieza siempre por la **red de pruebas** (dinero ficticio):
+
+1. Entra en https://testnet.binance.vision con tu cuenta de GitHub y genera una clave de API (HMAC).
+2. En el `.env`: `EJECUCION=binance`, `BINANCE_API_KEY=…`, `BINANCE_API_SECRET=…`. `BINANCE_URL` ya apunta a la red de pruebas por defecto.
+3. Reinicia y entra en **Ajustes → Ejecución → Probar ahora**. Haz aportes y retiros de prueba y revisa los tramos.
+
+Para operar con dinero real, en Binance crea una clave **solo con permiso de Spot**, con los **retiros deshabilitados** y **restringida a la IP del servidor**, y cambia `BINANCE_URL=https://api.binance.com`. La pantalla de Ejecución verifica esas tres condiciones y marca en rojo la que falte. Usa una cuenta de empresa verificada y dedicada solo a la financiera.
+
 ### Configuración
 
 Todas las opciones están comentadas en `.env.example`. Las principales:
@@ -177,6 +202,9 @@ Todas las opciones están comentadas en `.env.example`. Las principales:
 | `UMBRAL_ORIGEN_FONDOS_USD`, `UMBRAL_DOBLE_FIRMA_USD` | Montos a partir de los cuales se exige el origen de los fondos y la doble firma. |
 | `PRECIO_MAX_MINUTOS` | Antigüedad máxima de un precio para ejecutar operaciones. |
 | `INSTRUCCIONES_DEPOSITO` | Datos bancarios que ve el cliente al aportar. |
+| `EJECUCION` | `simulado` (por defecto) o `binance`. |
+| `BINANCE_API_KEY`, `BINANCE_API_SECRET`, `BINANCE_URL` | Clave de API y dirección (red de pruebas por defecto; `https://api.binance.com` para operar en real). |
+| `FUENTE_PRECIOS` | `binance` o `coingecko`. Por defecto, Binance si se ejecuta en Binance. |
 | `COMISION_ANUAL_PCT` | Comisión de gestión anual en porcentaje (0 la desactiva). |
 | `SMTP_HOST`, `SMTP_USUARIO`, `SMTP_CLAVE`, `SMTP_REMITENTE` | Servidor de correo para los avisos. Sin `SMTP_HOST` los avisos solo se ven en el portal. |
 | `URL_PUBLICA` | Dirección del sistema, para los enlaces de los correos y el pie de los estados de cuenta. |
@@ -196,7 +224,7 @@ python -m pytest
 El sistema registra y controla las operaciones, pero hay piezas del negocio que no puede resolver el software:
 
 1. **Figura legal y autorizaciones.** Recibir dinero del público para invertirlo puede requerir autorización de la Superintendencia de Valores del BCP. Además rigen las obligaciones antilavado de Seprelad y el reporte de operaciones con criptoactivos a la DNIT (RG 47/2026). Confírmalo con un abogado local antes de abrir al público.
-2. **Custodia real de las criptomonedas.** El sistema registra compras y ventas en su libro y permite conciliarlo con los saldos reales, pero no ejecuta las órdenes en un exchange. Falta elegir el exchange o custodio regulado y, más adelante, integrarlo para ejecutar y conciliar de forma automática.
+2. **Custodia en Binance.** Las órdenes se ejecutan en Binance y el dinero de todos los clientes queda en una sola cuenta de la empresa (cuenta ómnibus); el detalle por cliente vive en el libro. Eso exige conciliar a diario, proteger la cuenta (2FA, clave sin retiros, IP restringida) y evaluar con un abogado el riesgo de custodiar en un exchange extranjero sin regulación local específica.
 3. **Banco.** La conciliación incluye el saldo en dólares, pero se carga a mano desde el extracto; no hay conexión con el banco.
 4. **Verificación de identidad.** El legajo y la revisión son manuales. Para volumen conviene integrar un proveedor de verificación con prueba de vida.
 5. **Contrato y textos legales.** El texto de condiciones y el aviso de riesgos del portal es un punto de partida: un abogado tiene que adaptarlo a tu figura legal antes de usarlo.

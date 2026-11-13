@@ -51,11 +51,22 @@ def create_app(config=None):
         SMTP_USUARIO=_env("SMTP_USUARIO", ""),
         SMTP_CLAVE=_env("SMTP_CLAVE", ""),
         SMTP_REMITENTE=_env("SMTP_REMITENTE", ""),
+        EJECUCION=_env("EJECUCION", "simulado").lower(),
+        BINANCE_API_KEY=_env("BINANCE_API_KEY", ""),
+        BINANCE_API_SECRET=_env("BINANCE_API_SECRET", ""),
+        BINANCE_URL=_env("BINANCE_URL", "https://testnet.binance.vision").rstrip("/"),
+        BINANCE_RECV_WINDOW=int(_env("BINANCE_RECV_WINDOW", "5000")),
+        FUENTE_PRECIOS=_env("FUENTE_PRECIOS", "").lower(),
+        ORDEN_PREFIJO=_env("ORDEN_PREFIJO", "fc"),
         SCRYPT_N=2 ** 14,
     )
     if config:
         app.config.update(config)
 
+    if app.config["EJECUCION"] not in ("simulado", "binance"):
+        raise RuntimeError("EJECUCION tiene que ser 'simulado' o 'binance'.")
+    if not app.config["FUENTE_PRECIOS"]:
+        app.config["FUENTE_PRECIOS"] = "binance" if app.config["EJECUCION"] == "binance" else "coingecko"
     if not app.config["SECRET_KEY"]:
         if app.config["ENTORNO"] == "produccion":
             raise RuntimeError("Falta SECRET_KEY. Defínela como variable de entorno antes de iniciar en producción.")

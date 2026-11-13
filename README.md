@@ -12,6 +12,10 @@ Es un sistema propio e independiente: corre en tu servidor y guarda todo en tu b
 
 ---
 
+## Probarlo sin instalar nada
+
+Con una cuenta de GitHub, abre [este enlace](https://codespaces.new/kyro89py-glitch/financiera-cripto?quickstart=1) y toca **Create codespace**. En unos minutos se instala, carga la demostración y se abre en el navegador. Las cuentas y la contraseña están más abajo. Los Codespaces son gratis hasta 60 horas por mes en una cuenta personal.
+
 ## Probarlo en tu computadora
 
 Necesitas Python 3.11 o superior.

@@ -1,0 +1,18 @@
+{
+  "name": "Financiera Cripto (demostración)",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "containerEnv": {
+    "FINANCIERA_ENTORNO": "desarrollo",
+    "PYTHONDONTWRITEBYTECODE": "1"
+  },
+  "postCreateCommand": "sh .devcontainer/preparar.sh",
+  "postAttachCommand": "sh .devcontainer/iniciar.sh",
+  "forwardPorts": [5000],
+  "portsAttributes": {
+    "5000": { "label": "Financiera Cripto", "onAutoForward": "openBrowser" }
+  },
+  "customizations": {
+    "codespaces": { "openFiles": [".devcontainer/LEEME.md"] },
+    "vscode": { "extensions": ["ms-python.python"] }
+  }
+}

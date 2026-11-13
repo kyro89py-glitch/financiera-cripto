@@ -8,7 +8,7 @@ Plataforma de inversión en criptomonedas para operar con clientes reales, con d
 
 Es un sistema propio e independiente: corre en tu servidor y guarda todo en tu base de datos. Los únicos servicios externos son opcionales: Binance para ejecutar y cotizar, CoinGecko para los precios cuando no se usa Binance (también se cargan a mano) y un servidor de correo para los avisos por email.
 
-> **Estado:** versión 0.3, lista para pruebas internas con el equipo y para operar en la red de pruebas de Binance. Antes de recibir dinero de clientes lee [Antes de operar con dinero real](#antes-de-operar-con-dinero-real).
+> **Estado:** versión 0.4, lista para pruebas internas con el equipo y para operar en la red de pruebas de Binance. Antes de recibir dinero de clientes lee [Antes de operar con dinero real](#antes-de-operar-con-dinero-real).
 
 ---
 
@@ -131,7 +131,7 @@ financiera/
   rutas_*.py         pantallas de acceso, cliente, equipo, administración y documentos
   templates/         pantallas
   static/            estilos y JavaScript (sin recursos externos)
-tests/               79 pruebas automáticas (incluye una imitación completa de la API de Binance)
+tests/               82 pruebas automáticas (incluye una imitación completa de la API de Binance)
 ```
 
 ### Seguridad incluida

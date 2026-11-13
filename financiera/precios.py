@@ -152,6 +152,25 @@ def historial(codigos, desde):
     return out
 
 
+def mercado(dias=7):
+    """Cada activo con su precio vigente, la variación de 24 h y la serie de los últimos días."""
+    from datetime import timedelta
+    from .tiempo import ahora_dt, iso
+    vig = vigentes()
+    acts = activos()
+    hist = historial([a["codigo"] for a in acts], iso(ahora_dt() - timedelta(days=dias)))
+    out = []
+    for a in acts:
+        p = vig.get(a["codigo"])
+        serie = [float(x) for _, x in hist.get(a["codigo"], [])]
+        if p:
+            serie.append(float(p["precio"]))
+        var = (serie[-1] / serie[0] - 1) * 100 if len(serie) > 1 and serie[0] else None
+        out.append({"codigo": a["codigo"], "nombre": a["nombre"], "color": a["color"], "precio": p["precio"] if p else None,
+                    "cambio": p["cambio"] if p else None, "ts": p["ts"] if p else None, "serie": serie, "var": var})
+    return out
+
+
 @click.command("actualizar-precios")
 def cmd_actualizar():
     """Trae los precios de la fuente configurada (Binance o CoinGecko); pensado para ejecutarse cada pocos minutos."""

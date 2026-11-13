@@ -55,8 +55,8 @@
 </svg>
 {%- endmacro %}
 
-{% macro escena3d(datos, decorativo=false) -%}
-<div class="stage{{ ' decorativo' if decorativo }}" data-escena3d="datos-3d"{% if decorativo %} aria-hidden="true"{% endif %}>
+{% macro escena3d(datos, decorativo=false, heroe=false, forma=none, ciclo=false) -%}
+<div class="stage{{ ' decorativo' if decorativo }}{{ ' heroe' if heroe }}" data-escena3d="datos-3d"{% if forma %} data-forma="{{ forma }}"{% endif %}{% if ciclo %} data-ciclo{% endif %}{% if decorativo %} aria-hidden="true"{% endif %}>
   <canvas class="c-pts"></canvas><canvas class="c-glow" aria-hidden="true"></canvas>
   <canvas class="c-ovl" aria-label="Vista 3D giratoria: cada punto representa una porción igual de dinero. Toca un grupo para ver su monto."></canvas>
   <div class="hud"><b></b><span class="num"></span></div>
@@ -80,4 +80,23 @@
   {{ pill('bad' if nivel == 'alta' else ('warn' if nivel == 'media' else 'info'), 'Alta' if nivel == 'alta' else ('Media' if nivel == 'media' else 'Aviso')) }}
   <div class="grow">{{ texto }}</div>
 {% if url %}</a>{% else %}</div>{% endif %}
+{%- endmacro %}
+
+{% macro chispa(c) -%}
+{% if c %}<svg class="chispa {{ 'up' if c.sube else 'down' }}" viewBox="0 0 {{ c.ancho }} {{ c.alto }}" width="{{ c.ancho }}" height="{{ c.alto }}" aria-hidden="true"><polygon points="{{ c.area }}"/><polyline points="{{ c.puntos }}"/><circle cx="{{ '%.1f'|format(c.fin[0]) }}" cy="{{ '%.1f'|format(c.fin[1]) }}" r="2.2"/></svg>{% endif %}
+{%- endmacro %}
+
+{% macro mercado_item(m) -%}
+<div class="item"><i class="dot" style="background:{{ m.color }}"></i>
+  <div class="grow"><div class="t">{{ m.codigo }}</div><div class="d">{{ m.nombre }}</div></div>
+  {{ chispa(m.chispa) }}
+  <div class="amt num">{% if m.precio %}{{ m.precio|precio }}{% else %}—{% endif %}{% if m.cambio is not none %}<span class="{{ 'up' if m.cambio >= 0 else 'down' }}">{{ m.cambio|pct }} 24 h</span>{% endif %}</div>
+</div>
+{%- endmacro %}
+
+{% macro rendimiento(rend) -%}
+{% if rend %}
+<div><span class="lab">Rentabilidad</span><div class="num {{ 'up' if rend.twr >= 0 else 'down' }}">{{ rend.twr|pct }}</div><span class="xs" style="opacity:.7">ponderada por tiempo · {{ rend.dias }} días</span></div>
+{% if rend.btc is not none %}<div><span class="lab">Bitcoin, mismo período</span><div class="num {{ 'up' if rend.btc >= 0 else 'down' }}">{{ rend.btc|pct }}</div><span class="xs" style="opacity:.7">referencia</span></div>{% endif %}
+{% endif %}
 {%- endmacro %}

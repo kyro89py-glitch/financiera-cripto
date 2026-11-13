@@ -27,16 +27,17 @@
   var cv = el.querySelector(".c-pts"), cG = el.querySelector(".c-glow"), cO = el.querySelector(".c-ovl"), cP = document.createElement("canvas");
   var ctx = cv.getContext("2d"), ctxP = cP.getContext("2d"), ctxG = cG.getContext("2d"), ctxO = cO.getContext("2d");
   var still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  var deco = el.classList.contains("decorativo");
-  var VIS = { moneda: [0.3, 0.9, 1], esferas: [0.5, 0.36, 1.28], bloques: [0.7, 0.52, 1.02] };
-  var NOM = { moneda: "Moneda", esferas: "Esferas", bloques: "Bloques" };
+  var deco = el.classList.contains("decorativo"), heroe = el.classList.contains("heroe"), claro = deco || heroe;
+  var VIS = { moneda: [0.3, 0.9, 1], esferas: [0.5, 0.36, 1.28], bloques: [0.7, 0.52, 1.02], orbitas: [0.4, 0.5, 1.3] };
+  var NOM = { moneda: "Moneda", esferas: "Esferas", bloques: "Bloques", orbitas: "Órbitas" };
+  var OW = F(48), OC = F(48), OS = F(48), orbT = 0, ciclo = 0, tocado = false;
   var G = [], N = 0, total = 0, form = "moneda", sel = -1, W = 0, H = 0, BS = 1, BW = 0, BH = 0, img, d8, d32;
   var yaw = 0.3, pitch = 0.9, zoom = 1, tyaw = 0.3, tpitch = 0.9, tzoom = 1, ease = false, spin = 0, mov = 0, prev = 0, reloj = 0, first = true, unidadTxt = "", drag = null, pinch = 0;
   var lab = [], ptrs = new Map();
 
   function resize() {
     var w = el.clientWidth; if (!w) return;
-    W = w; H = Math.round(clamp(w * 0.8, 290, 470)); BS = Math.min(window.devicePixelRatio || 1, 2); BW = Math.round(W * BS); BH = Math.round(H * BS);
+    W = w; H = Math.round(heroe ? clamp(w * 0.56, 330, 500) : clamp(w * 0.8, 290, 470)); BS = Math.min(window.devicePixelRatio || 1, 2); BW = Math.round(W * BS); BH = Math.round(H * BS);
     [cv, cO, cP].forEach(function (c) { c.width = BW; c.height = BH; }); cv.style.height = H + "px"; cO.style.height = H + "px";
     cG.width = Math.max(2, BW >> 2); cG.height = Math.max(2, BH >> 2);
     img = ctxP.createImageData(BW, BH); d8 = img.data; d32 = new Uint32Array(d8.buffer);
@@ -75,6 +76,23 @@
         for (var i = g.start; i < g.start + g.cnt; i++) { var d = dir(i), q = R[k] * Math.pow(u3[i], 0.45); tx[i] = P[k][0] + d[0] * q; ty[i] = P[k][1] + d[1] * q; tz[i] = P[k][2] + d[2] * q; nor(i, d[0], d[1], d[2]); }
         anc(k, P[k][0], P[k][1] + R[k] + 0.35, P[k][2]);
       });
+    } else if (form === "orbitas") {
+      var R0 = clamp(0.115 * Math.cbrt(G[0].cnt), 0.9, 2.3), paso = n > 1 ? Math.min(0.85, (6.5 - R0 - 0.9) / (n - 1)) : 0;
+      OW.fill(0);
+      G.forEach(function (g, k) {
+        var i;
+        if (k === 0) {
+          for (i = g.start; i < g.start + g.cnt; i++) { var d = dir(i), q = R0 * Math.pow(u3[i], 0.4); tx[i] = d[0] * q; ty[i] = d[1] * q; tz[i] = d[2] * q; nor(i, d[0], d[1], d[2]); }
+          anc(0, 0, R0 + 0.4, 0); return;
+        }
+        var r = R0 + 0.9 + (k - 1) * paso, inc = ((k % 3) - 1) * 0.16, ancho = clamp(0.012 * Math.sqrt(g.cnt), 0.05, Math.max(0.06, paso * 0.36));
+        OW[k] = (k % 2 ? 1 : 0.8) * 0.62 / Math.sqrt(r);
+        for (i = g.start; i < g.start + g.cnt; i++) {
+          var th = TAU * u1[i], q2 = r + g1[i] * ancho * 0.5, x = q2 * Math.cos(th);
+          tx[i] = x; tz[i] = q2 * Math.sin(th); ty[i] = g2[i] * 0.035 + x * inc;
+        }
+        var a = k * 2.39996; anc(k, r * Math.cos(a), 0.4 + r * Math.cos(a) * inc, r * Math.sin(a));
+      });
     } else {
       var side = G.map(function (g) { return Math.max(0.5, 0.15 * Math.cbrt(g.cnt)); });
       var r0 = side[0] / 2 * 1.25 + 0.38 + (side[1] || 0.5) / 2 * 1.25;
@@ -99,7 +117,7 @@
         anc(k, c0[0], c0[1] + hs + 0.35, c0[2]);
       });
     }
-    if (first) { for (i = 0; i < N; i++) { px[i] = tx[i] * 0.55; py[i] = ty[i] * 0.55; pz[i] = tz[i] * 0.55; } first = false; }
+    if (first) { for (i = 0; i < N; i++) { var d0 = dir(i), q0 = 8 + 7 * u3[i]; px[i] = d0[0] * q0; py[i] = d0[1] * q0 * 0.6; pz[i] = d0[2] * q0; } first = false; }
   }
   function pintar() { G.forEach(function (g) { for (var i = g.start; i < g.start + g.cnt; i++) { var k = 0.45 + 0.55 * u4[i]; cr[i] = g.rgb[0] * k; cg[i] = g.rgb[1] * k; cb[i] = g.rgb[2] * k; } }); }
   function controles() {
@@ -108,7 +126,7 @@
     var box = el.querySelector(".s3ctl"); box.textContent = "";
     Object.keys(NOM).forEach(function (f) {
       var b = document.createElement("button"); b.type = "button"; b.textContent = NOM[f]; b.setAttribute("aria-pressed", f === form ? "true" : "false");
-      b.addEventListener("click", function () { cambiarForma(f); }); box.appendChild(b);
+      b.addEventListener("click", function () { tocado = true; cambiarForma(f); }); box.appendChild(b);
     });
   }
   function cargar(grupos) {
@@ -118,26 +136,33 @@
     G.forEach(function (g, k) { g.rgb = hex(g.col); g.cnt = Math.min(MAXN - n, Math.max(3, Math.round(g.value / unit))); g.start = n; for (var i = n; i < n + g.cnt; i++) gOf[i] = k; n += g.cnt; });
     N = n; sel = -1; unidadTxt = usd(unit, unit >= 100 ? 0 : 2); objetivos(); pintar(); mov = performance.now(); controles();
   }
+  function asentar() {  // al salir de Órbitas, deja cada punto donde se lo estaba viendo
+    for (var i = 0; i < N; i++) { var k = gOf[i]; if (!OW[k]) continue; var c = Math.cos(OW[k] * orbT), s = Math.sin(OW[k] * orbT), x = px[i], z = pz[i]; px[i] = x * c - z * s; pz[i] = x * s + z * c; }
+  }
   function cambiarForma(f) {
-    form = f; var v = VIS[f], y = v[0];
+    if (form === "orbitas") asentar();
+    orbT = 0; form = f; var v = VIS[f], y = v[0];
     while (y - yaw > Math.PI) y -= TAU; while (yaw - y > Math.PI) y += TAU;
     tyaw = y; tpitch = v[1]; tzoom = v[2]; ease = true; spin = 0; objetivos(); mov = performance.now(); controles();
   }
-  function escala() { return Math.min(W / 2 / 7, H / 2 / 5.2) * zoom; }
+  function escala() { return Math.min(W / 2 / 7, H / 2 / 5.2) * zoom * (heroe && W > 600 ? 1.12 : 1); }
   function rect(x, y, w, h, r) { ctxO.beginPath(); ctxO.moveTo(x + r, y); ctxO.arcTo(x + w, y, x + w, y + h, r); ctxO.arcTo(x + w, y + h, x, y + h, r); ctxO.arcTo(x, y + h, x, y, r); ctxO.arcTo(x, y, x + w, y, r); ctxO.closePath(); }
 
   function dibujar(now) {
     var cyw = Math.cos(yaw), syw = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), S = escala() * BS, cx = BW / 2, cy = BH / 2;
     var t1 = (reloj * 60) | 0, t2 = (reloj * 47) | 0, t3 = (reloj * 150) | 0;
     d32.fill(0);
+    var orb = form === "orbitas";
+    if (orb) for (var ko = 0; ko < G.length; ko++) { OC[ko] = Math.cos(OW[ko] * orbT); OS[ko] = Math.sin(OW[ko] * orbT); }
     for (var i = 0; i < N; i++) {
       var p = ph[i], x = px[i] + 0.045 * LUT[(p + t1) & 1023], y = py[i] + 0.045 * LUT[(p * 3 + t2) & 1023], z = pz[i];
+      if (orb) { var go = gOf[i]; if (OW[go]) { var xo = x; x = xo * OC[go] - z * OS[go]; z = xo * OS[go] + z * OC[go]; } }
       var X = x * cyw + z * syw, Z0 = -x * syw + z * cyw, d = CAM + (-y * sp + Z0 * cp);
       if (d < 3) continue;
-      var s = S * CAM / d, sx = (cx + X * s) | 0, sy = (cy - (y * cp + Z0 * sp) * s) | 0, n = (BS * 1.15 * CAM / d + 0.5) | 0;
+      var s = S * CAM / d, sx = (cx + X * s) | 0, sy = (cy - (y * cp + Z0 * sp) * s) | 0, n = (BS * (heroe ? 1.5 : 1.15) * CAM / d + 0.5) | 0;
       if (n < 1) n = 1; else if (n > 4) n = 4;
       if (sx < 0 || sy < 0 || sx > BW - n || sy > BH - n) continue;
-      var a = 0.62 * (d > CAM ? Math.max(0.35, 1 - (d - CAM) * 0.045) : 1) * (0.86 + 0.2 * LUT[(p * 7 + t3) & 1023]);
+      var a = (heroe ? 0.95 : 0.62) * (d > CAM ? Math.max(0.35, 1 - (d - CAM) * 0.045) : 1) * (0.86 + 0.2 * LUT[(p * 7 + t3) & 1023]);
       var n0 = nx[i], n1 = ny[i], n2 = nz[i];
       if (n0 !== 0 || n1 !== 0 || n2 !== 0) { var a1 = n0 * cyw + n2 * syw, b0 = -n0 * syw + n2 * cyw, dl = (a1 * LX + (n1 * cp + b0 * sp) * LY + (-n1 * sp + b0 * cp) * LZ) * INV; a *= dl > 0 ? 0.42 + 0.9 * dl : 0.42 + 0.22 * dl; }
       if (sel >= 0) a *= gOf[i] === sel ? 1.45 : 0.25;
@@ -148,7 +173,7 @@
       }
     }
     ctxP.putImageData(img, 0, 0);
-    if (deco) ctx.clearRect(0, 0, BW, BH);
+    if (claro) ctx.clearRect(0, 0, BW, BH);
     else { ctx.fillStyle = !still && now - mov < 2600 ? "rgba(8,12,21,0.3)" : "#080C15"; ctx.fillRect(0, 0, BW, BH); }
     ctx.drawImage(cP, 0, 0);
     ctxG.clearRect(0, 0, cG.width, cG.height); ctxG.drawImage(cv, 0, 0, cG.width, cG.height);
@@ -193,7 +218,9 @@
     if (best >= 0) return best;
     var cyw = Math.cos(yaw), syw = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), So = escala(), b = -1, dm = 16 * 16;
     for (var i = 0; i < N; i++) {
-      var X = px[i] * cyw + pz[i] * syw, Z0 = -px[i] * syw + pz[i] * cyw, d = CAM + (-py[i] * sp + Z0 * cp); if (d < 3) continue;
+      var x0 = px[i], z0 = pz[i], go = gOf[i];
+      if (form === "orbitas" && OW[go]) { x0 = px[i] * OC[go] - pz[i] * OS[go]; z0 = px[i] * OS[go] + pz[i] * OC[go]; }
+      var X = x0 * cyw + z0 * syw, Z0 = -x0 * syw + z0 * cyw, d = CAM + (-py[i] * sp + Z0 * cp); if (d < 3) continue;
       var s = So * CAM / d, dx = W / 2 + X * s - x, dy = H / 2 - (py[i] * cp + Z0 * sp) * s - y, q = dx * dx + dy * dy;
       if (q < dm) { dm = q; b = i; }
     }
@@ -203,7 +230,9 @@
     requestAnimationFrame(cuadro);
     var dt = Math.min(0.05, (t - prev) / 1000 || 0); prev = t;
     if (document.hidden || !W || !visible) return;
-    if (!still) reloj += dt;
+    if (!still) { reloj += dt; if (form === "orbitas") orbT += dt; }
+    if (!ciclo) ciclo = t;
+    if ((deco || el.hasAttribute("data-ciclo")) && !still && !tocado && t - ciclo > 9000) { var fs = Object.keys(NOM); ciclo = t; cambiarForma(fs[(fs.indexOf(form) + 1) % fs.length]); }
     var kb = dt * 2.6;
     for (var i = 0; i < N; i++) { var k = Math.min(1, kb * (0.5 + u4[i] * 1.5)); px[i] += (tx[i] - px[i]) * k; py[i] += (ty[i] - py[i]) * k; pz[i] += (tz[i] - pz[i]) * k; }
     if (ease) { var ke = Math.min(1, dt * 2.6); yaw += (tyaw - yaw) * ke; pitch += (tpitch - pitch) * ke; zoom += (tzoom - zoom) * ke; if (Math.abs(tyaw - yaw) + Math.abs(tpitch - pitch) + Math.abs(tzoom - zoom) < 0.004) ease = false; }
@@ -213,6 +242,7 @@
   }
   cO.addEventListener("pointerdown", function (e) {
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); try { cO.setPointerCapture(e.pointerId); } catch (_) {}
+    tocado = true;
     if (ptrs.size === 1) { drag = { x: e.clientX, y: e.clientY, mv: 0, t: performance.now() }; spin = 0; }
     else if (ptrs.size === 2) { var a = Array.from(ptrs.values()); pinch = Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y); if (drag) drag.mv = 99; }
   });
@@ -237,5 +267,6 @@
   var visible = true;
   if ("IntersectionObserver" in window) new IntersectionObserver(function (es) { visible = es[0].isIntersecting; }).observe(el);
   if ("ResizeObserver" in window) new ResizeObserver(resize).observe(el); else window.addEventListener("resize", resize);
+  if (NOM[el.getAttribute("data-forma")]) { form = el.getAttribute("data-forma"); var v0 = VIS[form]; yaw = tyaw = v0[0]; pitch = tpitch = v0[1]; zoom = tzoom = v0[2]; }
   resize(); cargar(datos.grupos || []); requestAnimationFrame(cuadro);
 })();

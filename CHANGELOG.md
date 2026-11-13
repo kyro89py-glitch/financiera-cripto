@@ -2,6 +2,15 @@
 
 Este proyecto sigue [versionado semántico](https://semver.org/lang/es/). Las fechas son de Paraguay.
 
+## [0.4.0] - 2026-11-13
+
+### Nuevo
+- **El 3D como protagonista:** el inicio del cliente, su cartera, el resumen del equipo y el mercado abren con una escena 3D a todo el ancho, con las cifras principales encima.
+- **Motor 3D:** nueva forma **Órbitas** (el activo mayor al centro y los demás girando en anillos), entrada animada desde una nube de puntos, más brillo y recorrido automático por las cuatro formas en la pantalla de ingreso.
+- **Rentabilidad ponderada por tiempo** de cada cliente, comparada con Bitcoin en el mismo período.
+- **Composición frente a la cartera modelo:** peso actual y objetivo de cada activo, con aviso cuando la cartera se desvía 5 puntos o más.
+- **Mercado:** precios, variación de 24 horas y de 7 días con minigráficos, para clientes y equipo.
+
 ## [0.3.0] - 2026-11-13
 
 ### Nuevo

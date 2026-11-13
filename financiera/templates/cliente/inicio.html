@@ -1,6 +1,7 @@
 {% extends "base.html" %}
-{% from "macros.html" import kyc, barra, linea, estado, ph, tipo_op, signo, vacio with context %}
+{% from "macros.html" import kyc, barra, linea, estado, ph, tipo_op, signo, vacio, escena3d, rendimiento, mercado_item with context %}
 {% block titulo %}Inicio{% endblock %}
+{% block cabeza %}<script src="{{ url_for('static', filename='js/escena3d.js') }}?v={{ VERSION }}" defer></script>{% endblock %}
 {% block contenido %}
 {% set cli = g.cliente %}
 {% call ph("Hola, " ~ cli.nombre.split()[0], "Así está tu cartera hoy.") %}{{ kyc(cli) }}{% endcall %}
@@ -10,28 +11,33 @@
   <div class="flash warn">Para completar tu verificación falta: {{ faltan|join('; ') }}. <a href="{{ url_for('cliente.perfil') }}#legajo">Subir documentos</a></div>
 {% endif %}
 
-<section class="card hero col" style="gap:18px">
-  <div class="row spread" style="align-items:flex-start">
+<section class="hero3d">
+  <div class="info">
     <div>
       <span class="lab">Valor de tu cartera</span>
       <div class="big">{{ total|usd }}</div>
       {% if total %}
         <div class="num {{ 'up' if var7 >= 0 else 'down' }}" style="margin-top:4px">{{ ("+" if var7 >= 0 else "") }}{{ var7|usd }} ({{ (var7 / graf.inicio_valor * 100 if graf and graf.inicio_valor else 0)|pct }}) en 7 días</div>
       {% else %}
-        <div class="muted" style="margin-top:4px">Todavía no tienes inversiones.</div>
+        <div style="margin-top:4px;opacity:.75">Todavía no tienes inversiones.</div>
       {% endif %}
+    </div>
+    <div class="stats">
+      <div><span class="lab">Aportado neto</span><div class="num">{{ aportado|usd }}</div></div>
+      <div><span class="lab">Resultado</span><div class="num {{ 'up' if total - aportado >= 0 else 'down' }}">{{ ("+" if total - aportado >= 0 else "") }}{{ (total - aportado)|usd }}</div></div>
+      {{ rendimiento(rend) }}
     </div>
     <div class="row">
       <a class="btn primary" href="{{ url_for('cliente.invertir') }}">Aportar</a>
       <a class="btn" href="{{ url_for('cliente.invertir') }}#retirar">Retirar</a>
+      <a class="btn" href="{{ url_for('cliente.cartera') }}">Ver detalle</a>
     </div>
+    <span class="xs" style="opacity:.6">Cartera {{ modelo.nombre }} · arrastra la figura para girarla</span>
   </div>
-  <div class="stats">
-    <div><span class="lab">Aportado neto</span><div class="num">{{ aportado|usd }}</div></div>
-    <div><span class="lab">Resultado</span><div class="num {{ 'up' if total - aportado >= 0 else 'down' }}">{{ ("+" if total - aportado >= 0 else "") }}{{ (total - aportado)|usd }}{% if aportado > 0 %} ({{ ((total - aportado) / aportado * 100)|pct }}){% endif %}</div></div>
-    <div><span class="lab">Cartera</span><div>{{ modelo.nombre }}</div></div>
-  </div>
+  {{ escena3d(datos3d, heroe=true) }}
 </section>
+{% if mayor_desvio >= 5 %}<div class="flash">Tu cartera se alejó {{ mayor_desvio|pct(1, false) }} de la composición de {{ modelo.nombre }} por los movimientos del mercado. <a href="{{ url_for('cliente.cartera') }}#composicion">Ver composición</a></div>{% endif %}
+
 
 {% if abiertas %}
 <section class="card">
@@ -52,7 +58,7 @@
     {% if graf %}{{ linea(graf, "Evolución del valor de tu cartera en 7 días") }}{% endif %}
   </section>
   <section class="card">
-    <div class="ch"><h3>Distribución</h3><a class="btn sm" href="{{ url_for('cliente.cartera') }}">Ver en 3D</a></div>
+    <div class="ch"><h3>Distribución</h3><a class="btn sm" href="{{ url_for('cliente.cartera') }}">Detalle</a></div>
     {{ barra(filas) }}
     <div class="list" style="margin-top:6px">
     {% for f in filas %}
@@ -65,5 +71,9 @@
 {% else %}
 <section class="card">{{ vacio('invertir', 'Cuando hagas tu primer aporte vas a ver aquí la evolución y la distribución de tu cartera.') }}</section>
 {% endif %}
+<section class="card flush">
+  <div class="ch"><h3>Mercado</h3><a class="small" href="{{ url_for('auth.mercado') }}">Ver todo</a></div>
+  <div class="list">{% for m in mercado %}{{ mercado_item(m) }}{% endfor %}</div>
+</section>
 <p class="note">Invertir en criptomonedas implica riesgo: su precio puede bajar con fuerza y puedes perder parte o todo lo invertido. Los resultados pasados no garantizan resultados futuros.</p>
 {% endblock %}

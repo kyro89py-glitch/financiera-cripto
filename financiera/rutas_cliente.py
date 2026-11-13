@@ -30,6 +30,13 @@ def datos3d(filas, titulo):
                                          "value": f["valor"], "col": f["color"]} for f in filas if f["valor"] > 0]}
 
 
+def _mercado():
+    out = precios.mercado()
+    for m in out:
+        m["chispa"] = graficos.chispa(m["serie"])
+    return out
+
+
 def _abiertas(cid):
     return db.todos("SELECT * FROM operaciones WHERE cliente_id = ? AND estado IN ('pendiente', 'primera_firma', 'ejecutando')"
                     " ORDER BY creado DESC", (cid,))
@@ -47,15 +54,20 @@ def inicio():
     aportado = cartera.aportado_neto(c["id"])
     modelo = db.uno("SELECT * FROM modelos WHERE codigo = ?", (c["modelo"],))
     faltan = documentos.faltantes(c) if c["kyc_estado"] != "verificado" else []
+    desv, mayor = cartera.desvio(filas, total, c["modelo"]) if total else ([], 0)
     return render_template("cliente/inicio.html", filas=filas, total=total, graf=graf, var7=var7, aportado=aportado,
-                           modelo=modelo, abiertas=_abiertas(c["id"]), faltan=faltan)
+                           modelo=modelo, abiertas=_abiertas(c["id"]), faltan=faltan, rend=cartera.rendimiento(c["id"], total),
+                           datos3d=datos3d(filas, ""), mercado=_mercado()[:5], mayor_desvio=mayor)
 
 
 @bp.get("/cartera", endpoint="cartera")
 def ver_cartera():
     c = g.cliente
     filas, total = cartera.posiciones(c["id"])
-    return render_template("cliente/cartera.html", filas=filas, total=total,
+    desv, mayor = cartera.desvio(filas, total, c["modelo"]) if total else ([], 0)
+    modelo = db.uno("SELECT * FROM modelos WHERE codigo = ?", (c["modelo"],))
+    return render_template("cliente/cartera.html", filas=filas, total=total, desvio=desv, mayor_desvio=mayor, modelo=modelo,
+                           rend=cartera.rendimiento(c["id"], total), aportado=cartera.aportado_neto(c["id"]),
                            datos3d=datos3d(filas, f"Cartera de {c['nombre'].split()[0]}"))
 
 

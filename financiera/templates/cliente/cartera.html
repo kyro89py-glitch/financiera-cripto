@@ -1,16 +1,24 @@
 {% extends "base.html" %}
-{% from "macros.html" import escena3d, ph, vacio with context %}
+{% from "macros.html" import escena3d, ph, vacio, pill, rendimiento with context %}
 {% block titulo %}Tu cartera{% endblock %}
 {% block cabeza %}<script src="{{ url_for('static', filename='js/escena3d.js') }}?v={{ VERSION }}" defer></script>{% endblock %}
 {% block contenido %}
-{% call ph("Tu cartera", "Valor actual " ~ (total|usd) ~ ". Cada punto de la vista 3D es una porción igual de tu dinero.") %}
+{% call ph("Tu cartera", "Cada punto de la vista 3D es una porción igual de tu dinero.") %}
   <a class="btn" href="{{ url_for('cliente.movimientos') }}">{{ icono('documento') }}Estados de cuenta</a>
 {% endcall %}
+<section class="hero3d">
+  <div class="info">
+    <div><span class="lab">Valor actual</span><div class="big">{{ total|usd }}</div></div>
+    <div class="stats">
+      <div><span class="lab">Aportado neto</span><div class="num">{{ aportado|usd }}</div></div>
+      <div><span class="lab">Resultado</span><div class="num {{ 'up' if total - aportado >= 0 else 'down' }}">{{ ("+" if total - aportado >= 0 else "") }}{{ (total - aportado)|usd }}</div></div>
+      {{ rendimiento(rend) }}
+    </div>
+    <span class="xs" style="opacity:.6">Arrastra para girar, pellizca para acercar y toca un grupo para ver cuánto vale. Prueba las cuatro formas.</span>
+  </div>
+  {{ escena3d(datos3d, heroe=true) }}
+</section>
 <div class="g2">
-  <section class="card">
-    {{ escena3d(datos3d) }}
-    <p class="small muted" style="margin-top:10px">Arrastra para girar, pellizca para acercar y toca un grupo para ver cuánto vale.</p>
-  </section>
   <section class="card flush">
     <div class="ch"><h3>Tenencias</h3></div>
     <div class="list">
@@ -23,6 +31,17 @@
       {{ vacio('cartera', 'Todavía no tienes inversiones.') }}
     {% endfor %}
     </div>
+  </section>
+  <section class="card col" id="composicion">
+    <div class="ch" style="margin:0"><h3>Composición frente a {{ modelo.nombre }}</h3>{% if desvio %}{{ pill('ok' if mayor_desvio < 5 else 'warn', 'Alineada' if mayor_desvio < 5 else 'Desviada ' ~ (mayor_desvio|pct(1, false))) }}{% endif %}</div>
+    {% for d in desvio %}
+    <div class="desv">
+      <div class="row spread"><span><i class="dot" style="background:{{ d.color }}"></i> <b>{{ d.activo if d.activo != 'USD' else 'USD' }}</b> <span class="small muted">{{ d.nombre }}</span></span>
+        <span class="num small">{{ d.actual|pct(1, false) }} <span class="muted">/ objetivo {{ d.objetivo|pct(0, false) }}</span></span></div>
+      <div class="desv-barra" aria-hidden="true"><span style="width:{{ [d.actual, 100]|min }}%;background:{{ d.color }}"></span><i style="left:{{ d.objetivo }}%"></i></div>
+    </div>
+    {% else %}<p class="small muted">Cuando inviertas vas a ver aquí cuánto se parece tu cartera a la composición que elegiste.</p>{% endfor %}
+    {% if desvio %}<p class="note">La marca vertical es el peso objetivo. Con el tiempo los precios mueven los pesos; tu próximo aporte se invierte con la composición objetivo.</p>{% endif %}
   </section>
 </div>
 {% endblock %}

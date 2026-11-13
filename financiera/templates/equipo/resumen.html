@@ -8,9 +8,26 @@
   {% if puede('reportes.exportar') %}<a class="btn" href="{{ url_for('equipo.reporte_operaciones') }}">{{ icono('descargar') }}Reporte</a>{% endif %}
 {% endcall %}
 
-<div class="kpis">
-  <div class="kpi"><span class="lab">Activos bajo gestión</span><b class="num">{{ casa.total|usd(0) }}</b>
-    {% if graf %}{% set d = graf.fin_valor - graf.inicio_valor %}<span class="s {{ 'up' if d >= 0 else 'down' }}">{{ "+" if d >= 0 else "" }}{{ d|usd(0) }} en 7 días</span>{% else %}<span class="s">sin saldo</span>{% endif %}</div>
+<section class="hero3d">
+  <div class="info">
+    <div><span class="lab">Activos bajo gestión</span><div class="big">{{ casa.total|usd(0) }}</div>
+      {% if graf %}{% set d = graf.fin_valor - graf.inicio_valor %}<div class="num {{ 'up' if d >= 0 else 'down' }}" style="margin-top:4px">{{ "+" if d >= 0 else "" }}{{ d|usd(0) }} en 7 días</div>{% endif %}</div>
+    <div class="stats">
+      <div><span class="lab">Clientes con saldo</span><div class="num">{{ con_saldo }}</div></div>
+      <div><span class="lab">Por aprobar</span><div class="num">{{ abiertas|length }}</div></div>
+      <div><span class="lab">Flujo 14 días</span><div class="num {{ 'up' if entradas - salidas >= 0 else 'down' }}">{{ "+" if entradas - salidas >= 0 else "" }}{{ (entradas - salidas)|usd(0) }}</div></div>
+    </div>
+    <div class="chips oscuro">
+      {% for v, t in [('activo', 'Por activo'), ('modelo', 'Por cartera'), ('cliente', 'Por cliente')] %}
+      <a href="{{ url_for('equipo.resumen', vista=v) }}" aria-current="{{ 'true' if vista == v else 'false' }}">{{ t }}</a>
+      {% endfor %}
+    </div>
+    <span class="xs" style="opacity:.6">Cada punto es una porción igual del dinero bajo gestión. <a href="{{ url_for('auth.mercado') }}" style="color:inherit">Ver mercado</a></span>
+  </div>
+  {{ escena3d(datos3d, heroe=true, forma="orbitas") }}
+</section>
+
+<div class="kpis tres">
   <div class="kpi"><span class="lab">Clientes</span><b class="num">{{ clientes|length }}</b><span class="s">{{ con_saldo }} con saldo · {{ clientes|selectattr('kyc_estado', 'equalto', 'verificado')|list|length }} verificados</span></div>
   <div class="kpi{{ ' alerta' if abiertas }}"><span class="lab">Por aprobar</span><b class="num">{{ abiertas|length }}</b>
     {% if abiertas %}<a href="{{ url_for('equipo.operaciones') }}">La más antigua {{ mas_antigua|hace }} →</a>{% else %}<span class="s">Nada pendiente</span>{% endif %}</div>
@@ -47,22 +64,6 @@
       {% for nivel, texto, enlace in alertas %}{{ alerta_item(nivel, texto, enlace) }}{% else %}{{ vacio('escudo', 'Sin alertas abiertas.') }}{% endfor %}
       </div>
     </section>
-  </div>
-</div>
-
-<div class="g2">
-  <section class="card col">
-    <div class="row spread"><h3>Activos en 3D</h3>
-      <div class="chips">
-        {% for v, t in [('activo', 'Por activo'), ('modelo', 'Por cartera'), ('cliente', 'Por cliente')] %}
-        <a href="{{ url_for('equipo.resumen', vista=v) }}" aria-current="{{ 'true' if vista == v else 'false' }}">{{ t }}</a>
-        {% endfor %}
-      </div>
-    </div>
-    {{ escena3d(datos3d) }}
-    <p class="small muted">Cada punto es una porción igual del dinero bajo gestión. Arrastra para girar y toca un grupo para ver su monto.</p>
-  </section>
-  <div class="col">
     <section class="card col">
       <h3>Exposición por activo</h3>
       {{ barra(casa.activos) }}
@@ -84,4 +85,5 @@
     </section>
   </div>
 </div>
+
 {% endblock %}

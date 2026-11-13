@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% from "macros.html" import escena3d, chispa, ph, vacio with context %}
+{% block titulo %}Mercado{% endblock %}
+{% block cabeza %}<script src="{{ url_for('static', filename='js/escena3d.js') }}?v={{ VERSION }}" defer></script>{% endblock %}
+{% block contenido %}
+{{ ph("Mercado", "Precio de cada activo que usa la casa, con su evolución de los últimos 7 días. Fuente: " ~ fuente ~ ".", volver=url_for('inicio'), volver_txt="Inicio") }}
+<section class="hero3d">
+  <div class="info">
+    <span class="lab">{{ datos3d.titulo }}</span>
+    <h3 style="font-size:24px;color:#fff;margin:0">Así se reparte entre los activos del mercado</h3>
+    <p class="small" style="opacity:.75;margin:0">Cada anillo es un activo y gira alrededor del más grande. Toca uno para ver cuánto vale.</p>
+  </div>
+  {{ escena3d(datos3d, heroe=true, forma="orbitas") }}
+</section>
+<section class="card flush">
+  <div class="tablewrap"><table class="tabla resp">
+    <thead><tr><th>Activo</th><th class="r">Precio</th><th class="r">24 h</th><th class="r">7 días</th><th>Evolución</th><th class="r">{{ "Tienes" if usuario.rol == 'cliente' else "Bajo gestión" }}</th></tr></thead>
+    <tbody>{% for m in filas %}
+      <tr>
+        <td><i class="dot" style="background:{{ m.color }}"></i> <b>{{ m.codigo }}</b><span class="sec">{{ m.nombre }}{% if m.ts %} · {{ m.ts|hace }}{% endif %}</span></td>
+        <td class="r num" style="white-space:nowrap">{% if m.precio %}{{ m.precio|precio }}{% else %}—{% endif %}</td>
+        <td class="r num {{ 'up' if (m.cambio or 0) >= 0 else 'down' }}">{{ m.cambio|pct if m.cambio is not none else "—" }}</td>
+        <td class="r num oc {{ 'up' if (m.var or 0) >= 0 else 'down' }}">{{ m.var|pct if m.var is not none else "—" }}</td>
+        <td class="oc">{{ chispa(m.chispa) }}</td>
+        <td class="r num oc">{{ tengo[m.codigo]|usd(0) if m.codigo in tengo else "—" }}</td>
+      </tr>
+    {% endfor %}</tbody>
+  </table></div>
+</section>
+<p class="note">Los precios son una referencia para valuar las carteras; el precio de cada compra o venta es el que se obtiene al ejecutarla. Los resultados pasados no garantizan resultados futuros.</p>
+{% endblock %}

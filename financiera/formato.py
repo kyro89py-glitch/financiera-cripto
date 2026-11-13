@@ -57,6 +57,8 @@ NAV = {
 }
 ACTIVO = {  # qué rutas marcan cada pestaña como activa
     "cliente.movimientos": ("cliente.movimientos", "cliente.estado_mensual"),
+    "cliente.inicio": ("cliente.inicio", "auth.mercado"),
+    "equipo.resumen": ("equipo.resumen", "auth.mercado"),
     "equipo.operaciones": ("equipo.operaciones", "equipo.operacion"),
     "equipo.clientes": ("equipo.clientes", "equipo.cliente", "equipo.cliente_nuevo", "equipo.estado_mensual"),
     "equipo.cumplimiento": ("equipo.cumplimiento", "equipo.bitacora", "equipo.documentos", "equipo.conciliacion"),

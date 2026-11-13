@@ -224,3 +224,49 @@ def serie_casa(dias=7, puntos=29):
                 total += valor_cent(a, ten[a], p)
         out.append((t, total))
     return out
+
+
+def rendimiento(cliente_id, total_actual=None):
+    """Rentabilidad ponderada por tiempo: mide cómo rindió el dinero invertido sin que la distorsionen los aportes y
+    retiros (encadena el resultado de cada tramo entre un movimiento y el siguiente). Las comisiones la reducen.
+    Devuelve None si el cliente nunca invirtió."""
+    filas = db.todos("SELECT tipo, liquidado_cent, resuelto_ts FROM operaciones WHERE cliente_id = ? AND estado = 'liquidada'"
+                     " AND tipo IN ('aporte', 'retiro') ORDER BY resuelto_ts, id", (cliente_id,))
+    if not filas:
+        return None
+    flujos = {}
+    for f in filas:
+        flujos[f["resuelto_ts"]] = flujos.get(f["resuelto_ts"], 0) + (f["liquidado_cent"] if f["tipo"] == "aporte" else -f["liquidado_cent"])
+    factor, previo = Decimal(1), 0
+    for ts, neto in flujos.items():
+        despues, _ = valor_en(cliente_id, ts)
+        if previo > 0:
+            factor *= Decimal(max(despues - neto, 0)) / Decimal(previo)
+        previo = despues
+    if total_actual is None:
+        _, total_actual = posiciones(cliente_id)
+    if previo > 0:
+        factor *= Decimal(total_actual) / Decimal(previo)
+    desde = next(iter(flujos))
+    vig = precios_mod.vigentes()
+    btc0 = precio_en("BTC", desde)
+    btc = float((vig["BTC"]["precio"] / btc0 - 1) * 100) if btc0 and "BTC" in vig else None
+    from .tiempo import leer
+    return {"twr": float((factor - 1) * 100), "desde": desde, "btc": btc, "dias": max(1, (ahora_dt() - leer(desde)).days)}
+
+
+def desvio(filas, total, modelo):
+    """Compara el peso actual de cada activo con el de la cartera modelo. Devuelve (filas, mayor_desvio_en_puntos)."""
+    objetivo = {a: pb / 100 for a, pb in pesos_modelo(modelo)}
+    actual = {f["activo"]: f for f in filas}
+    info = info_activos()
+    out = []
+    for a in list(objetivo) + [x for x in actual if x not in objetivo]:
+        f = actual.get(a)
+        act = f["valor"] / total * 100 if f and total else 0.0
+        obj = objetivo.get(a, 0.0)
+        if act < 0.05 and not obj:
+            continue
+        out.append({"activo": a, "nombre": "Dólares sin invertir" if a == "USD" else info[a]["nombre"],
+                    "color": f["color"] if f else info[a]["color"], "actual": act, "objetivo": obj, "dif": act - obj})
+    return out, max((abs(x["dif"]) for x in out), default=0.0)

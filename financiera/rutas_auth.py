@@ -189,6 +189,27 @@ def seguridad_cuenta():
 
 
 
+@bp.get("/mercado")
+def mercado():
+    r = seguridad.exigir_sesion()
+    if r:
+        return r
+    from . import cartera, graficos, precios
+    filas = precios.mercado()
+    for m in filas:
+        m["chispa"] = graficos.chispa(m["serie"], 160, 40)
+    if g.usuario["rol"] == "cliente":
+        cli = db.uno("SELECT id FROM clientes WHERE usuario_id = ?", (g.usuario["id"],))
+        pos, _ = cartera.posiciones(cli["id"]) if cli else ([], 0)
+        titulo = "Tu cartera"
+    else:
+        pos, titulo = cartera.resumen_casa()["activos"], "Activos bajo gestión"
+    tengo = {p["activo"]: p["valor"] for p in pos}
+    datos = {"titulo": titulo, "grupos": [{"label": p["activo"] if p["activo"] != "USD" else "Saldo USD", "value": p["valor"],
+                                           "col": p["color"]} for p in pos if p["valor"] > 0]}
+    return render_template("mercado.html", filas=filas, tengo=tengo, datos3d=datos, fuente=precios.fuente())
+
+
 @bp.get("/cuenta/avisos")
 def avisos():
     r = seguridad.exigir_sesion()

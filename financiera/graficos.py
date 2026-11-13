@@ -98,3 +98,19 @@ def barras(dias, ancho=640, alto=200):
                                  (len(dias) - 1, izq + w, "end"))]
     return {"ancho": ancho, "alto": alto, "barras": out, "marcas": marcas, "etiquetas": etiquetas, "izq": izq,
             "der": ancho - der, "cero": cero}
+
+
+def chispa(valores, ancho=120, alto=34):
+    """Minigráfico de línea sin ejes. Devuelve None si no hay al menos dos valores."""
+    if len(valores) < 2:
+        return None
+    if len(valores) > 60:
+        paso = len(valores) / 60
+        valores = [valores[int(i * paso)] for i in range(60)] + [valores[-1]]
+    mn, mx = min(valores), max(valores)
+    rango = (mx - mn) or 1
+    n = len(valores)
+    pts = [(2 + i * (ancho - 4) / (n - 1), 3 + (1 - (v - mn) / rango) * (alto - 6)) for i, v in enumerate(valores)]
+    linea_ = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
+    return {"ancho": ancho, "alto": alto, "puntos": linea_, "area": f"2,{alto} {linea_} {ancho - 2},{alto}",
+            "sube": valores[-1] >= valores[0], "fin": pts[-1]}

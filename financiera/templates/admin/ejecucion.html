@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph, pill, check, vacio, tipo_op with context %}
+{% block titulo %}Ejecución{% endblock %}
+{% block contenido %}
+{% call ph("Ejecución de órdenes", "Dónde se compran y venden las criptomonedas cuando se aprueba una operación.") %}
+  {{ pill('bad', 'En pausa') if pausada else pill('ok', 'Activa') }}
+{% endcall %}
+{% if g.usuario.rol == 'admin' %}{% include "admin/_subnav.html" %}{% else %}{% include "equipo/_subnav.html" %}{% endif %}
+
+<div class="g2">
+  <div class="col">
+    <section class="card hero col" style="gap:14px">
+      <div class="row spread" style="align-items:flex-start">
+        <div><span class="lab">Ejecutor</span><div class="big" style="font-size:30px">{{ brk.etiqueta }}</div>
+          <div class="small" style="opacity:.8;margin-top:4px">
+            {% if modo == 'binance' %}Órdenes de mercado contra USDT · {{ brk.url }}{% else %}Las órdenes se ejecutan dentro del sistema al precio vigente; no se envía nada a un exchange.{% endif %}
+          </div></div>
+        {% if modo == 'binance' %}{{ pill('ok' if brk.real else 'info', 'Dinero real' if brk.real else 'Red de pruebas') }}{% endif %}
+      </div>
+      <div class="stats">
+        <div><span class="lab">Precios</span><div>{{ fuente }}</div></div>
+        <div><span class="lab">Incompletas</span><div class="num {{ 'down' if incompletas }}">{{ incompletas|length }}</div></div>
+        <div><span class="lab">Estado</span><div>{{ "En pausa" if pausada else "Enviando órdenes" }}</div></div>
+      </div>
+    </section>
+
+    {% if pausada %}
+    <section class="card col">
+      <div class="ch" style="margin:0"><h3>Ejecución en pausa</h3>{{ pill('bad', 'Pausa') }}</div>
+      <p class="small">{% if pausa %}La pausó {{ pausa.nombre or "alguien del equipo" }} {{ pausa.ts|hace }}.{% endif %} Mientras dure no se aprueban aportes, retiros ni comisiones, y no se reintenta ninguna orden.</p>
+      {% if puede('ejecucion.reanudar') %}
+      <form method="post" action="{{ url_for('admin.ejecucion') }}" data-confirmar="¿Reanudar el envío de órdenes?">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="reanudar">
+        <button class="btn primary" type="submit">Reanudar la ejecución</button>
+      </form>
+      {% else %}<p class="note">Solo un administrador puede reanudarla.</p>{% endif %}
+    </section>
+    {% elif puede('ejecucion.pausar') %}
+    <section class="card col">
+      <h3>Pausa de emergencia</h3>
+      <p class="small muted">Detiene de inmediato todo envío de órdenes: úsala si ves precios anómalos, un problema en el exchange o una sospecha de acceso indebido. Se avisa a todo el equipo.</p>
+      <form class="row" method="post" action="{{ url_for('admin.ejecucion') }}" data-confirmar="¿Pausar el envío de órdenes? Nadie podrá aprobar operaciones hasta reanudarlo." style="align-items:flex-end">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="pausar">
+        <label class="field" for="motivo" style="flex:1;min-width:200px">Motivo<input id="motivo" name="motivo" maxlength="200" placeholder="Ej.: Binance en mantenimiento"></label>
+        <button class="btn danger" type="submit">Pausar la ejecución</button>
+      </form>
+    </section>
+    {% endif %}
+
+    <section class="card col">
+      <div class="ch" style="margin:0"><h3>Conexión y clave</h3>
+        <form method="post" action="{{ url_for('admin.ejecucion') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="probar"><button class="btn sm" type="submit">Probar ahora</button></form></div>
+      {% if controles %}
+        <ul class="checks">{% for ok, texto in controles %}{{ check(ok, texto) }}{% endfor %}</ul>
+      {% else %}
+        <p class="small muted">Comprueba la conexión, el reloj del servidor y los permisos de la clave de API. La clave debe poder operar en Spot, tener los <b>retiros deshabilitados</b> y estar restringida a la IP del servidor.</p>
+      {% endif %}
+    </section>
+  </div>
+
+  <div class="col">
+    <section class="card flush">
+      <div class="ch"><h3>Saldos en el exchange</h3>
+        {% if modo == 'binance' %}<form method="post" action="{{ url_for('admin.ejecucion') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="saldos"><button class="btn sm" type="submit">Traer saldos</button></form>{% endif %}</div>
+      {% if saldos is not none %}
+      <div class="tablewrap"><table class="tabla">
+        <thead><tr><th>Activo</th><th class="r">En {{ brk.etiqueta }}</th><th class="r">Según el libro</th><th class="r">Diferencia</th></tr></thead>
+        <tbody>{% for a in info %}{% set s = saldos.get(a, 0) %}{% set l = libro.get(a, 0) %}
+          <tr><td><i class="dot" style="background:{{ info[a].color }}"></i> <b>{{ a }}</b></td><td class="r num">{{ s|unidades(a) }}</td><td class="r num">{{ l|unidades(a) }}</td>
+            <td class="r dif {{ 'down' if s < l else ('up' if s > l else 'muted') }}">{{ ('+' if s > l else '') ~ ((s - l)|unidades(a)) if s != l else '—' }}</td></tr>
+        {% endfor %}</tbody>
+      </table></div>
+      <p class="note" style="padding:0 18px 16px">Una diferencia positiva es saldo propio de la casa (comisiones, USDT todavía sin asignar). Una negativa significa que falta dinero en el exchange: concílialo y revisa de inmediato.</p>
+      {% elif modo == 'binance' %}
+        <p class="small muted" style="padding:0 18px 18px">Trae los saldos de la cuenta para compararlos con el libro. Para registrar una conciliación formal usa <a href="{{ url_for('equipo.conciliacion', desde='exchange') }}">Conciliación</a>.</p>
+      {% else %}
+        <p class="small muted" style="padding:0 18px 18px">El simulador no tiene saldos propios: todo vive en el libro contable.</p>
+      {% endif %}
+    </section>
+
+    <section class="card flush">
+      <div class="ch"><h3>Operaciones con ejecución incompleta</h3><span class="meta">{{ incompletas|length }}</span></div>
+      <div class="list">
+      {% for o in incompletas %}
+        <a class="item" href="{{ url_for('equipo.operacion', opid=o.id) }}"><div class="grow"><div class="t">{{ o.nombre }} · {{ tipo_op(o) }}</div><div class="d">Empezó {{ o.ejecucion_inicio|hace }}</div></div><div class="amt num">{{ o.monto_cent|usd }}</div></a>
+      {% else %}{{ vacio('escudo', 'Todas las ejecuciones terminaron.') }}{% endfor %}
+      </div>
+    </section>
+  </div>
+</div>
+
+<section class="card flush">
+  <div class="ch"><h3>Últimas órdenes</h3><span class="meta">25 más recientes</span></div>
+  {% if recientes %}
+  <div class="tablewrap"><table class="tabla resp">
+    <thead><tr><th>Orden</th><th class="r">Ejecutado</th><th>Estado</th><th>Dónde</th></tr></thead>
+    <tbody>{% for t in recientes %}
+      <tr>
+        <td><a class="fila" href="{{ url_for('equipo.operacion', opid=t.operacion_id) }}">{{ "Compra" if t.lado == 'compra' else "Venta" }} de {{ t.activo }}</a><span class="sec">{{ t.nombre }} · operación #{{ t.operacion_id }} · {{ t.actualizado|fecha }}</span></td>
+        <td class="r num" style="white-space:nowrap">{% if t.estado == 'ejecutada' %}{{ t.cantidad|unidades(t.activo) }}<span class="sec">{{ t.importe_cent|usd }}</span>{% else %}—{% endif %}</td>
+        <td class="full">{{ pill(estados_tramo[t.estado][0], estados_tramo[t.estado][1]) }}{% if t.nota %} <span class="small muted">{{ t.nota }}</span>{% endif %}</td>
+        <td class="oc small">{{ t.venue|capitalize }}{% if t.ref_exchange %} · <span class="mono">{{ t.ref_exchange }}</span>{% endif %}</td>
+      </tr>
+    {% endfor %}</tbody>
+  </table></div>
+  {% else %}{{ vacio('operaciones', 'Todavía no se ejecutó ninguna orden.') }}{% endif %}
+</section>
+{% endblock %}

@@ -28,6 +28,9 @@ PERMISOS = {
     "documentos.revisar": {"cumplimiento", "admin"},
     "conciliacion.registrar": {"cumplimiento", "admin"},
     "comisiones.cobrar": {"admin"},
+    "ejecucion.ver": {"cumplimiento", "admin"},
+    "ejecucion.pausar": {"cumplimiento", "admin"},
+    "ejecucion.reanudar": {"admin"},
     "precios.editar": {"admin"},
     "usuarios.gestionar": {"admin"},
 }

@@ -1,7 +1,7 @@
 """Reglas de negocio de aportes y retiros: solicitud, doble firma, aprobación, rechazo y alertas."""
 from flask import current_app
 
-from . import auditoria, cartera, conciliacion, db, notificaciones, precios
+from . import auditoria, cartera, conciliacion, db, ejecucion, notificaciones, precios
 from .dinero import fmt_usd
 from .tiempo import ahora
 
@@ -72,7 +72,7 @@ def solicitar_retiro(cliente, monto, usuario, ts=None):
         _, total = cartera.posiciones(cliente["id"])
         pendiente = c.execute(
             "SELECT COALESCE(SUM(monto_cent), 0) AS s FROM operaciones WHERE cliente_id = ? AND tipo = 'retiro'"
-            " AND estado IN ('pendiente', 'primera_firma')", (cliente["id"],)).fetchone()["s"]
+            " AND estado IN ('pendiente', 'primera_firma', 'ejecutando')", (cliente["id"],)).fetchone()["s"]
         disponible = total - pendiente
         if monto > disponible:
             raise ErrorNegocio(f"El retiro supera lo disponible en tu cartera ({fmt_usd(max(disponible, 0))}).")
@@ -134,65 +134,60 @@ def requisitos(op, cli, usuario):
 
 
 def aprobar(opid, usuario, ts=None, precios_usar=None):
-    """Aprueba una operación. Devuelve 'primera_firma' o 'liquidada'."""
+    """Aprueba una operación. Devuelve 'primera_firma', 'liquidada' o 'incompleta' (algún tramo no se ejecutó)."""
     ts = ts or ahora()
-    with db.transaccion() as c:
-        op = c.execute("SELECT * FROM operaciones WHERE id = ?", (opid,)).fetchone()
-        if not op:
-            raise ErrorNegocio("La operación no existe.")
-        if op["estado"] not in ESTADOS_ABIERTOS:
-            raise ErrorNegocio("Esta operación ya fue resuelta.")
-        cli = c.execute("SELECT * FROM clientes WHERE id = ?", (op["cliente_id"],)).fetchone()
-        monto, tipo = op["monto_cent"], op["tipo"]
-        if cli["kyc_estado"] != "verificado":
-            raise ErrorNegocio(f"No se puede aprobar: la identidad de {cli['nombre']} no está verificada.")
-        if requiere_origen(op) and not cli["origen_fondos"]:
-            raise ErrorNegocio(f"No se puede aprobar: falta registrar el origen de los fondos de {cli['nombre']}.")
-        doble = requiere_doble_firma(op)
-        if doble and op["estado"] == "pendiente":
-            c.execute("UPDATE operaciones SET estado = 'primera_firma', firma1_por = ?, firma1_ts = ? WHERE id = ?",
-                      (usuario["id"], ts, opid))
+    op = db.uno("SELECT * FROM operaciones WHERE id = ?", (opid,))
+    if not op:
+        raise ErrorNegocio("La operación no existe.")
+    if op["estado"] not in ESTADOS_ABIERTOS:
+        raise ErrorNegocio("Esta operación ya fue resuelta." if op["estado"] != "ejecutando" else
+                           "Esta operación ya se está ejecutando. Revisa sus tramos y reintenta si hace falta.")
+    cli = db.uno("SELECT * FROM clientes WHERE id = ?", (op["cliente_id"],))
+    monto, tipo = op["monto_cent"], op["tipo"]
+    if cli["kyc_estado"] != "verificado":
+        raise ErrorNegocio(f"No se puede aprobar: la identidad de {cli['nombre']} no está verificada.")
+    if requiere_origen(op) and not cli["origen_fondos"]:
+        raise ErrorNegocio(f"No se puede aprobar: falta registrar el origen de los fondos de {cli['nombre']}.")
+    doble = requiere_doble_firma(op)
+    if doble and op["estado"] == "pendiente":
+        with db.transaccion() as c:
+            n = c.execute("UPDATE operaciones SET estado = 'primera_firma', firma1_por = ?, firma1_ts = ? WHERE id = ?"
+                          " AND estado = 'pendiente'", (usuario["id"], ts, opid)).rowcount
+            if not n:
+                raise ErrorNegocio("La operación cambió mientras la aprobabas; vuelve a abrirla.")
             auditoria.registrar("operacion.primera_firma", f"operacion:{opid}",
                                 {"texto": f"Dio la primera firma al {tipo} #{opid} de {cli['nombre']} por {fmt_usd(monto)}.",
                                  "monto_cent": monto}, usuario=usuario, ts=ts)
             notificaciones.notificar_rol(("cumplimiento", "admin"),
                                          f"El {tipo} #{opid} de {cli['nombre']} por {fmt_usd(monto)} espera la segunda firma.",
                                          f"/equipo/operaciones/{opid}", excepto=usuario["id"], ts=ts)
-            return "primera_firma"
-        if doble:
-            if op["firma1_por"] == usuario["id"]:
-                raise ErrorNegocio("La segunda firma tiene que darla otra persona.")
-            if usuario["rol"] not in ("cumplimiento", "admin"):
-                raise ErrorNegocio("La segunda firma corresponde a Cumplimiento o a un administrador.")
-        if precios_usar is None:
-            try:
-                precios.exigir_frescura(_activos_afectados(op))
-            except precios.ErrorPrecio as e:
-                raise ErrorNegocio(str(e)) from None
-        pr = precios_usar if precios_usar is not None else precios.vigentes()
+        return "primera_firma"
+    if doble:
+        if op["firma1_por"] == usuario["id"]:
+            raise ErrorNegocio("La segunda firma tiene que darla otra persona.")
+        if usuario["rol"] not in ("cumplimiento", "admin"):
+            raise ErrorNegocio("La segunda firma corresponde a Cumplimiento o a un administrador.")
+    if precios_usar is None:
         try:
-            if tipo == "aporte":
-                liquidado = cartera.ejecutar_aporte(c, op, cartera.pesos_modelo(op["modelo"]), pr, ts)
-                c.execute("UPDATE clientes SET modelo = ? WHERE id = ?", (op["modelo"], cli["id"]))
-            else:
-                liquidado = cartera.ejecutar_retiro(c, op, pr, ts)
-        except cartera.ErrorCartera as e:
+            precios.exigir_frescura(_activos_afectados(op))
+        except precios.ErrorPrecio as e:
             raise ErrorNegocio(str(e)) from None
-        if doble:
-            c.execute("UPDATE operaciones SET firma2_por = ?, firma2_ts = ? WHERE id = ?", (usuario["id"], ts, opid))
-        else:
-            c.execute("UPDATE operaciones SET firma1_por = ?, firma1_ts = ? WHERE id = ?", (usuario["id"], ts, opid))
-        c.execute("UPDATE operaciones SET estado = 'liquidada', resuelto_ts = ?, resuelto_por = ?, liquidado_cent = ?"
-                  " WHERE id = ?", (ts, usuario["id"], liquidado, opid))
-        verbo = "Liquidó el aporte" if tipo == "aporte" else "Liquidó el retiro"
-        auditoria.registrar("operacion.liquidada", f"operacion:{opid}",
-                            {"texto": f"{verbo} #{opid} de {cli['nombre']} por {fmt_usd(liquidado)}.",
-                             "monto_cent": monto, "liquidado_cent": liquidado}, usuario=usuario, ts=ts)
-        if cli["usuario_id"]:
-            texto = (f"Tu aporte #{opid} de {fmt_usd(monto)} fue aprobado e invertido." if tipo == "aporte" else
-                     f"Tu retiro #{opid} de {fmt_usd(liquidado)} fue aprobado. El pago se acredita en tu cuenta bancaria.")
-            notificaciones.notificar(cli["usuario_id"], texto, "/cliente/movimientos", ts=ts)
-        return "liquidada"
+    pr = precios_usar if precios_usar is not None else precios.vigentes()
+    try:
+        plan = ejecucion.planificar(op, cli, pr)  # puede consultar el exchange: fuera de la transacción
+        with db.transaccion() as c:
+            if c.execute("SELECT estado FROM operaciones WHERE id = ?", (opid,)).fetchone()["estado"] != op["estado"]:
+                raise ErrorNegocio("La operación cambió mientras la aprobabas; vuelve a abrirla.")
+            ejecucion.registrar_plan(c, op, plan, usuario, ts)
+            campo = "firma2" if doble else "firma1"
+            c.execute(f"UPDATE operaciones SET {campo}_por = ?, {campo}_ts = ? WHERE id = ?", (usuario["id"], ts, opid))
+            auditoria.registrar("operacion.aprobada", f"operacion:{opid}",
+                                {"texto": f"Aprobó el {tipo} #{opid} de {cli['nombre']} por {fmt_usd(monto)} y envió "
+                                          f"{sum(1 for t in plan if t['estado'] == 'pendiente')} órdenes a ejecutar.",
+                                 "monto_cent": monto}, usuario=usuario, ts=ts)
+        return ejecucion.continuar(opid, usuario, ts, precios_usar)
+    except ejecucion.ErrorEjecucion as e:
+        raise ErrorNegocio(str(e)) from None
 
 
 def rechazar(opid, usuario, motivo, ts=None):
@@ -233,6 +228,14 @@ def alertas():
             out.append(("info", f"{o['nombre']}: {o['tipo']} de {fmt_usd(o['monto_cent'])} espera la segunda firma.", ("op", o["id"])))
         if o["tipo"] == "aporte" and o["fuera_perfil"]:
             out.append(("info", f"{o['nombre']}: eligió una cartera con más riesgo que su perfil y lo confirmó.", ("op", o["id"])))
+    for o in ejecucion.incompletas():
+        fallidos = db.uno("SELECT COUNT(*) AS n FROM ejecuciones WHERE operacion_id = ? AND estado IN ('fallida', 'enviada')",
+                          (o["id"],))["n"]
+        out.append(("alta", f"{o['nombre']}: el {NOMBRE_TIPO[o['tipo']]} #{o['id']} quedó con la ejecución incompleta"
+                            f"{f' ({fallidos} tramo' + ('s' if fallidos != 1 else '') + ' sin ejecutar)' if fallidos else ''}.",
+                    ("op", o["id"])))
+    if ejecucion.pausada():
+        out.append(("alta", "La ejecución de órdenes está en pausa: no se pueden aprobar operaciones.", ("ejecucion", None)))
     for c in db.todos("SELECT id, nombre, kyc_nota FROM clientes WHERE kyc_estado = 'observado' ORDER BY nombre"):
         out.append(("media", f"{c['nombre']}: verificación observada. {c['kyc_nota'] or ''}".strip(), ("cliente", c["id"])))
     from . import documentos

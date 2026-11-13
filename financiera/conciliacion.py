@@ -40,6 +40,19 @@ def leer_cantidad(texto, activo):
         raise ErrorConciliacion(f"El saldo de {activo} no es válido.") from None
 
 
+def valores_exchange():
+    """Saldos de la cuenta del exchange como texto para el formulario (el saldo bancario en USD se carga a mano)."""
+    from . import exchange
+    saldos = exchange.cliente_binance().saldos()
+    out = {}
+    for a in activos_a_conciliar():
+        if a == "USD":
+            continue
+        u = saldos.get(a, 0)
+        out[a] = format((Decimal(u) / 10 ** 8).quantize(Decimal("0.00000001")), "f").replace(".", ",")
+    return out
+
+
 def registrar(reales, nota, usuario, ts=None):
     """reales: {activo: texto escrito por la persona}. Guarda una conciliación inalterable y devuelve su id."""
     libro = saldos_libro()

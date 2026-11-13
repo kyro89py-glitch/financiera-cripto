@@ -74,7 +74,8 @@
    else (url_for('equipo.cliente', cid=enlace[1]) if enlace[0] == 'cliente'
    else (url_for('equipo.documentos') if enlace[0] == 'documentos' and puede('cumplimiento.ver')
    else (url_for('equipo.conciliacion') if enlace[0] == 'conciliacion' and puede('cumplimiento.ver')
-   else (url_for('admin.precios') if enlace[0] == 'precios' and puede('precios.editar') else none)))) %}
+   else (url_for('admin.precios') if enlace[0] == 'precios' and puede('precios.editar')
+   else (url_for('admin.ejecucion') if enlace[0] == 'ejecucion' and puede('ejecucion.ver') else none))))) %}
 {% if url %}<a class="item" href="{{ url }}">{% else %}<div class="item">{% endif %}
   {{ pill('bad' if nivel == 'alta' else ('warn' if nivel == 'media' else 'info'), 'Alta' if nivel == 'alta' else ('Media' if nivel == 'media' else 'Aviso')) }}
   <div class="grow">{{ texto }}</div>

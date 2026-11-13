@@ -92,11 +92,25 @@ def migrar():
         if current_app.config["DATABASE"] != ":memory:":
             c.execute("PRAGMA journal_mode = WAL")
         version = c.execute("PRAGMA user_version").fetchone()[0]
-        for numero, nombre, sql in _migraciones():
-            if numero <= version:
-                continue
-            c.executescript(f"BEGIN IMMEDIATE;\n{sql}\nPRAGMA user_version = {numero};\nCOMMIT;")
-            aplicadas.append(nombre)
+        pendientes = [m for m in _migraciones() if m[0] > version]
+        if not pendientes:
+            return aplicadas
+        # Algunas migraciones reconstruyen tablas: las claves foráneas se desactivan durante la migración
+        # (no se puede dentro de una transacción) y se verifican antes de confirmar cada una.
+        c.execute("PRAGMA foreign_keys = OFF")
+        try:
+            for numero, nombre, sql in pendientes:
+                c.executescript(f"BEGIN IMMEDIATE;\n{sql}\nPRAGMA user_version = {numero};")
+                rotas = c.execute("PRAGMA foreign_key_check").fetchall()
+                if rotas:
+                    c.execute("ROLLBACK")
+                    raise RuntimeError(f"La migración {nombre} deja referencias rotas: {[tuple(r) for r in rotas[:5]]}")
+                c.execute("COMMIT")
+                aplicadas.append(nombre)
+        finally:
+            if c.in_transaction:
+                c.execute("ROLLBACK")
+            c.execute("PRAGMA foreign_keys = ON")
     return aplicadas
 
 

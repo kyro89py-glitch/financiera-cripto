@@ -15,6 +15,7 @@ ROLES = {"cliente": "Cliente", "operador": "Operaciones", "cumplimiento": "Cumpl
 ESTADOS = {
     "pendiente": ("warn", "Pendiente"),
     "primera_firma": ("info", "Espera segunda firma"),
+    "ejecutando": ("warn", "En ejecución"),
     "liquidada": ("ok", "Liquidada"),
     "rechazada": ("bad", "Rechazada"),
     "cancelada": ("", "Cancelada"),
@@ -59,7 +60,7 @@ ACTIVO = {  # qué rutas marcan cada pestaña como activa
     "equipo.operaciones": ("equipo.operaciones", "equipo.operacion"),
     "equipo.clientes": ("equipo.clientes", "equipo.cliente", "equipo.cliente_nuevo", "equipo.estado_mensual"),
     "equipo.cumplimiento": ("equipo.cumplimiento", "equipo.bitacora", "equipo.documentos", "equipo.conciliacion"),
-    "admin.precios": ("admin.precios", "admin.usuarios", "admin.comisiones"),
+    "admin.precios": ("admin.precios", "admin.usuarios", "admin.comisiones", "admin.ejecucion"),
 }
 
 
@@ -118,7 +119,7 @@ def navegacion():
         cuenta = 0
         if ep == "equipo.operaciones":
             from . import db
-            cuenta = db.uno("SELECT COUNT(*) AS n FROM operaciones WHERE estado IN ('pendiente', 'primera_firma')")["n"]
+            cuenta = db.uno("SELECT COUNT(*) AS n FROM operaciones WHERE estado IN ('pendiente', 'primera_firma', 'ejecutando')")["n"]
         out.append({"url": url_for(ep), "texto": texto, "icono": ico, "activo": activo, "cuenta": cuenta})
     return out
 

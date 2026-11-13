@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph, pill, vacio with context %}
+{% block titulo %}Conciliación de custodia{% endblock %}
+{% block contenido %}
+{% set est, ult = estado %}
+{% call ph("Conciliación de custodia", "Compara lo que dice el libro contable con lo que hay de verdad en el banco y en las cuentas de custodia.") %}
+  {{ pill('ok', 'Cuadra') if est == 'ok' else (pill('bad', 'Con diferencias') if est == 'diferencias' else pill('warn', 'Vencida' if est == 'vencida' else 'Nunca registrada')) }}
+{% endcall %}
+{% include "equipo/_subnav.html" %}
+{% if error %}<div class="flash error" role="alert">{{ error }}</div>{% endif %}
+
+<div class="g2">
+  <form class="card flush conc" method="post" action="{{ url_for('equipo.conciliacion') }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <div class="ch"><h3>Nueva conciliación</h3><span class="meta">saldos al {{ ahora()|fecha }}</span></div>
+    <div class="tablewrap"><table class="tabla">
+      <thead><tr><th>Activo</th><th class="r">Según el libro</th><th class="r">Saldo real</th></tr></thead>
+      <tbody>
+      {% for a in activos %}
+        <tr>
+          <td><i class="dot" style="background:{{ info[a].color if a in info else 'var(--muted)' }}"></i> <b>{{ a }}</b><span class="sec">{{ "Cuenta bancaria" if a == 'USD' else info[a].nombre }}</span></td>
+          <td class="r num">{{ libro.get(a, 0)|unidades(a) }}</td>
+          <td class="r"><label class="oculto" for="real_{{ a }}">Saldo real de {{ a }}</label><input class="inp" id="real_{{ a }}" name="real_{{ a }}" inputmode="decimal" autocomplete="off" required value="{{ valores.get(a, '') }}" placeholder="{{ '0,00' if a == 'USD' else '0,00000000' }}" {{ 'disabled' if not puede('conciliacion.registrar') }}></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% if puede('conciliacion.registrar') %}
+    <div class="col" style="padding:14px 18px 18px">
+      <label class="field" for="nota">Nota<input id="nota" name="nota" maxlength="300" placeholder="Ej.: extractos del banco y del custodio al cierre del día"></label>
+      <button class="btn primary" type="submit" data-confirmar="¿Registrar la conciliación? No se puede modificar después.">Registrar conciliación</button>
+      <p class="note">Escribe los saldos tal como figuran en los extractos. Si algo no cuadra, queda registrado con la diferencia y se genera una alerta.</p>
+    </div>
+    {% endif %}
+  </form>
+
+  <section class="card flush">
+    <div class="ch"><h3>Historial</h3></div>
+    <div class="list">
+    {% for k in historial %}
+      <details class="item wrap" style="display:block">
+        <summary class="row spread" style="cursor:pointer;list-style:none">
+          <span><b>{{ k.ts|fecha }}</b><span class="d" style="display:block">{{ k.nombre }}{% if k.nota %} · {{ k.nota }}{% endif %}</span></span>
+          {{ pill('ok', 'Sin diferencias') if not k.diferencias else pill('bad', k.diferencias ~ (' diferencia' if k.diferencias == 1 else ' diferencias')) }}
+        </summary>
+        <div class="tablewrap" style="margin-top:10px"><table class="tabla">
+          <thead><tr><th>Activo</th><th class="r">Libro</th><th class="r">Real</th><th class="r">Diferencia</th></tr></thead>
+          <tbody>{% for d in k.detalle %}<tr><td>{{ d.activo }}</td><td class="r num">{{ d.libro|unidades(d.activo) }}</td><td class="r num">{{ d.real|unidades(d.activo) }}</td><td class="r dif {{ 'down' if d.diferencia else 'muted' }}">{{ ('+' if d.diferencia > 0 else '') ~ (d.diferencia|unidades(d.activo)) if d.diferencia else '—' }}</td></tr>{% endfor %}</tbody>
+        </table></div>
+      </details>
+    {% else %}
+      {{ vacio('custodia', 'Todavía no se registró ninguna conciliación.') }}
+    {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}

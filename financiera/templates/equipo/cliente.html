@@ -1,44 +1,95 @@
 {% extends "base.html" %}
-{% from "macros.html" import kyc, estado, barra, check %}
+{% from "macros.html" import kyc, estado, barra, check, ph, pill, tipo_op, signo, riesgo, vacio with context %}
 {% block titulo %}{{ cli.nombre }}{% endblock %}
 {% block contenido %}
-<a class="small" href="{{ url_for('equipo.clientes') }}">← Clientes</a>
-<div class="row spread"><h2>{{ cli.nombre }}</h2>{{ kyc(cli) }}</div>
-<p class="muted small">{{ cli.documento }} · {{ "Empresa" if cli.tipo == 'empresa' else "Persona" }} · perfil {{ PERFILES[cli.perfil_riesgo]|lower }} · {{ cli.email or "sin acceso al portal" }}{% if cli.telefono %} · {{ cli.telefono }}{% endif %} · cliente desde {{ cli.creado|dia }}</p>
+{% call ph(cli.nombre, cli.documento ~ " · " ~ ("Empresa" if cli.tipo == 'empresa' else "Persona") ~ " · cliente desde " ~ (cli.creado|dia), volver=url_for('equipo.clientes'), volver_txt="Clientes") %}{{ kyc(cli) }}{% endcall %}
+
+<div class="kpis">
+  <div class="kpi"><span class="lab">Valor actual</span><b class="num">{{ total|usd }}</b><span class="s">cartera {{ modelo.nombre }}</span></div>
+  <div class="kpi"><span class="lab">Aportado neto</span><b class="num">{{ aportado|usd }}</b><span class="s">aportes menos retiros</span></div>
+  <div class="kpi"><span class="lab">Resultado</span><b class="num {{ 'up' if total - aportado >= 0 else 'down' }}">{{ "+" if total - aportado >= 0 else "" }}{{ (total - aportado)|usd }}</b><span class="s">{% if aportado > 0 %}{{ ((total - aportado) / aportado * 100)|pct }}{% else %}—{% endif %}</span></div>
+  <div class="kpi"><span class="lab">Perfil</span><b style="font-family:inherit;font-size:18px">{{ PERFILES[cli.perfil_riesgo] }}</b><span class="s">{{ cli.email or "sin acceso al portal" }}</span></div>
+</div>
 
 <div class="g2">
   <div class="col">
-    <div class="kpis" style="grid-template-columns:repeat(2,minmax(0,1fr))">
-      <div class="kpi"><span class="lab">Valor actual</span><b class="num">{{ total|usd }}</b><span class="s">cartera {{ modelo.nombre }}</span></div>
-      <div class="kpi"><span class="lab">Aportado neto</span><b class="num">{{ aportado|usd }}</b><span class="s {{ 'up' if total - aportado >= 0 else 'down' }}">resultado {{ (total - aportado)|usd }}</span></div>
-    </div>
     {% if filas %}
     <section class="card col">
-      <h3>Posiciones</h3>
+      <div class="ch" style="margin:0"><h3>Posiciones</h3><span class="meta">{{ riesgo(modelo.riesgo) }}</span></div>
       {{ barra(filas) }}
       <div class="list">{% for f in filas %}
-        <div class="item"><i class="dot" style="background:{{ f.color }}"></i><div class="grow"><div class="t">{{ f.nombre }}</div><div class="d num">{% if f.activo != 'USD' %}{{ f.unidades|unidades(f.activo) }}{% endif %}</div></div><div class="amt num">{{ f.valor|usd }}<span class="muted">{{ (f.peso * 100)|pct(1, false) }}</span></div></div>
+        <div class="item"><i class="dot" style="background:{{ f.color }}"></i><div class="grow"><div class="t">{{ f.nombre }}</div><div class="d num">{% if f.activo != 'USD' %}{{ f.unidades|unidades(f.activo) }}{% else %}Saldo disponible{% endif %}</div></div><div class="amt num">{{ f.valor|usd }}<span class="muted">{{ (f.peso * 100)|pct(1, false) }}</span></div></div>
       {% endfor %}</div>
     </section>
     {% endif %}
+
+    <section class="card flush">
+      <div class="ch"><h3>Operaciones</h3><span class="meta">últimas 50</span></div>
+      <div class="list">{% for o in ops %}
+        <a class="item" href="{{ url_for('equipo.operacion', opid=o.id) }}"><div class="grow"><div class="t">{{ tipo_op(o) }} {{ estado(o) }}</div><div class="d">{{ o.creado|fecha }}</div></div>
+          <div class="amt num {{ 'up' if o.tipo == 'aporte' else 'down' }}">{{ signo(o) }}{{ (o.liquidado_cent if o.liquidado_cent is not none else o.monto_cent)|usd }}</div></a>
+      {% else %}{{ vacio('operaciones', 'Sin operaciones.') }}{% endfor %}</div>
+    </section>
+
     <section class="card">
-      <h3>Operaciones</h3>
-      <div class="list" style="margin-top:4px">{% for o in ops %}
-        <a class="item" href="{{ url_for('equipo.operacion', opid=o.id) }}"><div class="grow"><div class="t">{{ "Aporte" if o.tipo == "aporte" else "Retiro" }} #{{ o.id }} {{ estado(o) }}</div><div class="d">{{ o.creado|fecha }}</div></div>
-          <div class="amt num {{ 'up' if o.tipo == 'aporte' else 'down' }}">{{ ("+" if o.tipo == "aporte" else "−") }}{{ o.monto_cent|usd }}</div></a>
-      {% else %}<div class="empty">Sin operaciones.</div>{% endfor %}</div>
+      <div class="ch"><h3>Estados de cuenta</h3></div>
+      <div class="chips">{% for p in periodos[:12] %}<a href="{{ url_for('equipo.estado_mensual', cid=cli.id, periodo=p) }}">{{ p|periodo }}</a>{% endfor %}</div>
     </section>
   </div>
 
   <div class="col">
     <section class="card col">
-      <h3>Legajo</h3>
+      <h3>Debida diligencia</h3>
       <ul class="checks">
         {{ check(cli.kyc_estado == 'verificado', "Identidad verificada" if cli.kyc_estado == 'verificado' else ("Verificación observada" if cli.kyc_estado == 'observado' else "Identidad sin verificar")) }}
+        {{ check(not faltan, "Documentos obligatorios aceptados" if not faltan else "Faltan documentos: " ~ faltan|join(', ')) }}
         {{ check(cli.origen_fondos is not none, "Origen de los fondos registrado" if cli.origen_fondos else "Origen de los fondos sin registrar") }}
+        {% if cli.usuario_id %}{{ check(acepto and acepto.terminos_version, "Condiciones aceptadas el " ~ (acepto.terminos_ts|dia) if acepto and acepto.terminos_ts else "Todavía no aceptó las condiciones del servicio") }}{% endif %}
       </ul>
       {% if cli.kyc_nota %}<p class="small"><span class="lab">Nota de verificación</span><br>{{ cli.kyc_nota }}{% if cli.kyc_por %} · {{ usuarios[cli.kyc_por].nombre }}, {{ cli.kyc_fecha|fecha }}{% endif %}</p>{% endif %}
       {% if cli.origen_fondos %}<p class="small"><span class="lab">Origen de los fondos</span><br>{{ cli.origen_fondos }} · {{ usuarios[cli.origen_fondos_por].nombre }}, {{ cli.origen_fondos_fecha|fecha }}</p>{% endif %}
+    </section>
+
+    <section class="card col" id="legajo">
+      <div class="ch" style="margin:0"><h3>Legajo</h3><span class="meta">{{ legajo|map(attribute='docs')|map('length')|sum }} archivos</span></div>
+      <div class="list">
+      {% for x in legajo %}
+        <div class="item wrap">
+          <div class="grow">
+            <div class="t">{{ x.nombre }}{% if x.requerido %} <span class="xs muted">obligatorio</span>{% endif %}</div>
+            {% if not x.docs %}<div class="d">Sin archivos.</div>{% endif %}
+          </div>
+          {% if x.estado == 'falta' %}{{ pill('warn' if x.requerido else '', 'Falta') }}{% else %}{{ pill(estados_doc[x.estado][0], estados_doc[x.estado][1]) }}{% endif %}
+          {% for d in x.docs %}
+          <div class="acts" style="flex-direction:column;gap:6px;padding:8px 10px;border:1px solid var(--line);border-radius:10px">
+            <div class="row spread" style="gap:8px">
+              <a href="{{ url_for('documentos.ver', did=d.id) }}" target="_blank" rel="noopener">{{ icono('documento') }} {{ d.nombre_original }}</a>
+              {{ pill(estados_doc[d.estado][0] ~ ' plain', estados_doc[d.estado][1]) }}
+            </div>
+            <span class="xs muted">{{ (d.tamano / 1024)|round(0)|int }} KB · subido {{ d.subido_ts|fecha }}{% if d.subido_por in usuarios %} por {{ usuarios[d.subido_por].nombre }}{% endif %}{% if d.revisado_por %} · revisado por {{ usuarios[d.revisado_por].nombre }}{% endif %}{% if d.nota %} · «{{ d.nota }}»{% endif %}</span>
+            {% if d.estado == 'pendiente' and puede('documentos.revisar') %}
+            <form class="row" method="post" action="{{ url_for('equipo.documento_revisar', did=d.id) }}" style="gap:6px">
+              <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+              <input class="inp" name="nota" maxlength="200" placeholder="Nota (obligatoria al rechazar)" aria-label="Nota de la revisión" style="flex:1;min-width:160px">
+              <button class="btn sm" name="estado" value="aceptado" type="submit">Aceptar</button>
+              <button class="btn sm danger" name="estado" value="rechazado" type="submit">Rechazar</button>
+            </form>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      {% endfor %}
+      </div>
+      {% if puede('documentos.subir') %}
+      <form class="col" method="post" enctype="multipart/form-data" action="{{ url_for('equipo.cliente_documento', cid=cli.id) }}" style="gap:10px;border-top:1px solid var(--line);padding-top:14px">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <div class="form" style="grid-template-columns:1fr">
+          <label class="field" for="tipo-doc">Tipo<select id="tipo-doc" name="tipo">{% for t, n in tipos %}<option value="{{ t }}">{{ n }}</option>{% endfor %}</select></label>
+          <label class="field" for="archivo">Archivo<input id="archivo" name="archivo" type="file" accept="application/pdf,image/png,image/jpeg" required></label>
+        </div>
+        <button class="btn" type="submit">Agregar al legajo</button>
+      </form>
+      {% endif %}
     </section>
 
     {% if puede('clientes.kyc') %}
@@ -50,6 +101,7 @@
           <select id="estado" name="estado">{% for v in ('verificado', 'observado', 'pendiente') %}<option value="{{ v }}" {{ 'selected' if cli.kyc_estado == v }}>{{ KYC[v][1] }}</option>{% endfor %}</select>
         </label>
         <label class="field" for="nota">Nota (obligatoria si se observa)<textarea id="nota" name="nota" maxlength="300">{{ cli.kyc_nota or '' }}</textarea></label>
+        {% if faltan %}<p class="small muted">Para marcarla como verificada primero hay que aceptar: {{ faltan|join(', ') }}.</p>{% endif %}
         <button class="btn" type="submit">Guardar verificación</button>
       </form>
     </section>
@@ -69,10 +121,10 @@
     {% if puede('clientes.clave') and cli.usuario_id %}
     <section class="card col">
       <h3>Acceso al portal</h3>
-      <p class="small muted">Genera una contraseña temporal y cierra las sesiones abiertas del cliente.</p>
+      <p class="small muted">Genera una contraseña temporal y cierra las sesiones abiertas del cliente. Entrégasela por un canal seguro.</p>
       <form method="post" action="{{ url_for('equipo.cliente_clave', cid=cli.id) }}" data-confirmar="¿Generar una contraseña temporal para {{ cli.nombre }}?">
         <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-        <button class="btn" type="submit">Generar contraseña temporal</button>
+        <button class="btn" type="submit">{{ icono('llave') }}Generar contraseña temporal</button>
       </form>
     </section>
     {% endif %}

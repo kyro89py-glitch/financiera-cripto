@@ -1,31 +1,29 @@
 {% extends "base.html" %}
-{% from "macros.html" import estado, kyc, check %}
-{% block titulo %}Operación #{{ op.id }}{% endblock %}
+{% from "macros.html" import estado, kyc, check, ph, tipo_op, riesgo with context %}
+{% block titulo %}{{ TIPOS_OP[op.tipo] }} #{{ op.id }}{% endblock %}
 {% block contenido %}
-<a class="small" href="{{ url_for('equipo.operaciones') }}">← Operaciones</a>
-<div class="row spread">
-  <h2>{{ "Aporte" if op.tipo == "aporte" else "Retiro" }} #{{ op.id }}</h2>
-  {{ estado(op) }}
-</div>
+{% call ph(TIPOS_OP[op.tipo] ~ " #" ~ op.id, "Solicitada el " ~ (op.creado|fecha) ~ " · " ~ (op.creado|hace), volver=url_for('equipo.operaciones'), volver_txt="Operaciones") %}{{ estado(op) }}{% endcall %}
 
 <div class="g2">
   <div class="col">
-    <section class="card col">
-      <div class="row spread">
-        <div><span class="lab">Monto</span><div class="num" style="font-size:26px;font-weight:700">{{ op.monto_cent|usd }}</div></div>
-        {% if op.liquidado_cent is not none %}<div><span class="lab">Liquidado</span><div class="num" style="font-size:18px">{{ op.liquidado_cent|usd }}</div></div>{% endif %}
+    <section class="card hero col" style="gap:14px">
+      <div class="row spread" style="align-items:flex-end">
+        <div><span class="lab">{{ "Monto solicitado" if op.tipo != 'comision' else "Comisión" }}</span><div class="big">{{ op.monto_cent|usd }}</div></div>
+        {% if op.liquidado_cent is not none and op.liquidado_cent != op.monto_cent %}<div><span class="lab">Liquidado</span><div class="num" style="font-size:20px">{{ op.liquidado_cent|usd }}</div></div>{% endif %}
       </div>
+    </section>
+    <section class="card flush">
       <div class="list">
-        <a class="item" href="{{ url_for('equipo.cliente', cid=cli.id) }}"><div class="grow"><div class="t">{{ cli.nombre }}</div><div class="d">{{ cli.documento }} · valor actual {{ valor|usd }}</div></div>{{ kyc(cli) }}</a>
-        {% if modelo %}<div class="item"><div class="grow"><div class="t">Cartera {{ modelo.nombre }}</div><div class="d">Riesgo {{ modelo.riesgo }} de 5</div></div></div>{% endif %}
-        {% if op.referencia %}<div class="item"><div class="grow"><div class="t">Comprobante</div><div class="d num">{{ op.referencia }}</div></div></div>{% endif %}
-        {% if op.motivo %}<div class="item"><div class="grow"><div class="t">Motivo del rechazo</div><div class="d">{{ op.motivo }}</div></div></div>{% endif %}
+        <a class="item" href="{{ url_for('equipo.cliente', cid=cli.id) }}"><span class="avatar" aria-hidden="true">{{ iniciales(cli.nombre) }}</span><div class="grow"><div class="t">{{ cli.nombre }}</div><div class="d">{{ cli.documento }} · perfil {{ PERFILES[cli.perfil_riesgo]|lower }} · valor actual {{ valor|usd }}</div></div>{{ kyc(cli) }}</a>
+        {% if modelo %}<div class="item">{{ icono('cartera') }}<div class="grow"><div class="t">Cartera {{ modelo.nombre }}</div><div class="d">{{ modelo.descripcion }}</div></div>{{ riesgo(modelo.riesgo) }}</div>{% endif %}
+        {% if op.referencia %}<div class="item">{{ icono('documento') }}<div class="grow"><div class="t">Comprobante</div><div class="d num">{{ op.referencia }}</div></div><button class="btn sm" type="button" data-copiar="{{ op.referencia }}">Copiar</button></div>{% endif %}
+        {% if op.motivo %}<div class="item">{{ icono('cumplimiento') }}<div class="grow"><div class="t">Motivo del rechazo</div><div class="d">{{ op.motivo }}</div></div></div>{% endif %}
       </div>
     </section>
 
     {% if op.estado in ('pendiente', 'primera_firma') %}
     <section class="card col">
-      <h3>Controles</h3>
+      <h3>Controles antes de aprobar</h3>
       <ul class="checks">{% for ok, texto in requisitos %}{{ check(ok, texto) }}{% endfor %}</ul>
       {% if plan %}
       <div>
@@ -38,17 +36,20 @@
       </div>
       {% endif %}
       {% if puede('operaciones.aprobar') %}
-      <form method="post" action="{{ url_for('equipo.aprobar', opid=op.id) }}" data-confirmar="{{ 'Registrar tu firma' if doble else 'Aprobar y liquidar' }} el {{ op.tipo }} #{{ op.id }} por {{ op.monto_cent|usd }}?">
+      <form method="post" action="{{ url_for('equipo.aprobar', opid=op.id) }}" data-confirmar="¿{{ 'Registrar tu firma en' if doble and op.estado == 'pendiente' else 'Aprobar y liquidar' }} el {{ TIPOS_OP[op.tipo]|lower }} #{{ op.id }} por {{ op.monto_cent|usd }}?">
         <input type="hidden" name="csrf" value="{{ csrf_token() }}">
         <button class="btn primary block" type="submit">
           {% if doble and op.estado == 'pendiente' %}Dar la primera firma{% elif doble %}Dar la segunda firma y liquidar{% else %}Aprobar y liquidar{% endif %}
         </button>
       </form>
-      <form class="col" method="post" action="{{ url_for('equipo.rechazar', opid=op.id) }}" data-confirmar="¿Rechazar esta operación?">
-        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-        <label class="field" for="motivo">Motivo del rechazo (lo verá el cliente)<textarea id="motivo" name="motivo" maxlength="300" required></textarea></label>
-        <button class="btn danger" type="submit">Rechazar</button>
-      </form>
+      <details class="rechazo">
+        <summary class="btn danger block">Rechazar…</summary>
+        <form class="col" method="post" action="{{ url_for('equipo.rechazar', opid=op.id) }}" data-confirmar="¿Rechazar esta operación?" style="margin-top:12px">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <label class="field" for="motivo">Motivo del rechazo (lo verá el cliente)<textarea id="motivo" name="motivo" maxlength="300" required></textarea></label>
+          <button class="btn danger" type="submit">Confirmar rechazo</button>
+        </form>
+      </details>
       {% endif %}
     </section>
     {% endif %}
@@ -58,25 +59,27 @@
     <section class="card col">
       <h3>Historial</h3>
       <ul class="linea">
-        <li>Solicitada el {{ op.creado|fecha }}</li>
-        {% if op.firma1_por %}<li>{{ "Primera firma" if doble else "Aprobada" }}: {{ usuarios[op.firma1_por].nombre }} · {{ op.firma1_ts|fecha }}</li>{% endif %}
-        {% if op.firma2_por %}<li>Segunda firma: {{ usuarios[op.firma2_por].nombre }} · {{ op.firma2_ts|fecha }}</li>{% endif %}
-        {% if op.resuelto_ts %}<li>{{ ESTADOS[op.estado][1] }}{% if op.resuelto_por %} por {{ usuarios[op.resuelto_por].nombre }}{% endif %} · {{ op.resuelto_ts|fecha }}</li>{% endif %}
+        <li>Solicitada<span class="d">{{ op.creado|fecha }}{% if op.creado_por and op.creado_por in usuarios %} · {{ usuarios[op.creado_por].nombre }}{% endif %}</span></li>
+        {% if op.firma1_por %}<li>{{ "Primera firma" if doble else "Aprobada" }}<span class="d">{{ usuarios[op.firma1_por].nombre }} · {{ op.firma1_ts|fecha }}</span></li>{% endif %}
+        {% if op.firma2_por %}<li>Segunda firma<span class="d">{{ usuarios[op.firma2_por].nombre }} · {{ op.firma2_ts|fecha }}</span></li>{% endif %}
+        {% if op.resuelto_ts %}<li>{{ ESTADOS[op.estado][1] }}<span class="d">{% if op.resuelto_por %}{{ usuarios[op.resuelto_por].nombre }} · {% endif %}{{ op.resuelto_ts|fecha }}</span></li>{% endif %}
       </ul>
     </section>
     {% if ordenes %}
-    <section class="card">
-      <h3>Órdenes ejecutadas</h3>
-      <div class="tablewrap"><table class="num">
+    <section class="card flush">
+      <div class="ch"><h3>Órdenes ejecutadas</h3></div>
+      <div class="tablewrap"><table class="tabla">
         <thead><tr><th>Activo</th><th>Lado</th><th class="r">Cantidad</th><th class="r">Precio</th><th class="r">Importe</th></tr></thead>
-        <tbody>{% for r in ordenes %}<tr><td>{{ r.activo }}</td><td>{{ r.lado }}</td><td class="r">{{ r.cantidad|unidades(r.activo) }}</td><td class="r">{{ r.precio|precio }}</td><td class="r">{{ r.importe_cent|usd }}</td></tr>{% endfor %}</tbody>
+        <tbody>{% for r in ordenes %}<tr><td><b>{{ r.activo }}</b></td><td>{{ r.lado|capitalize }}</td><td class="r num">{{ r.cantidad|unidades(r.activo) }}</td><td class="r num">{{ r.precio|precio }}</td><td class="r num">{{ r.importe_cent|usd }}</td></tr>{% endfor %}</tbody>
       </table></div>
     </section>
-    <section class="card">
-      <h3>Asientos en el libro</h3>
-      <div class="tablewrap"><table class="num">
-        <thead><tr><th>#</th><th>Concepto</th><th>Activo</th><th class="r">Movimiento</th></tr></thead>
-        <tbody>{% for a in asientos %}<tr><td>{{ a.id }}</td><td>{{ a.concepto|replace('_', ' ') }}</td><td>{{ a.activo }}</td><td class="r {{ 'up' if a.cantidad > 0 else 'down' }}">{{ ("+" if a.cantidad > 0 else "") }}{{ a.cantidad|unidades(a.activo) }}</td></tr>{% endfor %}</tbody>
+    {% endif %}
+    {% if asientos %}
+    <section class="card flush">
+      <div class="ch"><h3>Asientos en el libro</h3><span class="meta">inmutables</span></div>
+      <div class="tablewrap"><table class="tabla">
+        <thead><tr><th>N.º</th><th>Concepto</th><th>Activo</th><th class="r">Movimiento</th></tr></thead>
+        <tbody>{% for a in asientos %}<tr><td class="num muted">{{ a.id }}</td><td>{{ a.concepto|replace('_', ' ')|capitalize }}</td><td>{{ a.activo }}</td><td class="r num {{ 'up' if a.cantidad > 0 else 'down' }}">{{ ("+" if a.cantidad > 0 else "") }}{{ a.cantidad|unidades(a.activo) }}</td></tr>{% endfor %}</tbody>
       </table></div>
     </section>
     {% endif %}

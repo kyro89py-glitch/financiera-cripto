@@ -187,3 +187,14 @@ def seguridad_cuenta():
     return render_template("auth/seguridad.html", error=error, activa=bool(u["totp_secreto"]), secreto=grupos,
                            enlace=enlace, obligatorio=obligatorio)
 
+
+
+@bp.get("/cuenta/avisos")
+def avisos():
+    r = seguridad.exigir_sesion()
+    if r:
+        return r
+    from . import notificaciones
+    lista = notificaciones.listar(g.usuario["id"])
+    notificaciones.marcar_leidas(g.usuario["id"])
+    return render_template("auth/avisos.html", lista=lista)

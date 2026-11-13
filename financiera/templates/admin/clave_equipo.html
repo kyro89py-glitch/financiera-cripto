@@ -1,8 +1,9 @@
 {% extends "base.html" %}
+{% from "macros.html" import ph with context %}
 {% block titulo %}Contraseña temporal{% endblock %}
 {% block contenido %}
-<h2>{{ "Acceso restablecido" if restablecida else "Usuario creado" }}</h2>
-<section class="card col">
+{{ ph("Acceso restablecido" if restablecida else "Usuario creado", volver=url_for('admin.usuarios'), volver_txt="Usuarios") }}
+<section class="card col" style="max-width:620px">
   <p><b>{{ u.nombre }}</b> ({{ ROLES[u.rol] }}) ingresa con <b>{{ u.email }}</b> y esta contraseña temporal:</p>
   <div class="row"><div class="clave" style="flex:1">{{ clave }}</div><button class="btn" type="button" data-copiar="{{ clave }}">Copiar</button></div>
   <p class="small muted">Se muestra solo esta vez. Entrégala en persona o por un canal seguro. Al ingresar elegirá su propia contraseña{% if config.EXIGIR_2FA_EQUIPO %} y activará la verificación en dos pasos{% endif %}.</p>

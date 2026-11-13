@@ -1,7 +1,7 @@
 """Administración: precios y usuarios del equipo."""
 from flask import Blueprint, abort, flash, g, redirect, render_template, request, url_for
 
-from . import auditoria, cuentas, db, precios, seguridad
+from . import auditoria, comisiones, cuentas, db, precios, seguridad
 from .dinero import leer_precio
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -96,3 +96,20 @@ def usuario_clave(uid):
                             {"texto": f"Restableció el acceso de {u['email']} (contraseña temporal y nueva verificación en dos pasos)."})
     u = db.uno("SELECT * FROM usuarios WHERE id = ?", (uid,))
     return render_template("admin/clave_equipo.html", u=u, clave=clave, restablecida=True)
+
+
+@bp.route("/comisiones", methods=["GET", "POST"], endpoint="comisiones")
+def comisiones_ver():
+    sugerido = comisiones.periodo_anterior()
+    if request.method == "POST":
+        periodo = (request.form.get("periodo") or sugerido).strip()
+        try:
+            r = comisiones.cobrar(periodo, g.usuario)
+            flash(f"Comisión de {comisiones.nombre_periodo(periodo)}: se cobró a {r['cobradas']} clientes"
+                  + (f"; {r['ya_cobradas']} ya estaban cobrados." if r["ya_cobradas"] else "."), "ok")
+        except comisiones.ErrorComision as e:
+            flash(str(e), "error")
+        return redirect(url_for("admin.comisiones"))
+    return render_template("admin/comisiones.html", periodos=comisiones.resumen_periodos(), sugerido=sugerido,
+                           tasa=comisiones.tasa(), nombre_periodo=comisiones.nombre_periodo)
+

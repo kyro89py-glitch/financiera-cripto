@@ -24,12 +24,19 @@ PERMISOS = {
     "clientes.origen": {"cumplimiento", "admin"},
     "cumplimiento.ver": {"cumplimiento", "admin"},
     "reportes.exportar": {"cumplimiento", "admin"},
+    "documentos.subir": {"operador", "cumplimiento", "admin"},
+    "documentos.revisar": {"cumplimiento", "admin"},
+    "conciliacion.registrar": {"cumplimiento", "admin"},
+    "comisiones.cobrar": {"admin"},
     "precios.editar": {"admin"},
     "usuarios.gestionar": {"admin"},
 }
 
+# Versión vigente de las condiciones y la información de riesgos que acepta cada cliente.
+TERMINOS_VERSION = 1
+
 # Rutas a las que se puede entrar aunque el usuario tenga un paso obligatorio pendiente.
-SIN_FORZAR = {"auth.clave", "auth.seguridad", "auth.salir", "static"}
+SIN_FORZAR = {"auth.clave", "auth.seguridad", "auth.salir", "cliente.condiciones", "static"}
 
 
 # ---------- contraseñas ----------
@@ -171,6 +178,8 @@ def init_app(app):
                 return redirect(url_for("auth.clave"))
             if u["rol"] in ROLES_EQUIPO and app.config["EXIGIR_2FA_EQUIPO"] and not u["totp_secreto"]:
                 return redirect(url_for("auth.seguridad"))
+            if u["rol"] == "cliente" and (u["terminos_version"] or 0) < TERMINOS_VERSION:
+                return redirect(url_for("cliente.condiciones"))
         return None
 
     @app.context_processor

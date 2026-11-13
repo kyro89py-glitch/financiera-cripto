@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph, vacio with context %}
+{% block titulo %}Comisiones{% endblock %}
+{% block contenido %}
+{{ ph("Comisión de gestión", tasa ~ " % anual sobre el valor de cada cartera, cobrada una vez por mes (la doceava parte) al cierre del mes.") }}
+{% include "admin/_subnav.html" %}
+<div class="g2">
+  <section class="card col" style="align-self:start">
+    <h3>Cobrar un mes</h3>
+    <p class="small muted">Se calcula con los precios vigentes al momento de cobrar. Es seguro repetirlo: un cliente nunca paga dos veces el mismo mes. Cada cobro se registra como operación liquidada, aparece en el estado de cuenta del cliente y le llega un aviso.</p>
+    <form class="row" method="post" action="{{ url_for('admin.comisiones') }}" style="align-items:flex-end" data-confirmar="¿Cobrar la comisión del mes indicado a todos los clientes con saldo?">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <label class="field" for="periodo" style="flex:1;min-width:160px">Mes (AAAA-MM)<input id="periodo" name="periodo" value="{{ sugerido }}" pattern="\d{4}-\d{2}" required></label>
+      <button class="btn primary" type="submit">Cobrar {{ nombre_periodo(sugerido) }}</button>
+    </form>
+    <p class="note">En producción se programa <span class="mono">flask cobrar-comisiones</span> el día 1 de cada mes; cobra el mes anterior.</p>
+  </section>
+  <section class="card flush">
+    <div class="ch"><h3>Meses cobrados</h3></div>
+    {% if periodos %}
+    <div class="tablewrap"><table class="tabla resp">
+      <thead><tr><th>Mes</th><th class="r">Total</th><th class="r">Clientes</th><th>Cobrado</th></tr></thead>
+      <tbody>{% for p in periodos %}
+        <tr><td><b>{{ p.periodo|periodo|capitalize }}</b></td><td class="r num">{{ p.total|usd }}</td><td class="r num oc">{{ p.clientes }}</td><td class="full small muted">{{ p.clientes }} clientes · {{ p.ts|fecha }}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% else %}{{ vacio('documento', 'Todavía no se cobró ningún mes.') }}{% endif %}
+  </section>
+</div>
+{% endblock %}

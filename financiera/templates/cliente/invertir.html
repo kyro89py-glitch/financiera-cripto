@@ -1,17 +1,17 @@
 {% extends "base.html" %}
-{% from "macros.html" import riesgo %}
+{% from "macros.html" import riesgo, ph with context %}
 {% block titulo %}Invertir{% endblock %}
 {% block contenido %}
-<h2>Invertir</h2>
+{{ ph("Invertir", "Elige una cartera, indica el monto y envía la solicitud. La compra se hace cuando el equipo confirma que recibió el dinero.") }}
 {% if g.cliente.kyc_estado != 'verificado' %}
-<div class="flash error">Tu identidad todavía no está verificada. Puedes enviar la solicitud, pero el equipo no podrá aprobarla hasta completar la verificación.</div>
+<div class="flash warn">Tu identidad todavía no está verificada. Puedes enviar la solicitud, pero el equipo no podrá aprobarla hasta completar la verificación. <a href="{{ url_for('cliente.perfil') }}#legajo">Ver qué falta</a></div>
 {% endif %}
 {% if error %}<div class="flash error" role="alert">{{ error }}</div>{% endif %}
 
-<form class="col" method="post" action="{{ url_for('cliente.invertir') }}">
+<form class="col" method="post" action="{{ url_for('cliente.invertir') }}" style="gap:16px">
   <input type="hidden" name="csrf" value="{{ csrf_token() }}">
   <section class="card col">
-    <h3>1. Elige una cartera</h3>
+    <div class="ch" style="margin:0"><h3>1. Elige una cartera</h3><span class="meta">Tu perfil: {{ PERFILES[g.cliente.perfil_riesgo]|lower }}</span></div>
     <div class="models" role="radiogroup" aria-label="Cartera">
     {% for m in modelos %}
       <label class="model">
@@ -20,9 +20,14 @@
         <div class="alloc" aria-hidden="true">{% for a, pb in m.pesos %}<span style="width:{{ pb / 100 }}%;background:{{ info[a].color }}"></span>{% endfor %}</div>
         <span class="small muted">{% for a, pb in m.pesos %}{{ a }} {{ (pb / 100)|int }}%{{ " · " if not loop.last }}{% endfor %}</span>
         <span class="small">{{ m.descripcion }}</span>
+        {% if m.fuera %}<span class="pill warn">Más riesgo que tu perfil</span>{% endif %}
       </label>
     {% endfor %}
     </div>
+    <label class="check" id="confirmar-riesgo" {% if form.modelo not in datos.fuera %}hidden{% endif %}>
+      <input type="checkbox" name="acepta_riesgo" value="si" {{ 'checked' if form.acepta_riesgo == 'si' }}>
+      <span>Entiendo que esta cartera tiene más riesgo que mi perfil y que puedo perder una parte mayor de lo invertido. Quiero continuar igual.</span>
+    </label>
   </section>
 
   <section class="card col">
@@ -32,21 +37,25 @@
     </label>
     <div class="chips">{% for n in [100, 500, 1000, 5000] %}<button type="button" data-monto="{{ n }}" aria-pressed="false">{{ (n * 100)|usd(0) }}</button>{% endfor %}</div>
     <div id="previa" aria-live="polite"></div>
-    <label class="field" for="referencia">Comprobante de la transferencia
+  </section>
+
+  <section class="card col">
+    <h3>3. Transfiere y escribe el comprobante</h3>
+    <p class="small">{{ config.INSTRUCCIONES_DEPOSITO }}</p>
+    <label class="field" for="referencia">Número de comprobante
       <input id="referencia" name="referencia" maxlength="80" autocomplete="off" value="{{ form.referencia }}" placeholder="Número de operación del banco">
     </label>
-    <p class="small muted">{{ config.INSTRUCCIONES_DEPOSITO }}</p>
     <button class="btn primary" type="submit">Enviar solicitud de aporte</button>
-    <p class="note">La compra se hace al precio del momento en que el equipo aprueba el aporte, que puede ser distinto del que ves ahora.</p>
+    <p class="note">El precio de compra es el del momento en que el equipo aprueba el aporte, que puede ser distinto del que ves ahora.</p>
   </section>
 </form>
 
 <section class="card col" id="retirar">
   <h3>Retirar</h3>
-  <p class="small muted">Disponible: <span class="num">{{ disponible|usd }}</span>. El retiro usa primero tu saldo en dólares y luego vende una parte proporcional de cada moneda.</p>
-  <form class="col" method="post" action="{{ url_for('cliente.retiro') }}" data-confirmar="¿Enviar la solicitud de retiro?">
+  <p class="small muted">Disponible: <span class="num">{{ disponible|usd }}</span>. El retiro usa primero tu saldo en dólares y luego vende una parte proporcional de cada moneda. El pago se acredita en tu cuenta bancaria registrada.</p>
+  <form class="row" method="post" action="{{ url_for('cliente.retiro') }}" data-confirmar="¿Enviar la solicitud de retiro?" style="align-items:flex-end">
     <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-    <label class="field" for="retiro">Monto a retirar en dólares<input id="retiro" name="monto" inputmode="decimal" autocomplete="off" required></label>
+    <label class="field" for="retiro" style="flex:1;min-width:200px">Monto a retirar en dólares<input id="retiro" name="monto" inputmode="decimal" autocomplete="off" required></label>
     <button class="btn" type="submit">Solicitar retiro</button>
   </form>
 </section>

@@ -1,13 +1,13 @@
 # Financiera Cripto
 
-Plataforma de inversión en criptomonedas con dos espacios:
+Plataforma de inversión en criptomonedas para operar con clientes reales, con dos espacios:
 
-- **Portal del cliente:** ve su cartera (también en 3D), pide aportes y retiros, sigue sus movimientos y descarga su estado de cuenta.
-- **Panel del equipo:** aprueba operaciones con controles de cumplimiento, gestiona clientes y verificaciones, revisa la bitácora y administra precios y usuarios.
+- **Portal del cliente:** su cartera (también en 3D), aportes y retiros, movimientos, estados de cuenta mensuales para imprimir, su legajo de documentos y avisos.
+- **Panel del equipo:** aprobación de operaciones con controles de cumplimiento y doble firma, fichas de clientes con legajo, revisión de documentos, conciliación de custodia, comisiones de gestión, bitácora inalterable, precios y usuarios.
 
-Es un sistema propio e independiente: corre en tu servidor y guarda todo en tu base de datos. No depende de Claude ni de servicios externos, salvo CoinGecko para los precios, y eso es opcional porque los precios también se cargan a mano.
+Es un sistema propio e independiente: corre en tu servidor y guarda todo en tu base de datos. No depende de Claude ni de servicios externos, salvo CoinGecko para los precios (opcional: también se cargan a mano) y un servidor de correo si quieres avisos por email.
 
-> **Estado:** base técnica lista para pruebas internas. Antes de recibir dinero de clientes lee [Antes de operar con dinero real](#antes-de-operar-con-dinero-real).
+> **Estado:** versión 0.2, lista para pruebas internas con el equipo. Antes de recibir dinero de clientes lee [Antes de operar con dinero real](#antes-de-operar-con-dinero-real).
 
 ---
 
@@ -29,11 +29,12 @@ Abre http://127.0.0.1:5000. Todas las cuentas de demostración usan la contrase�
 
 | Cuenta | Rol | Para ver |
 |---|---|---|
-| `lucia@demo.local` | Cliente | Portal con cartera, aportes y un retiro rechazado |
-| `hugo@demo.local` | Cliente | Cliente con la identidad sin verificar |
+| `lucia@demo.local` | Cliente | Portal con cartera, estados de cuenta, legajo completo y un retiro rechazado |
+| `patricia@demo.local` | Cliente | Aporte pendiente en una cartera con más riesgo que su perfil |
+| `hugo@demo.local` | Cliente | Identidad sin verificar; todavía tiene que aceptar las condiciones |
 | `operaciones@demo.local` | Operaciones | Cola de aprobaciones y alta de clientes |
-| `cumplimiento@demo.local` | Cumplimiento | Segunda firma, verificaciones, bitácora y reportes |
-| `admin@demo.local` | Administración | Todo lo anterior, precios y usuarios del equipo |
+| `cumplimiento@demo.local` | Cumplimiento | Segunda firma, documentos por revisar, conciliación, bitácora y reportes |
+| `admin@demo.local` | Administración | Todo lo anterior, precios, comisiones y usuarios del equipo |
 
 ---
 
@@ -43,16 +44,25 @@ Abre http://127.0.0.1:5000. Todas las cuentas de demostración usan la contrase�
 
 | Rol | Puede |
 |---|---|
-| Cliente | Ver su cartera, pedir aportes y retiros, cancelar solicitudes pendientes, descargar su estado de cuenta |
-| Operaciones | Aprobar o rechazar operaciones (primera firma), dar de alta clientes, generar contraseñas temporales |
-| Cumplimiento | Aprobar operaciones y dar la segunda firma, verificar identidades, registrar el origen de los fondos, ver la bitácora y exportar reportes |
-| Administración | Todo lo anterior, cargar precios y gestionar los usuarios del equipo |
+| Cliente | Ver su cartera, pedir aportes y retiros, cancelar solicitudes pendientes, subir sus documentos, ver e imprimir sus estados de cuenta |
+| Operaciones | Aprobar o rechazar operaciones (primera firma), dar de alta clientes, subir documentos al legajo, generar contraseñas temporales |
+| Cumplimiento | Lo anterior más la segunda firma, revisar documentos, verificar identidades, registrar el origen de los fondos, conciliar la custodia, ver la bitácora y exportar reportes |
+| Administración | Todo lo anterior, cargar precios, cobrar comisiones y gestionar los usuarios del equipo |
 
 ### Cómo fluye el dinero
 
 1. El cliente elige una cartera modelo (Reserva, Equilibrio o Impulso), transfiere y pide el aporte con el número de comprobante.
 2. El equipo confirma la recepción y aprueba. El sistema compra cada activo según los pesos del modelo **al precio de ese momento**.
 3. Para retirar, el sistema usa primero el saldo en dólares y vende el resto en proporción a cada tenencia.
+4. Cada mes cerrado se cobra la comisión de gestión (por defecto 1,5 % anual, la doceava parte por mes) sobre el valor de la cartera al cierre del mes; el primer mes se cobra en proporción a los días invertidos. Es idempotente: un cliente nunca paga dos veces el mismo mes.
+5. El cliente recibe un aviso en el portal (y por correo, si está configurado) cuando se aprueba o rechaza algo, y tiene un estado de cuenta por mes con valor inicial, aportes, retiros, comisiones, resultado de mercado y valor final.
+
+### Alta y debida diligencia
+
+1. Operaciones da de alta al cliente con su perfil de riesgo (conservador, moderado o arriesgado) y le entrega una contraseña temporal.
+2. En su primer ingreso el cliente cambia la contraseña y **acepta las condiciones del servicio y el aviso de riesgos**; queda registrado con la versión y la fecha.
+3. El cliente (o el equipo) sube los documentos obligatorios: identidad y domicilio para personas; estatutos y representante para empresas. Solo se aceptan PDF, JPG o PNG verificados por su contenido, no por la extensión.
+4. Cumplimiento revisa cada documento. La identidad solo se puede marcar como verificada cuando todos los obligatorios están aceptados.
 
 ### Controles automáticos
 
@@ -63,6 +73,11 @@ Al aprobar, el sistema verifica:
 - **Doble firma:** las operaciones desde US$ 25.000 necesitan dos personas distintas, y la segunda tiene que ser de Cumplimiento o de Administración.
 - **Precios vigentes:** no se ejecuta con precios de más de 60 minutos.
 - **Saldo suficiente:** un retiro no puede superar el valor de la cartera menos los retiros ya pedidos.
+- **Idoneidad:** si el cliente elige una cartera con más riesgo que su perfil, tiene que confirmarlo de forma expresa, y la operación queda marcada para el equipo.
+
+### Conciliación de custodia
+
+Cumplimiento registra los saldos reales del banco y de cada criptomoneda en custodia; el sistema los compara con el libro contable y guarda el resultado sin posibilidad de modificarlo. Si hay diferencias, o si pasan más de 7 días sin conciliar, aparece una alerta en el panel.
 
 Los umbrales se cambian en la configuración.
 
@@ -70,26 +85,32 @@ Los umbrales se cambian en la configuración.
 
 ## Cómo está construido
 
-- **Python + Flask + SQLite.** Sin dependencias de interfaz: las pantallas se generan en el servidor y el JavaScript solo agrega la vista 3D y la vista previa del aporte.
+- **Python + Flask + SQLite.** Sin dependencias de interfaz: las pantallas y los gráficos (SVG) se generan en el servidor y el JavaScript solo agrega la vista 3D, la vista previa del aporte y pequeñas ayudas.
+- **Migraciones numeradas** en `financiera/migraciones/`: al arrancar se aplican las que falten, cada una en su transacción.
 - **Montos exactos:** los dólares se guardan en centavos y las criptomonedas en unidades de 0,00000001, siempre como enteros. Nunca se usan decimales de coma flotante.
 - **Libro contable de solo inserción:** cada depósito, compra, venta y pago es un asiento. Los saldos se calculan sumando asientos. La base de datos impide modificar o borrar asientos y órdenes.
 - **Bitácora inalterable:** cada acción queda registrada con autor, hora e IP. Cada registro guarda la huella SHA-256 del anterior, así que cualquier alteración directa en la base se detecta. La pantalla de Cumplimiento la verifica en cada visita, y también se puede verificar con `flask --app financiera verificar-bitacora`.
 
 ```
 financiera/
-  __init__.py      configuración, cabeceras de seguridad y arranque
-  schema.sql       tablas, disparadores de inmutabilidad, activos y carteras modelo
-  seguridad.py     contraseñas (scrypt), sesiones, CSRF, verificación en dos pasos, permisos
-  auditoria.py     bitácora encadenada
-  operaciones.py   reglas de aportes y retiros, doble firma, alertas
-  cartera.py       tenencias, valuación, ejecución de compras y ventas
-  precios.py       precios manuales o desde CoinGecko, historial y antigüedad
-  cuentas.py       alta de usuarios y clientes, verificaciones
-  demo.py          datos de demostración
-  rutas_*.py       pantallas de acceso, cliente, equipo y administración
-  templates/       pantallas
-  static/          estilos y JavaScript (sin recursos externos)
-tests/             42 pruebas automáticas
+  __init__.py        configuración, cabeceras de seguridad y arranque
+  migraciones/       esquema de la base en pasos numerados (tablas, disparadores, datos base)
+  seguridad.py       contraseñas (scrypt), sesiones, CSRF, dos pasos, permisos, condiciones
+  auditoria.py       bitácora encadenada
+  operaciones.py     reglas de aportes y retiros, idoneidad, doble firma, alertas
+  cartera.py         tenencias, valuación, ejecución, estados de cuenta mensuales
+  comisiones.py      comisión de gestión mensual
+  conciliacion.py    conciliación del libro con los saldos reales
+  documentos.py      legajo: validación de archivos, revisión, faltantes
+  notificaciones.py  avisos en el portal y cola de correos
+  graficos.py        geometría de los gráficos SVG
+  precios.py         precios manuales o desde CoinGecko, historial y antigüedad
+  cuentas.py         alta de usuarios y clientes, verificaciones
+  demo.py            datos de demostración
+  rutas_*.py         pantallas de acceso, cliente, equipo, administración y documentos
+  templates/         pantallas
+  static/            estilos y JavaScript (sin recursos externos)
+tests/               56 pruebas automáticas
 ```
 
 ### Seguridad incluida
@@ -120,7 +141,7 @@ docker compose exec app flask --app financiera crear-admin
 Esto levanta tres servicios:
 
 - **La aplicación**, con 3 procesos.
-- **Una tarea** que actualiza los precios desde CoinGecko cada 5 minutos.
+- **Las tareas de fondo:** actualiza precios y envía los correos pendientes cada 5 minutos, y el día 1 de cada mes cobra la comisión del mes anterior.
 - **Caddy**, que obtiene y renueva el certificado HTTPS solo.
 
 El primer administrador crea al resto del equipo desde Ajustes → Usuarios del equipo.
@@ -131,7 +152,19 @@ El primer administrador crea al resto del equipo desde Ajustes → Usuarios del 
 docker compose exec app flask --app financiera respaldar /datos/respaldo-$(date +%F).db
 ```
 
-Programa este comando todos los días y copia el archivo fuera del servidor (otro proveedor o almacenamiento externo). Prueba restaurar un respaldo al menos una vez por mes.
+Programa este comando todos los días y copia el archivo fuera del servidor (otro proveedor o almacenamiento externo), junto con la carpeta `/datos/documentos` del legajo. Prueba restaurar un respaldo al menos una vez por mes.
+
+### Comandos útiles
+
+| Comando | Qué hace |
+|---|---|
+| `flask --app financiera crear-admin` | Crea el primer usuario de Administración |
+| `flask --app financiera migrar` | Aplica las migraciones pendientes (también se hace al arrancar) |
+| `flask --app financiera actualizar-precios` | Trae los precios de CoinGecko |
+| `flask --app financiera cobrar-comisiones [--periodo AAAA-MM]` | Cobra la comisión del mes (por defecto, el anterior) |
+| `flask --app financiera enviar-correos` | Envía los avisos por correo pendientes |
+| `flask --app financiera verificar-bitacora` | Comprueba que nadie alteró la bitácora |
+| `flask --app financiera respaldar destino.db` | Copia consistente de la base en caliente |
 
 ### Configuración
 
@@ -144,6 +177,10 @@ Todas las opciones están comentadas en `.env.example`. Las principales:
 | `UMBRAL_ORIGEN_FONDOS_USD`, `UMBRAL_DOBLE_FIRMA_USD` | Montos a partir de los cuales se exige el origen de los fondos y la doble firma. |
 | `PRECIO_MAX_MINUTOS` | Antigüedad máxima de un precio para ejecutar operaciones. |
 | `INSTRUCCIONES_DEPOSITO` | Datos bancarios que ve el cliente al aportar. |
+| `COMISION_ANUAL_PCT` | Comisión de gestión anual en porcentaje (0 la desactiva). |
+| `SMTP_HOST`, `SMTP_USUARIO`, `SMTP_CLAVE`, `SMTP_REMITENTE` | Servidor de correo para los avisos. Sin `SMTP_HOST` los avisos solo se ven en el portal. |
+| `URL_PUBLICA` | Dirección del sistema, para los enlaces de los correos y el pie de los estados de cuenta. |
+| `DOCUMENTO_MAX_MB` | Tamaño máximo de cada documento del legajo. |
 
 ### Pruebas
 
@@ -159,11 +196,9 @@ python -m pytest
 El sistema registra y controla las operaciones, pero hay piezas del negocio que no puede resolver el software:
 
 1. **Figura legal y autorizaciones.** Recibir dinero del público para invertirlo puede requerir autorización de la Superintendencia de Valores del BCP. Además rigen las obligaciones antilavado de Seprelad y el reporte de operaciones con criptoactivos a la DNIT (RG 47/2026). Confírmalo con un abogado local antes de abrir al público.
-2. **Custodia real de las criptomonedas.** Hoy el sistema registra compras y ventas en su libro, pero no las ejecuta en un exchange. Falta decidir:
-   - con qué exchange o custodio regulado se opera;
-   - cómo se concilia todos los días el libro con los saldos reales.
-3. **Banco.** Falta conciliar los depósitos y pagos con los extractos bancarios.
-4. **Verificación de identidad.** Hoy Cumplimiento la marca a mano. Para volumen conviene integrar un proveedor de verificación con prueba de vida.
-5. **Comisiones, avisos por correo y contratos.** No están implementados.
+2. **Custodia real de las criptomonedas.** El sistema registra compras y ventas en su libro y permite conciliarlo con los saldos reales, pero no ejecuta las órdenes en un exchange. Falta elegir el exchange o custodio regulado y, más adelante, integrarlo para ejecutar y conciliar de forma automática.
+3. **Banco.** La conciliación incluye el saldo en dólares, pero se carga a mano desde el extracto; no hay conexión con el banco.
+4. **Verificación de identidad.** El legajo y la revisión son manuales. Para volumen conviene integrar un proveedor de verificación con prueba de vida.
+5. **Contrato y textos legales.** El texto de condiciones y el aviso de riesgos del portal es un punto de partida: un abogado tiene que adaptarlo a tu figura legal antes de usarlo.
 6. **Escala.** SQLite rinde bien con un solo servidor y miles de clientes. Para más servidores conviene migrar a PostgreSQL.
 7. **Revisión externa.** Antes de lanzar, una auditoría de seguridad hecha por terceros, como una prueba de penetración.

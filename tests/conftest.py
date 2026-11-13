@@ -2,7 +2,7 @@ from decimal import Decimal
 
 import pytest
 
-from financiera import create_app, cuentas, db, precios
+from financiera import create_app, cuentas, db, documentos, precios
 
 CLAVE = "Prueba-2026!"
 
@@ -26,10 +26,21 @@ def app(tmp_path):
             cuentas.crear_usuario(email, nombre, rol, CLAVE, debe_cambiar=False)
         cid, _ = cuentas.crear_cliente({"nombre": "Laura Cliente", "documento": "CI 1", "tipo": "persona", "email": "laura@x.com",
                                         "perfil_riesgo": "moderado", "modelo": "equilibrio", "clave": CLAVE})
+        legajo_completo(cid)
         cuentas.marcar_kyc(cid, "verificado", "ok", usuario("cum@x.com"))
         cid2, _ = cuentas.crear_cliente({"nombre": "Pedro Pendiente", "documento": "CI 2", "tipo": "persona", "email": "pedro@x.com",
                                          "perfil_riesgo": "moderado", "modelo": "reserva", "clave": CLAVE})
+        for email in ("laura@x.com", "pedro@x.com"):
+            cuentas.aceptar_terminos(usuario(email))
     yield app
+
+
+def legajo_completo(cid):
+    """Sube y acepta los documentos obligatorios del cliente."""
+    cli = db.uno("SELECT * FROM clientes WHERE id = ?", (cid,))
+    for tipo in documentos.REQUERIDOS[cli["tipo"]]:
+        did = documentos.guardar(cli, tipo, f"{tipo}.pdf", documentos.pdf_ejemplo(tipo), usuario("op@x.com"))
+        documentos.revisar(did, "aceptado", "", usuario("cum@x.com"))
 
 
 def usuario(email):

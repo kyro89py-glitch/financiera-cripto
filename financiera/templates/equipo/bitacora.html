@@ -1,27 +1,33 @@
 {% extends "base.html" %}
+{% from "macros.html" import ph, vacio with context %}
 {% block titulo %}Bitácora{% endblock %}
 {% block contenido %}
-<a class="small" href="{{ url_for('equipo.cumplimiento') }}">← Cumplimiento</a>
-<h2>Bitácora</h2>
-<p class="small muted">Cada acción queda registrada con su autor, hora y dirección IP. Los registros no se pueden modificar ni borrar, y cada uno guarda la huella del anterior.</p>
-<form class="row" method="get" action="{{ url_for('equipo.bitacora') }}" role="search">
-  <label class="field" for="q" style="flex:1"><span class="oculto">Buscar</span><input id="q" name="q" value="{{ q }}" placeholder="Buscar por persona, acción o texto"></label>
+{{ ph("Bitácora", "Cada acción queda registrada con su autor, hora y dirección IP. Los registros no se pueden modificar ni borrar, y cada uno guarda la huella del anterior.") }}
+{% include "equipo/_subnav.html" %}
+<form class="row" method="get" action="{{ url_for('equipo.bitacora') }}" role="search" style="margin-bottom:12px">
+  <label class="field" for="q" style="flex:1;min-width:200px"><span class="oculto">Buscar</span><input id="q" name="q" type="search" value="{{ q }}" placeholder="Persona, acción o texto"></label>
   <button class="btn" type="submit">Buscar</button>
 </form>
-<section class="card">
-  <div class="tablewrap"><table>
-    <thead><tr><th>#</th><th>Fecha</th><th>Quién</th><th>Qué pasó</th><th>IP</th></tr></thead>
+<section class="card flush">
+  {% if filas %}
+  <div class="tablewrap"><table class="tabla resp">
+    <thead><tr><th>Qué pasó</th><th>Quién</th><th>Fecha</th><th class="r">IP</th></tr></thead>
     <tbody>
     {% for f in filas %}
-      <tr><td class="num">{{ f.id }}</td><td class="num" style="white-space:nowrap">{{ f.ts|fecha }}</td><td>{{ f.actor }}</td><td>{{ texto(f) }}<div class="huella">{{ f.accion }} · {{ f.hash[:16] }}</div></td><td class="num small">{{ f.ip or "—" }}</td></tr>
-    {% else %}
-      <tr><td colspan="5" class="empty">Sin registros.</td></tr>
+      <tr>
+        <td class="full">{{ texto(f) }}<span class="sec huella">#{{ f.id }} · {{ f.accion }} · {{ f.hash[:16] }}</span></td>
+        <td>{{ f.actor }}</td>
+        <td class="num small" style="white-space:nowrap">{{ f.ts|fecha }}</td>
+        <td class="r num small oc">{{ f.ip or "—" }}</td>
+      </tr>
     {% endfor %}
     </tbody>
   </table></div>
+  {% else %}{{ vacio('cadena', 'Sin registros.') }}{% endif %}
 </section>
-<div class="pag">
+<div class="pag" style="margin-top:12px">
   {% if pagina > 1 %}<a class="btn sm" href="{{ url_for('equipo.bitacora', q=q, p=pagina - 1) }}">← Más recientes</a>{% else %}<span></span>{% endif %}
-  {% if hay_mas %}<a class="btn sm" href="{{ url_for('equipo.bitacora', q=q, p=pagina + 1) }}">Más antiguos →</a>{% endif %}
+  <span class="small muted">Página {{ pagina }}</span>
+  {% if hay_mas %}<a class="btn sm" href="{{ url_for('equipo.bitacora', q=q, p=pagina + 1) }}">Más antiguos →</a>{% else %}<span></span>{% endif %}
 </div>
 {% endblock %}

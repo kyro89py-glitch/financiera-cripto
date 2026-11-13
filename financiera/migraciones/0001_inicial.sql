@@ -1,10 +1,8 @@
--- Esquema de Financiera Cripto.
+-- Migración 0001: esquema inicial de Financiera Cripto.
 -- Unidades: los montos en dólares se guardan en centavos (enteros) y las criptomonedas en
 -- unidades de 1e-8 (enteros), para no perder precisión con números decimales.
 -- El libro contable, las órdenes y la bitácora solo admiten inserciones: los disparadores
 -- impiden modificar o borrar filas.
-
-PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS usuarios (
   id INTEGER PRIMARY KEY,
@@ -21,6 +19,8 @@ CREATE TABLE IF NOT EXISTS usuarios (
   bloqueado_hasta TEXT,
   sesion_ver INTEGER NOT NULL DEFAULT 1,
   ultimo_ingreso TEXT,
+  terminos_version INTEGER,
+  terminos_ts TEXT,
   creado TEXT NOT NULL
 );
 
@@ -89,8 +89,10 @@ CREATE INDEX IF NOT EXISTS ix_precios_historial ON precios_historial(activo, ts)
 CREATE TABLE IF NOT EXISTS operaciones (
   id INTEGER PRIMARY KEY,
   cliente_id INTEGER NOT NULL REFERENCES clientes(id),
-  tipo TEXT NOT NULL CHECK (tipo IN ('aporte', 'retiro')),
+  tipo TEXT NOT NULL CHECK (tipo IN ('aporte', 'retiro', 'comision')),
   monto_cent INTEGER NOT NULL CHECK (monto_cent > 0),
+  periodo TEXT,
+  fuera_perfil INTEGER NOT NULL DEFAULT 0,
   modelo TEXT REFERENCES modelos(codigo),
   referencia TEXT,
   estado TEXT NOT NULL DEFAULT 'pendiente'
@@ -108,13 +110,14 @@ CREATE TABLE IF NOT EXISTS operaciones (
 );
 CREATE INDEX IF NOT EXISTS ix_operaciones_estado ON operaciones(estado, creado);
 CREATE INDEX IF NOT EXISTS ix_operaciones_cliente ON operaciones(cliente_id, creado);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_comision_periodo ON operaciones(cliente_id, periodo) WHERE tipo = 'comision';
 
 CREATE TABLE IF NOT EXISTS libro (
   id INTEGER PRIMARY KEY,
   cliente_id INTEGER NOT NULL REFERENCES clientes(id),
   activo TEXT NOT NULL,
   cantidad INTEGER NOT NULL,
-  concepto TEXT NOT NULL CHECK (concepto IN ('deposito', 'compra', 'venta', 'pago_retiro')),
+  concepto TEXT NOT NULL CHECK (concepto IN ('deposito', 'compra', 'venta', 'pago_retiro', 'comision')),
   operacion_id INTEGER REFERENCES operaciones(id),
   ts TEXT NOT NULL
 );
@@ -146,6 +149,55 @@ CREATE TABLE IF NOT EXISTS bitacora (
   hash TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS documentos (
+  id INTEGER PRIMARY KEY,
+  cliente_id INTEGER NOT NULL REFERENCES clientes(id),
+  tipo TEXT NOT NULL,
+  nombre_original TEXT NOT NULL,
+  archivo TEXT NOT NULL UNIQUE,
+  mime TEXT NOT NULL,
+  tamano INTEGER NOT NULL,
+  sha256 TEXT NOT NULL,
+  estado TEXT NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'aceptado', 'rechazado')),
+  nota TEXT,
+  subido_por INTEGER REFERENCES usuarios(id),
+  subido_ts TEXT NOT NULL,
+  revisado_por INTEGER REFERENCES usuarios(id),
+  revisado_ts TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_documentos_cliente ON documentos(cliente_id, tipo);
+
+CREATE TABLE IF NOT EXISTS notificaciones (
+  id INTEGER PRIMARY KEY,
+  usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
+  texto TEXT NOT NULL,
+  enlace TEXT,
+  leida INTEGER NOT NULL DEFAULT 0,
+  ts TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_notificaciones_usuario ON notificaciones(usuario_id, leida, ts);
+
+CREATE TABLE IF NOT EXISTS correos (
+  id INTEGER PRIMARY KEY,
+  para TEXT NOT NULL,
+  asunto TEXT NOT NULL,
+  cuerpo TEXT NOT NULL,
+  estado TEXT NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'enviado', 'error')),
+  intentos INTEGER NOT NULL DEFAULT 0,
+  error TEXT,
+  creado TEXT NOT NULL,
+  enviado TEXT
+);
+
+CREATE TABLE IF NOT EXISTS conciliaciones (
+  id INTEGER PRIMARY KEY,
+  ts TEXT NOT NULL,
+  usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
+  nota TEXT,
+  detalle TEXT NOT NULL,
+  diferencias INTEGER NOT NULL
+);
+
 CREATE TRIGGER IF NOT EXISTS libro_no_modificable BEFORE UPDATE ON libro
 BEGIN SELECT RAISE(ABORT, 'El libro contable no se puede modificar'); END;
 CREATE TRIGGER IF NOT EXISTS libro_no_borrable BEFORE DELETE ON libro
@@ -158,6 +210,10 @@ CREATE TRIGGER IF NOT EXISTS bitacora_no_modificable BEFORE UPDATE ON bitacora
 BEGIN SELECT RAISE(ABORT, 'La bitácora no se puede modificar'); END;
 CREATE TRIGGER IF NOT EXISTS bitacora_no_borrable BEFORE DELETE ON bitacora
 BEGIN SELECT RAISE(ABORT, 'La bitácora no se puede borrar'); END;
+CREATE TRIGGER IF NOT EXISTS conciliaciones_no_modificables BEFORE UPDATE ON conciliaciones
+BEGIN SELECT RAISE(ABORT, 'Las conciliaciones no se pueden modificar'); END;
+CREATE TRIGGER IF NOT EXISTS conciliaciones_no_borrables BEFORE DELETE ON conciliaciones
+BEGIN SELECT RAISE(ABORT, 'Las conciliaciones no se pueden borrar'); END;
 
 -- Datos base: activos disponibles y carteras modelo. Se pueden ajustar antes de operar.
 INSERT OR IGNORE INTO activos (codigo, nombre, coingecko_id, color, estable, orden) VALUES

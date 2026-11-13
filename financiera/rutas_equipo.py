@@ -5,9 +5,12 @@ from decimal import Decimal
 
 from flask import Blueprint, Response, abort, flash, g, redirect, render_template, request, url_for
 
-from . import auditoria, cartera, cuentas, db, operaciones, precios, seguridad
+from datetime import timedelta
+
+from . import auditoria, cartera, comisiones, conciliacion, cuentas, db, documentos, graficos, operaciones, precios, seguridad
 from .dinero import fmt_num
-from .formato import ESTADOS, f_fecha
+from .formato import ESTADOS, TIPOS_OP, f_fecha, zona
+from .tiempo import ahora_dt, iso, leer
 
 bp = Blueprint("equipo", __name__, url_prefix="/equipo")
 
@@ -52,9 +55,26 @@ def resumen():
         grupos = [{"label": a["activo"] if a["activo"] != "USD" else "Saldo USD", "value": a["valor"], "col": a["color"]}
                   for a in casa["activos"]]
     top = sorted(((casa["por_cliente"].get(c["id"], 0), c) for c in clientes), key=lambda x: -x[0])[:6]
+    serie = cartera.serie_casa()
+    graf = graficos.linea(serie) if casa["total"] else None
+    hoy = ahora_dt().astimezone(zona()).date()
+    dias = [hoy - timedelta(days=13 - i) for i in range(14)]
+    flujo = {d: [0, 0] for d in dias}
+    for o in db.todos("SELECT tipo, liquidado_cent, resuelto_ts FROM operaciones WHERE estado = 'liquidada' AND tipo IN ('aporte', 'retiro')"
+                      " AND resuelto_ts >= ?", (iso(ahora_dt() - timedelta(days=15)),)):
+        d = leer(o["resuelto_ts"]).astimezone(zona()).date()
+        if d in flujo:
+            flujo[d][0 if o["tipo"] == "aporte" else 1] += o["liquidado_cent"]
+    barras = graficos.barras([(f"{d.isoformat()}T12:00:00Z", a, r) for d, (a, r) in flujo.items()])
+    entradas = sum(a for a, _ in flujo.values())
+    salidas = sum(r for _, r in flujo.values())
+    mas_antigua = min((o["creado"] for o in abiertas), default=None)
+    ult_comision = (comisiones.resumen_periodos(1) or [None])[0]
     return render_template("equipo/resumen.html", casa=casa, vista=vista, datos3d={"titulo": "Activos bajo gestión", "grupos": grupos},
-                           clientes=clientes, abiertas=abiertas, neto=neto, top=top, alertas=operaciones.alertas()[:5],
-                           con_saldo=sum(1 for v in casa["por_cliente"].values() if v > 0))
+                           clientes=clientes, abiertas=abiertas, neto=neto, top=top, alertas=operaciones.alertas()[:6],
+                           con_saldo=sum(1 for v in casa["por_cliente"].values() if v > 0), graf=graf, barras=barras,
+                           entradas=entradas, salidas=salidas, mas_antigua=mas_antigua, ult_comision=ult_comision,
+                           conc=conciliacion.estado())
 
 
 @bp.get("/operaciones", endpoint="operaciones")
@@ -66,7 +86,7 @@ def operaciones_lista():
         filtro = "abiertas"
     orden = "o.creado ASC" if filtro == "abiertas" else "o.creado DESC"
     ops = db.todos(
-        "SELECT o.*, c.nombre, c.kyc_estado, c.origen_fondos FROM operaciones o JOIN clientes c ON c.id = o.cliente_id"
+        "SELECT o.*, c.nombre, c.documento, c.kyc_estado, c.origen_fondos FROM operaciones o JOIN clientes c ON c.id = o.cliente_id"
         f" WHERE {condiciones[filtro]} ORDER BY {orden}, o.id LIMIT 300")
     return render_template("equipo/operaciones.html", ops=ops, filtro=filtro,
                            requiere_origen=operaciones.requiere_origen, requiere_doble=operaciones.requiere_doble_firma)
@@ -158,8 +178,11 @@ def cliente(cid):
     ops = db.todos("SELECT * FROM operaciones WHERE cliente_id = ? ORDER BY creado DESC LIMIT 50", (cid,))
     usuarios = {u["id"]: u for u in db.todos("SELECT id, nombre FROM usuarios")}
     modelo = db.uno("SELECT * FROM modelos WHERE codigo = ?", (cli["modelo"],))
+    acepto = db.uno("SELECT terminos_version, terminos_ts FROM usuarios WHERE id = ?", (cli["usuario_id"],)) if cli["usuario_id"] else None
     return render_template("equipo/cliente.html", cli=cli, filas=filas, total=total, ops=ops, usuarios=usuarios,
-                           modelo=modelo, aportado=cartera.aportado_neto(cid))
+                           modelo=modelo, aportado=cartera.aportado_neto(cid), legajo=documentos.legajo(cli),
+                           tipos=documentos.TIPOS[cli["tipo"]], estados_doc=documentos.ESTADOS, acepto=acepto,
+                           faltan=documentos.faltantes(cli), periodos=cartera.periodos_cliente(cli))
 
 
 @bp.post("/clientes/<int:cid>/kyc")
@@ -237,7 +260,7 @@ def reporte_operaciones():
     w.writerow(["Operación", "Fecha", "Cliente", "Documento", "Tipo de cliente", "Tipo", "Estado", "Monto USD",
                 "Liquidado USD", "Referencia", "Motivo"])
     for o in filas:
-        w.writerow([o["id"], f_fecha(o["creado"]), o["nombre"], o["documento"], o["tipo_cliente"], o["tipo"],
+        w.writerow([o["id"], f_fecha(o["creado"]), o["nombre"], o["documento"], o["tipo_cliente"], TIPOS_OP[o["tipo"]],
                     ESTADOS[o["estado"]][1], fmt_num(Decimal(o["monto_cent"]) / 100),
                     fmt_num(Decimal(o["liquidado_cent"]) / 100) if o["liquidado_cent"] is not None else "",
                     o["referencia"] or "", o["motivo"] or ""])
@@ -245,3 +268,75 @@ def reporte_operaciones():
                         {"texto": f"Exportó el reporte de operaciones del {desde} al {hasta} ({len(filas)} filas)."})
     return Response(buf.getvalue(), mimetype="text/csv",
                     headers={"Content-Disposition": f'attachment; filename="operaciones-{desde}-{hasta}.csv"'})
+
+
+@bp.post("/clientes/<int:cid>/documentos")
+@seguridad.requiere("documentos.subir")
+def cliente_documento(cid):
+    cli = _cliente_o_404(cid)
+    archivo = request.files.get("archivo")
+    try:
+        if not archivo or not archivo.filename:
+            raise documentos.ErrorDocumento("Elige un archivo.")
+        documentos.guardar(cli, request.form.get("tipo"), archivo.filename, archivo.read(), g.usuario)
+        flash("Documento agregado al legajo.", "ok")
+    except documentos.ErrorDocumento as e:
+        flash(str(e), "error")
+    return redirect(url_for("equipo.cliente", cid=cid) + "#legajo")
+
+
+@bp.post("/documentos/<int:did>/revisar")
+@seguridad.requiere("documentos.revisar")
+def documento_revisar(did):
+    d = db.uno("SELECT cliente_id FROM documentos WHERE id = ?", (did,))
+    if not d:
+        abort(404)
+    try:
+        documentos.revisar(did, request.form.get("estado"), request.form.get("nota"), g.usuario)
+        flash("Revisión guardada.", "ok")
+    except documentos.ErrorDocumento as e:
+        flash(str(e), "error")
+    destino = request.form.get("volver")
+    if destino == "cola":
+        return redirect(url_for("equipo.documentos"))
+    return redirect(url_for("equipo.cliente", cid=d["cliente_id"]) + "#legajo")
+
+
+@bp.get("/documentos", endpoint="documentos")
+@seguridad.requiere("cumplimiento.ver")
+def documentos_cola():
+    return render_template("equipo/documentos.html", pendientes=documentos.pendientes_revision(),
+                           nombre_tipo=documentos.nombre_tipo)
+
+
+
+@bp.route("/conciliacion", methods=["GET", "POST"], endpoint="conciliacion")
+@seguridad.requiere("cumplimiento.ver")
+def conciliacion_ver():
+    error = None
+    valores = {}
+    if request.method == "POST":
+        if not seguridad.puede("conciliacion.registrar"):
+            abort(403)
+        valores = {a: request.form.get(f"real_{a}", "") for a in conciliacion.activos_a_conciliar()}
+        try:
+            conciliacion.registrar(valores, request.form.get("nota"), g.usuario)
+            flash("Conciliación registrada.", "ok")
+            return redirect(url_for("equipo.conciliacion"))
+        except conciliacion.ErrorConciliacion as e:
+            error = str(e)
+    info = cartera.info_activos()
+    return render_template("equipo/conciliacion.html", libro=conciliacion.saldos_libro(), activos=conciliacion.activos_a_conciliar(),
+                           info=info, historial=conciliacion.historial(), estado=conciliacion.estado(), error=error, valores=valores)
+
+
+
+@bp.get("/clientes/<int:cid>/estado-de-cuenta/<periodo>", endpoint="estado_mensual")
+def estado_mensual(cid, periodo):
+    cli = _cliente_o_404(cid)
+    periodos = cartera.periodos_cliente(cli)
+    if periodo not in periodos:
+        abort(404)
+    return render_template("estado_cuenta.html", cli=cli, ec=cartera.estado_cuenta(cli, periodo), periodos=periodos,
+                           url_periodo=lambda p: url_for("equipo.estado_mensual", cid=cid, periodo=p),
+                           url_csv=None, volver=url_for("equipo.cliente", cid=cid))

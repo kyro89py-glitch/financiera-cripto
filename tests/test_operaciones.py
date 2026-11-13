@@ -34,7 +34,7 @@ def test_aporte_completo_por_pantallas(nav, ctx):
 
 def test_el_libro_cuadra_en_dolares(ctx):
     cli = cliente("laura@x.com")
-    opid = operaciones.solicitar_aporte(cli, 123457, "impulso", None, None)
+    opid = operaciones.solicitar_aporte(cli, 123457, "impulso", None, None, acepta_riesgo=True)
     operaciones.aprobar(opid, usuario("op@x.com"))
     usd = db.uno("SELECT SUM(cantidad) s FROM libro WHERE activo = 'USD' AND cliente_id = ?", (cli["id"],))["s"]
     compras = db.uno("SELECT SUM(importe_cent) s FROM ordenes WHERE operacion_id = ?", (opid,))["s"]
@@ -98,7 +98,7 @@ def test_retiro(ctx):
 
 def test_retiro_total(ctx):
     cli = cliente("laura@x.com")
-    operaciones.aprobar(operaciones.solicitar_aporte(cli, 77777, "impulso", None, None), usuario("op@x.com"))
+    operaciones.aprobar(operaciones.solicitar_aporte(cli, 77777, "impulso", None, None, acepta_riesgo=True), usuario("op@x.com"))
     valor = _saldo(cli["id"])
     operaciones.aprobar(operaciones.solicitar_retiro(cli, valor, None), usuario("op@x.com"))
     assert _saldo(cli["id"]) <= 1

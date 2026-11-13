@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block titulo %}Cambiar contraseña{% endblock %}
 {% block contenido %}
-<div class="auth">
+<div class="auth auth-solo">
   <div>
     <h2>{{ "Elige tu contraseña" if forzado else "Cambiar contraseña" }}</h2>
     <p class="muted">{% if forzado %}Estás usando una contraseña temporal. Elige una propia para continuar.{% else %}Al cambiarla se cierran tus sesiones en otros dispositivos.{% endif %}</p>

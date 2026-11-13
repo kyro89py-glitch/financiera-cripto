@@ -5,7 +5,7 @@ from decimal import ROUND_CEILING, Decimal
 
 from . import db, precios as precios_mod
 from .dinero import unidades_por, valor_cent
-from .tiempo import ahora_dt, iso
+from .tiempo import ahora, ahora_dt, iso, leer
 
 COLOR_USD = "#94A3B8"
 
@@ -136,8 +136,10 @@ def ejecutar_aporte(c, op, pesos, precios, ts):
     return monto
 
 
-def ejecutar_retiro(c, op, precios, ts):
-    """Usa primero el saldo en dólares y vende el resto en proporción a cada tenencia. Devuelve lo pagado."""
+def ejecutar_retiro(c, op, precios, ts, concepto="pago_retiro"):
+    """Usa primero el saldo en dólares y vende el resto en proporción a cada tenencia. Devuelve lo pagado.
+
+    También se usa para cobrar la comisión de gestión (concepto='comision')."""
     cid, monto = op["cliente_id"], op["monto_cent"]
     ten = tenencias(cid)
     _, total = posiciones(cid, precios, ten)
@@ -162,7 +164,7 @@ def ejecutar_retiro(c, op, precios, ts):
             _orden(c, op, activo, "venta", vender, p["precio"], ingreso, ts)
             caja += ingreso
     pago = min(monto, caja)
-    _asiento(c, cid, "USD", -pago, "pago_retiro", op["id"], ts)
+    _asiento(c, cid, "USD", -pago, concepto, op["id"], ts)
     return pago
 
 
@@ -192,3 +194,97 @@ def resumen_casa(precios=None):
     for cid, v in por_cliente.items():
         por_modelo[clientes[cid]["modelo"]] += v
     return {"total": total, "activos": activos_l, "por_cliente": dict(por_cliente), "por_modelo": dict(por_modelo)}
+
+
+# ---------- valuación en el pasado y estados de cuenta ----------
+def tenencias_hasta(cliente_id, ts):
+    filas = db.todos("SELECT activo, SUM(cantidad) AS u FROM libro WHERE cliente_id = ? AND ts <= ? GROUP BY activo",
+                     (cliente_id, ts))
+    return {f["activo"]: f["u"] for f in filas if f["u"]}
+
+
+def precio_en(activo, ts):
+    f = db.uno("SELECT precio FROM precios_historial WHERE activo = ? AND ts <= ? ORDER BY ts DESC, id DESC LIMIT 1", (activo, ts))
+    if not f:
+        f = db.uno("SELECT precio FROM precios_historial WHERE activo = ? ORDER BY ts, id LIMIT 1", (activo,))
+    if not f:
+        f = db.uno("SELECT precio FROM precios WHERE activo = ?", (activo,))
+    return Decimal(f["precio"]) if f else None
+
+
+def valor_en(cliente_id, ts):
+    """(total_cent, filas) del cliente en un momento dado, con los precios de ese momento."""
+    ten = tenencias_hasta(cliente_id, ts)
+    pr = {a: {"precio": precio_en(a, ts)} for a in ten if a != "USD"}
+    pr = {a: p for a, p in pr.items() if p["precio"] is not None}
+    filas, total = posiciones(cliente_id, pr, ten)
+    return total, filas
+
+
+def periodos_cliente(cliente):
+    """Meses desde el alta del cliente hasta hoy, del más reciente al más antiguo, como 'AAAA-MM'."""
+    from .formato import zona
+    ini = leer(cliente["creado"]).astimezone(zona())
+    fin = ahora_dt().astimezone(zona())
+    out, a, m = [], fin.year, fin.month
+    while (a, m) >= (ini.year, ini.month) and len(out) < 120:
+        out.append(f"{a:04d}-{m:02d}")
+        a, m = (a, m - 1) if m > 1 else (a - 1, 12)
+    return out
+
+
+def limites_periodo(periodo):
+    """Inicio y fin (UTC, ISO) de un mes en la zona horaria del negocio. El fin nunca es posterior a ahora."""
+    from datetime import datetime
+    from .formato import zona
+    a, m = (int(x) for x in periodo.split("-"))
+    ini = datetime(a, m, 1, tzinfo=zona())
+    fin = datetime(a + (m == 12), m % 12 + 1, 1, tzinfo=zona())
+    fin_iso = min(iso(fin), ahora())
+    return iso(ini), fin_iso, fin_iso < iso(fin)
+
+
+def estado_cuenta(cliente, periodo):
+    ini, fin, en_curso = limites_periodo(periodo)
+    v_ini, _ = valor_en(cliente["id"], ini)
+    v_fin, filas = valor_en(cliente["id"], fin)
+    ops = db.todos("SELECT * FROM operaciones WHERE cliente_id = ? AND estado = 'liquidada' AND resuelto_ts > ? AND resuelto_ts <= ?"
+                   " ORDER BY resuelto_ts, id", (cliente["id"], ini, fin))
+    ordenes = {}
+    for o in db.todos("SELECT * FROM ordenes WHERE cliente_id = ? AND ts > ? AND ts <= ? ORDER BY id", (cliente["id"], ini, fin)):
+        ordenes.setdefault(o["operacion_id"], []).append(o)
+    aportes = sum(o["liquidado_cent"] for o in ops if o["tipo"] == "aporte")
+    retiros = sum(o["liquidado_cent"] for o in ops if o["tipo"] == "retiro")
+    comisiones = sum(o["liquidado_cent"] for o in ops if o["tipo"] == "comision")
+    mercado = v_fin - v_ini - aportes + retiros + comisiones
+    return {"periodo": periodo, "inicio": ini, "fin": fin, "en_curso": en_curso, "valor_inicial": v_ini, "valor_final": v_fin,
+            "aportes": aportes, "retiros": retiros, "comisiones": comisiones, "mercado": mercado, "ops": ops,
+            "ordenes": ordenes, "posiciones": filas}
+
+
+def serie_casa(dias=7, puntos=29):
+    """Valor total gestionado a lo largo del tiempo: tenencias de cada momento por precios de cada momento."""
+    fin = ahora_dt()
+    ini = fin - timedelta(days=dias)
+    movs = db.todos("SELECT activo, cantidad, ts FROM libro ORDER BY ts, id")
+    cripto = sorted({m["activo"] for m in movs if m["activo"] != "USD"})
+    hist = precios_mod.historial(cripto, iso(ini))
+    vig = precios_mod.vigentes()
+    ten, ptr, j, out = defaultdict(int), defaultdict(int), 0, []
+    for k in range(puntos):
+        t = iso(ini + (fin - ini) * k / (puntos - 1))
+        while j < len(movs) and movs[j]["ts"] <= t:
+            ten[movs[j]["activo"]] += movs[j]["cantidad"]
+            j += 1
+        total = ten.get("USD", 0)
+        for a in cripto:
+            if not ten.get(a):
+                continue
+            h = hist.get(a) or []
+            while ptr[a] + 1 < len(h) and h[ptr[a] + 1][0] <= t:
+                ptr[a] += 1
+            p = h[ptr[a]][1] if h else (vig[a]["precio"] if a in vig else None)
+            if p is not None:
+                total += valor_cent(a, ten[a], p)
+        out.append((t, total))
+    return out

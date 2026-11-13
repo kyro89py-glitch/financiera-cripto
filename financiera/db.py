@@ -2,6 +2,11 @@
 import contextlib
 import os
 import sqlite3
+
+try:
+    import fcntl
+except ImportError:  # Windows
+    fcntl = None
 from datetime import datetime, timezone
 from importlib import resources
 
@@ -54,19 +59,58 @@ def transaccion():
         c.execute("COMMIT")
 
 
-def crear_esquema():
+def _migraciones():
+    carpeta = resources.files(__package__).joinpath("migraciones")
+    out = []
+    for f in carpeta.iterdir():
+        nombre = f.name
+        if nombre.endswith(".sql") and nombre[:4].isdigit():
+            out.append((int(nombre[:4]), nombre, f.read_text(encoding="utf-8")))
+    return sorted(out)
+
+
+@contextlib.contextmanager
+def _candado():
+    """Evita que dos procesos apliquen migraciones a la vez (por ejemplo, varios workers al arrancar)."""
+    ruta = current_app.config["DATABASE"]
+    if ruta == ":memory:" or fcntl is None:
+        yield
+        return
+    with open(ruta + ".lock", "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
+def migrar():
+    """Aplica en orden las migraciones pendientes. La versión aplicada se guarda en PRAGMA user_version."""
     c = conexion()
-    if current_app.config["DATABASE"] != ":memory:":
-        c.execute("PRAGMA journal_mode = WAL")
-    sql = resources.files(__package__).joinpath("schema.sql").read_text(encoding="utf-8")
-    c.executescript(sql)
+    aplicadas = []
+    with _candado():
+        if current_app.config["DATABASE"] != ":memory:":
+            c.execute("PRAGMA journal_mode = WAL")
+        version = c.execute("PRAGMA user_version").fetchone()[0]
+        for numero, nombre, sql in _migraciones():
+            if numero <= version:
+                continue
+            c.executescript(f"BEGIN IMMEDIATE;\n{sql}\nPRAGMA user_version = {numero};\nCOMMIT;")
+            aplicadas.append(nombre)
+    return aplicadas
 
 
-@click.command("init-db")
-def cmd_init_db():
-    """Crea las tablas y los datos base si no existen."""
-    crear_esquema()
-    click.echo("Base de datos lista en " + current_app.config["DATABASE"])
+def version():
+    return conexion().execute("PRAGMA user_version").fetchone()[0]
+
+
+@click.command("migrar")
+def cmd_migrar():
+    """Crea o actualiza la base de datos aplicando las migraciones pendientes."""
+    aplicadas = migrar()
+    for nombre in aplicadas:
+        click.echo("Aplicada " + nombre)
+    click.echo(f"Base de datos en la versión {version()}: " + current_app.config["DATABASE"])
 
 
 @click.command("respaldar")
@@ -86,5 +130,5 @@ def cmd_respaldar(destino):
 
 def init_app(app):
     app.teardown_appcontext(cerrar)
-    app.cli.add_command(cmd_init_db)
+    app.cli.add_command(cmd_migrar)
     app.cli.add_command(cmd_respaldar)

@@ -1,35 +1,41 @@
 {% extends "base.html" %}
-{% from "macros.html" import estado, pill %}
+{% from "macros.html" import estado, pill, ph, tipo_op, signo, vacio with context %}
 {% block titulo %}Operaciones{% endblock %}
 {% block contenido %}
-<h2>Operaciones</h2>
-<div class="chips">
+{% call ph("Operaciones", "Aportes, retiros y comisiones de todos los clientes. Las solicitudes abiertas se muestran de la más antigua a la más nueva.") %}
+  {% if puede('reportes.exportar') %}<a class="btn" href="{{ url_for('equipo.reporte_operaciones') }}">{{ icono('descargar') }}Exportar CSV</a>{% endif %}
+{% endcall %}
+<div class="chips" style="margin-bottom:12px">
   {% for v, t in [('abiertas', 'Por aprobar'), ('liquidadas', 'Liquidadas'), ('rechazadas', 'Rechazadas y canceladas'), ('todas', 'Todas')] %}
   <a href="{{ url_for('equipo.operaciones', ver=v) }}" aria-current="{{ 'true' if filtro == v else 'false' }}">{{ t }}</a>
   {% endfor %}
 </div>
-<section class="card">
-  <div class="list">
-  {% for o in ops %}
-    <a class="item" href="{{ url_for('equipo.operacion', opid=o.id) }}">
-      <div class="grow">
-        <div class="t">{{ o.nombre }} · {{ "Aporte" if o.tipo == "aporte" else "Retiro" }} #{{ o.id }}</div>
-        <div class="d">{{ o.creado|fecha }} · {{ o.creado|hace }}</div>
-        <div class="row" style="gap:6px;margin-top:4px">
+<section class="card flush">
+  {% if ops %}
+  <div class="tablewrap"><table class="tabla resp">
+    <thead><tr><th>Cliente y operación</th><th class="r">Monto</th><th>Estado</th><th>Solicitada</th></tr></thead>
+    <tbody>
+    {% for o in ops %}
+      <tr>
+        <td><a class="fila" href="{{ url_for('equipo.operacion', opid=o.id) }}">{{ o.nombre }}</a><span class="sec">{{ tipo_op(o) }} · {{ o.documento }}</span></td>
+        <td class="r num {{ 'up' if o.tipo == 'aporte' else 'down' }}" style="white-space:nowrap">{{ signo(o) }}{{ (o.liquidado_cent if o.liquidado_cent is not none else o.monto_cent)|usd }}</td>
+        <td class="full"><div class="row" style="gap:6px">
           {{ estado(o) }}
           {% if o.estado in ('pendiente', 'primera_firma') %}
             {% if o.kyc_estado != 'verificado' %}{{ pill('bad', 'Identidad sin verificar') }}{% endif %}
             {% if requiere_origen(o) and not o.origen_fondos %}{{ pill('warn', 'Falta origen de fondos') }}{% endif %}
-            {% if requiere_doble(o) and o.estado == 'pendiente' %}{{ pill('info', 'Requiere dos firmas') }}{% endif %}
+            {% if requiere_doble(o) and o.estado == 'pendiente' %}{{ pill('info', 'Dos firmas') }}{% endif %}
+            {% if o.fuera_perfil %}{{ pill('warn', 'Fuera de perfil') }}{% endif %}
           {% endif %}
-        </div>
-      </div>
-      <div class="amt num {{ 'up' if o.tipo == 'aporte' else 'down' }}">{{ ("+" if o.tipo == "aporte" else "−") }}{{ o.monto_cent|usd }}</div>
-    </a>
+        </div></td>
+        <td class="full small muted" style="white-space:nowrap">{{ o.creado|fecha }}{% if o.estado in ('pendiente', 'primera_firma') %} · {{ o.creado|hace }}{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
   {% else %}
-    <div class="empty">{{ "No hay solicitudes por aprobar." if filtro == 'abiertas' else "No hay operaciones para mostrar." }}</div>
-  {% endfor %}
-  </div>
+    {{ vacio('operaciones', "No hay solicitudes por aprobar." if filtro == 'abiertas' else "No hay operaciones para mostrar.") }}
+  {% endif %}
 </section>
-<p class="note">Reglas: no se aprueba sin identidad verificada; los aportes desde {{ (config.UMBRAL_ORIGEN_FONDOS_USD * 100)|usd(0) }} necesitan el origen de los fondos registrado; desde {{ (config.UMBRAL_DOBLE_FIRMA_USD * 100)|usd(0) }} se necesitan dos firmas de personas distintas, la segunda de Cumplimiento.</p>
+<p class="note">Reglas: no se aprueba sin identidad verificada; los aportes desde {{ (config.UMBRAL_ORIGEN_FONDOS_USD * 100)|usd(0) }} necesitan el origen de los fondos registrado; desde {{ (config.UMBRAL_DOBLE_FIRMA_USD * 100)|usd(0) }} se necesitan dos firmas de personas distintas, la segunda de Cumplimiento. El precio de ejecución es el vigente al aprobar.</p>
 {% endblock %}

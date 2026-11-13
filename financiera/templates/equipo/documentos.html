@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph, vacio with context %}
+{% block titulo %}Documentos por revisar{% endblock %}
+{% block contenido %}
+{{ ph("Documentos por revisar", "Archivos que subieron los clientes o el equipo, del más antiguo al más nuevo. Ábrelos antes de decidir: la consulta queda en la bitácora.") }}
+{% include "equipo/_subnav.html" %}
+<section class="card flush">
+  <div class="list">
+  {% for d in pendientes %}
+    <div class="item cola-doc">
+      <div>
+        <div class="t"><a href="{{ url_for('equipo.cliente', cid=d.cliente_id) }}#legajo">{{ d.nombre }}</a> · {{ nombre_tipo(d.tipo_cliente, d.tipo) }}</div>
+        <div class="d"><a href="{{ url_for('documentos.ver', did=d.id) }}" target="_blank" rel="noopener">{{ icono('documento') }} {{ d.nombre_original }}</a> · {{ (d.tamano / 1024)|round(0)|int }} KB · subido {{ d.subido_ts|hace }}</div>
+      </div>
+      {% if puede('documentos.revisar') %}
+      <form method="post" action="{{ url_for('equipo.documento_revisar', did=d.id) }}">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="volver" value="cola">
+        <input class="inp" name="nota" maxlength="200" placeholder="Nota (obligatoria al rechazar)" aria-label="Nota de la revisión">
+        <button class="btn sm primary" name="estado" value="aceptado" type="submit">Aceptar</button>
+        <button class="btn sm danger" name="estado" value="rechazado" type="submit">Rechazar</button>
+      </form>
+      {% endif %}
+    </div>
+  {% else %}
+    {{ vacio('documento', 'No hay documentos pendientes de revisión.') }}
+  {% endfor %}
+  </div>
+</section>
+{% endblock %}

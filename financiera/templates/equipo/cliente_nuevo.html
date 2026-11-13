@@ -1,10 +1,10 @@
 {% extends "base.html" %}
+{% from "macros.html" import ph with context %}
 {% block titulo %}Nuevo cliente{% endblock %}
 {% block contenido %}
-<a class="small" href="{{ url_for('equipo.clientes') }}">← Clientes</a>
-<h2>Nuevo cliente</h2>
+{{ ph("Nuevo cliente", "Alta de la cuenta y del acceso al portal. Después se completa el legajo y Cumplimiento verifica la identidad.", volver=url_for('equipo.clientes'), volver_txt="Clientes") }}
 {% if error %}<div class="flash error" role="alert">{{ error }}</div>{% endif %}
-<form class="card col" method="post" action="{{ url_for('equipo.cliente_nuevo') }}">
+<form class="card col" style="max-width:760px" method="post" action="{{ url_for('equipo.cliente_nuevo') }}">
   <input type="hidden" name="csrf" value="{{ csrf_token() }}">
   <div class="form">
     <label class="field full" for="nombre">Nombre completo o razón social<input id="nombre" name="nombre" required maxlength="120" value="{{ form.nombre }}"></label>

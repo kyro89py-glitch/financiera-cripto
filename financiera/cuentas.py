@@ -100,14 +100,24 @@ def marcar_kyc(cliente_id, estado, nota, usuario, ts=None):
         raise ErrorDatos("Escribe qué falta o qué se observó.")
     ts = ts or ahora()
     with db.transaccion() as c:
-        cli = c.execute("SELECT nombre FROM clientes WHERE id = ?", (cliente_id,)).fetchone()
+        cli = c.execute("SELECT * FROM clientes WHERE id = ?", (cliente_id,)).fetchone()
         if not cli:
             raise ErrorDatos("El cliente no existe.")
+        if estado == "verificado":
+            from . import documentos
+            faltan = documentos.faltantes(cli)
+            if faltan:
+                raise ErrorDatos("Para verificar la identidad faltan documentos aceptados: " + "; ".join(faltan) + ".")
         c.execute("UPDATE clientes SET kyc_estado = ?, kyc_nota = ?, kyc_fecha = ?, kyc_por = ? WHERE id = ?",
                   (estado, nota or None, ts, usuario["id"], cliente_id))
         auditoria.registrar("cliente.kyc", f"cliente:{cliente_id}",
                             {"texto": f"{KYC_TEXTOS[estado]} {cli['nombre']}." + (f" Nota: {nota}" if nota else ""),
                              "estado": estado}, usuario=usuario, ts=ts)
+        if cli["usuario_id"] and estado != cli["kyc_estado"] and estado in ("verificado", "observado"):
+            from . import notificaciones
+            texto = ("Verificamos tu identidad. Ya podemos aprobar tus aportes y retiros." if estado == "verificado" else
+                     f"Tu verificación tiene una observación: {nota}")
+            notificaciones.notificar(cli["usuario_id"], texto, "/cliente/perfil", ts=ts)
 
 
 def registrar_origen(cliente_id, texto, usuario, ts=None):
@@ -123,3 +133,15 @@ def registrar_origen(cliente_id, texto, usuario, ts=None):
                   (texto, ts, usuario["id"], cliente_id))
         auditoria.registrar("cliente.origen_fondos", f"cliente:{cliente_id}",
                             {"texto": f"Registró el origen de fondos de {cli['nombre']}: {texto}"}, usuario=usuario, ts=ts)
+
+
+TERMINOS_VERSION = seguridad.TERMINOS_VERSION
+
+
+def aceptar_terminos(usuario, ts=None):
+    ts = ts or ahora()
+    with db.transaccion() as c:
+        c.execute("UPDATE usuarios SET terminos_version = ?, terminos_ts = ? WHERE id = ?", (TERMINOS_VERSION, ts, usuario["id"]))
+        auditoria.registrar("terminos.aceptados", f"usuario:{usuario['id']}",
+                            {"texto": f"{usuario['email']} aceptó las condiciones y la información de riesgos (versión {TERMINOS_VERSION}).",
+                             "version": TERMINOS_VERSION}, usuario=usuario, ts=ts)

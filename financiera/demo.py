@@ -10,7 +10,7 @@ from decimal import Decimal
 import click
 from flask import current_app
 
-from . import cuentas, db, operaciones, precios
+from . import comisiones, conciliacion, cuentas, db, documentos, operaciones, precios
 from .tiempo import ahora_dt, iso
 
 CLAVE_DEMO = "Demo-2026!"
@@ -45,6 +45,12 @@ CLIENTES = [
     ("agro", "Agroservicios del Este S.A.", "RUC 80104417-3", "empresa", "agro@demo.local", "moderado", "equilibrio", True,
      "Excedentes de la zafra 2025/26. Presentó balance auditado y extracto bancario."),
 ]
+
+
+def _texto_cantidad(unidades, activo):
+    escala = 100 if activo == "USD" else 10 ** 8
+    entero, resto = divmod(unidades, escala)
+    return f"{entero},{resto:0{2 if activo == 'USD' else 8}d}"
 
 
 def _interp(serie, f):
@@ -93,6 +99,15 @@ def cmd_sembrar():
         equipo[rol] = db.uno("SELECT * FROM usuarios WHERE id = ?", (uid,))
     op_u, cu_u = equipo["operador"], equipo["cumplimiento"]
 
+    def legajo(cid, ts_subida, ts_revision, tipos=None, aceptar=True):
+        c0 = db.uno("SELECT * FROM clientes WHERE id = ?", (cid,))
+        dueno = db.uno("SELECT * FROM usuarios WHERE id = ?", (c0["usuario_id"],))
+        for tipo in tipos or documentos.REQUERIDOS[c0["tipo"]]:
+            did = documentos.guardar(c0, tipo, f"{tipo}.pdf", documentos.pdf_ejemplo(f"{tipo.capitalize()} - {c0['documento']}"),
+                                     dueno, ts=ts_subida)
+            if aceptar:
+                documentos.revisar(did, "aceptado", None, cu_u, ts=ts_revision)
+
     cli = {}
     for i, (clave, nombre, doc, tipo, email, perfil, modelo, verificado, origen) in enumerate(CLIENTES):
         cid, _ = cuentas.crear_cliente({"nombre": nombre, "documento": doc, "tipo": tipo, "email": email,
@@ -100,6 +115,7 @@ def cmd_sembrar():
                                         "telefono": f"0981 {400 + i * 37:03d} {120 + i * 53:03d}"},
                                        creador=op_u, ts=t(25, minutos=i * 7))
         if verificado:
+            legajo(cid, t(24, minutos=i * 5 - 30), t(24, minutos=i * 5 - 10))
             cuentas.marcar_kyc(cid, "verificado", "Documento y prueba de vida revisados.", cu_u, ts=t(24, minutos=i * 5))
         if origen:
             cuentas.registrar_origen(cid, origen, cu_u, ts=t(24, minutos=i * 5 + 2))
@@ -152,15 +168,29 @@ def cmd_sembrar():
     itapua, _ = cuentas.crear_cliente({"nombre": "Comercial Itapúa S.R.L.", "documento": "RUC 80098812-1", "tipo": "empresa",
                                        "email": "itapua@demo.local", "perfil_riesgo": "conservador", "modelo": "reserva",
                                        "clave": CLAVE_DEMO, "telefono": "071 204 330"}, creador=op_u, ts=t(3, 2))
+    legajo(itapua, t(2, 23), t(2, 21))
     cuentas.marcar_kyc(itapua, "verificado", "Estatutos, RUC y documentos del representante revisados.", cu_u, ts=t(2, 20))
+    legajo(hugo, t(0, 9), None, tipos=["identidad"], aceptar=False)
     cli.update(hugo=hugo, itapua=itapua)
+    for clave in cli:
+        if clave != "hugo":
+            u = usuario_de(clave)
+            cuentas.aceptar_terminos(u, ts=db.uno("SELECT creado FROM clientes WHERE id = ?", (cli[clave],))["creado"])
 
     operaciones.solicitar_aporte(fila("hugo"), 200000, "equilibrio", "TRF-552019", usuario_de("hugo"), ts=t(0, 7))
     operaciones.solicitar_retiro(fila("ruben"), 150000, usuario_de("ruben"), ts=t(0, 5))
-    operaciones.solicitar_aporte(fila("patricia"), 500000, "equilibrio", "TRF-552311", usuario_de("patricia"), ts=t(0, 3))
+    operaciones.solicitar_aporte(fila("patricia"), 500000, "impulso", "TRF-552311", usuario_de("patricia"), ts=t(0, 3),
+                                 acepta_riesgo=True)
     agro_op = operaciones.solicitar_aporte(fila("agro"), 3000000, "equilibrio", "TRF-552408", usuario_de("agro"), ts=t(0, 2))
     operaciones.aprobar(agro_op, op_u, ts=t(0, 1))
     operaciones.solicitar_aporte(fila("itapua"), 6000000, "reserva", "TRF-552517", usuario_de("itapua"), ts=t(0, 0, 40))
+    try:  # comisión del mes anterior (proporcional para quien invirtió durante el mes)
+        comisiones.cobrar(comisiones.periodo_anterior(), equipo["admin"], ts=t(0, 11))
+    except comisiones.ErrorComision:
+        pass
+    saldos = conciliacion.saldos_libro()
+    conciliacion.registrar({a: _texto_cantidad(saldos.get(a, 0), a) for a in conciliacion.activos_a_conciliar()},
+                           "Saldos del custodio y del banco al cierre de ayer.", cu_u, ts=t(0, 10))
 
     click.echo("Datos de demostración cargados. Contraseña de todas las cuentas: " + CLAVE_DEMO)
     for email, nombre, rol in EQUIPO:

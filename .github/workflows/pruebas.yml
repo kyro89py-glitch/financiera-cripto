@@ -1,0 +1,42 @@
+name: Pruebas
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt pytest
+      - name: Ejecutar pruebas
+        env:
+          FINANCIERA_ENTORNO: pruebas
+        run: python -m pytest -q
+      - name: Cargar la demostración de punta a punta
+        env:
+          FINANCIERA_ENTORNO: desarrollo
+          DATABASE: ${{ runner.temp }}/demo.db
+        run: |
+          flask --app financiera sembrar-demo
+          flask --app financiera verificar-bitacora
+
+  imagen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construir la imagen Docker
+        run: docker build -t financiera-cripto:ci .

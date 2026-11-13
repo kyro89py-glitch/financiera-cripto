@@ -4,6 +4,10 @@
 
 {% macro kyc(cli) -%}{{ pill(KYC[cli.kyc_estado][0], KYC[cli.kyc_estado][1]) }}{%- endmacro %}
 
+{% macro tipo_op(o) -%}{{ TIPOS_OP[o.tipo] }}{% if o.tipo == 'comision' and o.periodo %} · {{ o.periodo|periodo }}{% else %} #{{ o.id }}{% endif %}{%- endmacro %}
+
+{% macro signo(o) -%}{{ "+" if o.tipo == "aporte" else "−" }}{%- endmacro %}
+
 {% macro riesgo(r) -%}
 <span class="risk" role="img" aria-label="Riesgo {{ r }} de 5">{% for i in range(1, 6) %}<i class="{{ 'on' if i <= r }}"></i>{% endfor %}</span>
 {%- endmacro %}
@@ -12,20 +16,50 @@
 <div class="alloc" aria-hidden="true">{% for p in partes %}<span style="width:{{ '%.3f'|format(p.peso * 100) }}%;background:{{ p.color }}"></span>{% endfor %}</div>
 {%- endmacro %}
 
-{% macro grafico(g) -%}
-{% set color = 'var(--up)' if g.sube else 'var(--down)' %}
-<svg class="chart" viewBox="0 0 {{ g.ancho }} {{ g.alto }}" preserveAspectRatio="none" role="img" aria-label="Evolución del valor en los últimos 7 días">
-  <polygon points="{{ g.area }}" fill="{{ color }}" opacity=".13"/>
-  <polyline points="{{ g.puntos }}" fill="none" stroke="{{ color }}" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
-</svg>
-<div class="row spread small muted mono"><span>hace 7 d · mín. {{ g.min|usd(0) }}</span><span>máx. {{ g.max|usd(0) }} · hoy</span></div>
+{% macro ph(titulo, sub=None, volver=None, volver_txt="Volver") -%}
+<div class="ph">
+  <div class="tit">
+    {% if volver %}<a class="volver" href="{{ volver }}">← {{ volver_txt }}</a>{% endif %}
+    <h2>{{ titulo }}</h2>
+    {% if sub %}<p class="sub">{{ sub }}</p>{% endif %}
+  </div>
+  {% if caller is defined %}<div class="acc">{{ caller() }}</div>{% endif %}
+</div>
 {%- endmacro %}
 
-{% macro escena3d(datos) -%}
-<div class="stage" data-escena3d="datos-3d">
+{% macro subnav(items) -%}
+<nav class="subnav" aria-label="Secciones">{% for ep, texto in items %}<a href="{{ url_for(ep) }}"{% if request.endpoint == ep %} aria-current="page"{% endif %}>{{ texto }}</a>{% endfor %}</nav>
+{%- endmacro %}
+
+{% macro vacio(icon, texto) -%}<div class="empty">{{ icono(icon) }}<span>{{ texto }}</span></div>{%- endmacro %}
+
+{% macro linea(g, etiqueta="Evolución del valor") -%}
+{% set color = 'var(--up)' if g.sube else 'var(--down)' %}
+<svg class="chart" viewBox="0 0 {{ g.ancho }} {{ g.alto }}" role="img" aria-label="{{ etiqueta }}">
+  {% for m in g.marcas %}<line class="grid" x1="{{ g.izq }}" x2="{{ g.der }}" y1="{{ '%.1f'|format(m.y) }}" y2="{{ '%.1f'|format(m.y) }}"/><text class="eje" x="{{ g.izq - 8 }}" y="{{ '%.1f'|format(m.y + 3.5) }}" text-anchor="end">{{ m.texto }}</text>{% endfor %}
+  <polygon points="{{ g.area }}" fill="{{ color }}" opacity=".10"/>
+  <polyline points="{{ g.puntos }}" fill="none" stroke="{{ color }}" stroke-width="2" stroke-linejoin="round"/>
+  <circle cx="{{ '%.1f'|format(g.fin[0]) }}" cy="{{ '%.1f'|format(g.fin[1]) }}" r="3.5" fill="{{ color }}"/>
+  {% for e in g.etiquetas %}<text class="eje" x="{{ '%.1f'|format(e.x) }}" y="{{ g.alto - 6 }}" text-anchor="{{ e.ancla }}">{{ e.texto }}</text>{% endfor %}
+</svg>
+{%- endmacro %}
+
+{% macro barras(g) -%}
+<svg class="chart" viewBox="0 0 {{ g.ancho }} {{ g.alto }}" role="img" aria-label="Aportes y retiros por día">
+  {% for m in g.marcas %}<line class="{{ 'cero' if m.texto == '0' else 'grid' }}" x1="{{ g.izq }}" x2="{{ g.der }}" y1="{{ '%.1f'|format(m.y) }}" y2="{{ '%.1f'|format(m.y) }}"/><text class="eje" x="{{ g.izq - 8 }}" y="{{ '%.1f'|format(m.y + 3.5) }}" text-anchor="end">{{ m.texto }}</text>{% endfor %}
+  {% for b in g.barras %}<g><title>{{ b.titulo }}</title>
+    {% if b.ha > 0 %}<rect x="{{ '%.1f'|format(b.x) }}" y="{{ '%.1f'|format(b.ya) }}" width="{{ '%.1f'|format(b.w) }}" height="{{ '%.1f'|format(b.ha) }}" rx="2" fill="var(--up)"/>{% endif %}
+    {% if b.hr > 0 %}<rect x="{{ '%.1f'|format(b.x) }}" y="{{ '%.1f'|format(b.yr) }}" width="{{ '%.1f'|format(b.w) }}" height="{{ '%.1f'|format(b.hr) }}" rx="2" fill="var(--down)"/>{% endif %}
+  </g>{% endfor %}
+  {% for e in g.etiquetas %}<text class="eje" x="{{ '%.1f'|format(e.x) }}" y="{{ g.alto - 6 }}" text-anchor="{{ e.ancla }}">{{ e.texto }}</text>{% endfor %}
+</svg>
+{%- endmacro %}
+
+{% macro escena3d(datos, decorativo=false) -%}
+<div class="stage{{ ' decorativo' if decorativo }}" data-escena3d="datos-3d"{% if decorativo %} aria-hidden="true"{% endif %}>
   <canvas class="c-pts"></canvas><canvas class="c-glow" aria-hidden="true"></canvas>
   <canvas class="c-ovl" aria-label="Vista 3D giratoria: cada punto representa una porción igual de dinero. Toca un grupo para ver su monto."></canvas>
-  <div class="hud"><b></b><span class="mono"></span></div>
+  <div class="hud"><b></b><span class="num"></span></div>
   <div class="s3ctl"></div>
 </div>
 <script type="application/json" id="datos-3d">{{ datos|tojson }}</script>
@@ -33,4 +67,16 @@
 
 {% macro check(estado, texto) -%}
 <li class="{{ 'si' if estado == true else ('no' if estado == false else 'info') }}">{{ texto }}</li>
+{%- endmacro %}
+
+{% macro alerta_item(nivel, texto, enlace) -%}
+{% set url = url_for('equipo.operacion', opid=enlace[1]) if enlace[0] == 'op'
+   else (url_for('equipo.cliente', cid=enlace[1]) if enlace[0] == 'cliente'
+   else (url_for('equipo.documentos') if enlace[0] == 'documentos' and puede('cumplimiento.ver')
+   else (url_for('equipo.conciliacion') if enlace[0] == 'conciliacion' and puede('cumplimiento.ver')
+   else (url_for('admin.precios') if enlace[0] == 'precios' and puede('precios.editar') else none)))) %}
+{% if url %}<a class="item" href="{{ url }}">{% else %}<div class="item">{% endif %}
+  {{ pill('bad' if nivel == 'alta' else ('warn' if nivel == 'media' else 'info'), 'Alta' if nivel == 'alta' else ('Media' if nivel == 'media' else 'Aviso')) }}
+  <div class="grow">{{ texto }}</div>
+{% if url %}</a>{% else %}</div>{% endif %}
 {%- endmacro %}

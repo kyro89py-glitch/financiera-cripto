@@ -1,32 +1,47 @@
 {% extends "base.html" %}
-{% from "macros.html" import estado %}
+{% from "macros.html" import estado, ph, tipo_op, signo, vacio with context %}
 {% block titulo %}Movimientos{% endblock %}
 {% block contenido %}
-<div class="row spread"><h2>Movimientos</h2><a class="btn sm" href="{{ url_for('cliente.estado_cuenta') }}">Estado de cuenta (CSV)</a></div>
-<div class="chips">
-  <a href="{{ url_for('cliente.movimientos') }}" aria-current="{{ 'true' if filtro != 'abiertos' else 'false' }}">Todos</a>
-  <a href="{{ url_for('cliente.movimientos', ver='abiertos') }}" aria-current="{{ 'true' if filtro == 'abiertos' else 'false' }}">En curso</a>
-</div>
-<section class="card">
-  <div class="list">
-  {% for o in ops %}
-    <div class="item wrap">
-      <div class="grow">
-        <div class="t">{{ "Aporte" if o.tipo == "aporte" else "Retiro" }} #{{ o.id }} {{ estado(o) }}</div>
-        <div class="d">{{ o.creado|fecha }}{% if o.modelo and o.tipo == 'aporte' %} · cartera {{ modelos[o.modelo] }}{% endif %}{% if o.referencia %} · comprobante {{ o.referencia }}{% endif %}</div>
-        {% if o.estado == 'rechazada' and o.motivo %}<div class="d down">Motivo: {{ o.motivo }}</div>{% endif %}
-        {% for r in ordenes.get(o.id, []) %}<div class="d num">{{ "Compra" if r.lado == "compra" else "Venta" }} {{ r.cantidad|unidades(r.activo) }} · {{ r.precio|precio }}</div>{% endfor %}
-      </div>
-      <div class="amt num {{ 'up' if o.tipo == 'aporte' else 'down' }}">{{ ("+" if o.tipo == "aporte" else "−") }}{{ o.monto_cent|usd }}</div>
-      {% if o.estado == 'pendiente' %}
-      <form class="acts" method="post" action="{{ url_for('cliente.cancelar', opid=o.id) }}" data-confirmar="¿Cancelar esta solicitud?">
-        <input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn sm" type="submit">Cancelar solicitud</button>
-      </form>
-      {% endif %}
+{% call ph("Movimientos", "Tus aportes, retiros y comisiones, con el detalle de cada compra y venta.") %}
+  <a class="btn" href="{{ url_for('cliente.estado_cuenta') }}">{{ icono('descargar') }}CSV completo</a>
+{% endcall %}
+<div class="g2">
+  <div class="col">
+    <div class="chips">
+      <a href="{{ url_for('cliente.movimientos') }}" aria-current="{{ 'true' if filtro != 'abiertos' else 'false' }}">Todos</a>
+      <a href="{{ url_for('cliente.movimientos', ver='abiertos') }}" aria-current="{{ 'true' if filtro == 'abiertos' else 'false' }}">En curso</a>
     </div>
-  {% else %}
-    <div class="empty">No hay movimientos para mostrar.</div>
-  {% endfor %}
+    <section class="card flush">
+      <div class="list">
+      {% for o in ops %}
+        <div class="item wrap">
+          <div class="grow">
+            <div class="t">{{ tipo_op(o) }} {{ estado(o) }}</div>
+            <div class="d">{{ o.creado|fecha }}{% if o.modelo and o.tipo == 'aporte' %} · cartera {{ modelos[o.modelo] }}{% endif %}{% if o.referencia %} · comprobante {{ o.referencia }}{% endif %}</div>
+            {% if o.estado == 'rechazada' and o.motivo %}<div class="d down">Motivo: {{ o.motivo }}</div>{% endif %}
+            {% for r in ordenes.get(o.id, []) %}<div class="d num">{{ "Compra" if r.lado == "compra" else "Venta" }} {{ r.cantidad|unidades(r.activo) }} · {{ r.precio|precio }}</div>{% endfor %}
+          </div>
+          <div class="amt num {{ 'up' if o.tipo == 'aporte' else 'down' }}">{{ signo(o) }}{{ (o.liquidado_cent if o.liquidado_cent is not none else o.monto_cent)|usd }}</div>
+          {% if o.estado == 'pendiente' %}
+          <form class="acts" method="post" action="{{ url_for('cliente.cancelar', opid=o.id) }}" data-confirmar="¿Cancelar esta solicitud?">
+            <input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn sm" type="submit">Cancelar solicitud</button>
+          </form>
+          {% endif %}
+        </div>
+      {% else %}
+        {{ vacio('movimientos', 'No hay movimientos para mostrar.') }}
+      {% endfor %}
+      </div>
+    </section>
   </div>
-</section>
+  <section class="card">
+    <div class="ch"><h3>Estados de cuenta</h3></div>
+    <p class="small muted">Resumen mensual con el valor inicial y final, tus movimientos y el resultado. Puedes imprimirlo o guardarlo como PDF.</p>
+    <div class="list" style="margin-top:6px">
+    {% for p in periodos %}
+      <a class="item" href="{{ url_for('cliente.estado_mensual', periodo=p) }}">{{ icono('documento') }}<div class="grow t">{{ p|periodo|capitalize }}</div>{% if loop.first %}<span class="pill info plain">En curso</span>{% endif %}</a>
+    {% endfor %}
+    </div>
+  </section>
+</div>
 {% endblock %}

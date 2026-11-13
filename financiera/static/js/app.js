@@ -8,9 +8,14 @@
   }, true);
 
   document.addEventListener("click", function (e) {
+    var imp = e.target.closest("[data-imprimir]");
+    if (imp) { window.print(); return; }
     var b = e.target.closest("[data-copiar]");
     if (!b || !navigator.clipboard) return;
-    navigator.clipboard.writeText(b.getAttribute("data-copiar")).then(function () { b.textContent = "Copiado"; });
+    navigator.clipboard.writeText(b.getAttribute("data-copiar")).then(function () {
+      var antes = b.textContent; b.textContent = "Copiado";
+      setTimeout(function () { b.textContent = antes; }, 1600);
+    });
   });
 
   var fuente = document.getElementById("datos-invertir");
@@ -33,13 +38,21 @@
     var dot = document.createElement("i"); dot.className = "dot"; dot.style.background = color;
     var g = document.createElement("div"); g.className = "grow";
     var t = document.createElement("div"); t.className = "t"; t.textContent = titulo;
-    var s = document.createElement("div"); s.className = "d mono"; s.textContent = detalle;
-    var a = document.createElement("div"); a.className = "amt mono"; a.textContent = valor;
+    var s = document.createElement("div"); s.className = "d num"; s.textContent = detalle;
+    var a = document.createElement("div"); a.className = "amt num"; a.textContent = valor;
     g.appendChild(t); g.appendChild(s); it.appendChild(dot); it.appendChild(g); it.appendChild(a);
     return it;
   }
+  var riesgo = document.getElementById("confirmar-riesgo");
   function render() {
     var m = leer(monto.value), sel = document.querySelector("input[name=modelo]:checked");
+    if (riesgo) {
+      var fuera = !!sel && (d.fuera || []).indexOf(sel.value) >= 0;
+      riesgo.hidden = !fuera;
+      var cb = riesgo.querySelector("input");
+      cb.required = fuera;
+      if (!fuera) cb.checked = false;
+    }
     document.querySelectorAll("[data-monto]").forEach(function (b) { b.setAttribute("aria-pressed", String(Math.round(+b.getAttribute("data-monto") * 100) === m)); });
     prev.textContent = "";
     if (!sel) return;

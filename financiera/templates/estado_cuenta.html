@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% from "macros.html" import tipo_op, signo, vacio with context %}
+{% block titulo %}Estado de cuenta {{ ec.periodo|periodo }}{% endblock %}
+{% block contenido %}
+{% set i = periodos.index(ec.periodo) %}
+<div class="ph no-imprimir">
+  <div class="tit"><a class="volver" href="{{ volver }}">← Volver</a><h2>Estado de cuenta</h2></div>
+  <div class="acc">
+    <button class="btn" type="button" data-imprimir>{{ icono('imprimir') }}Imprimir o guardar PDF</button>
+    <a class="btn" href="{{ url_csv }}">{{ icono('descargar') }}CSV</a>
+  </div>
+</div>
+<nav class="pag no-imprimir" aria-label="Meses">
+  {% if i + 1 < periodos|length %}<a class="btn sm" href="{{ url_periodo(periodos[i + 1]) }}">← {{ periodos[i + 1]|periodo }}</a>{% else %}<span></span>{% endif %}
+  <b>{{ ec.periodo|periodo|capitalize }}</b>
+  {% if i > 0 %}<a class="btn sm" href="{{ url_periodo(periodos[i - 1]) }}">{{ periodos[i - 1]|periodo }} →</a>{% else %}<span></span>{% endif %}
+</nav>
+
+<article class="card ec">
+  <header class="cab">
+    <div>
+      <div class="row" style="gap:10px"><span class="logo" aria-hidden="true"></span><b>{{ config.NOMBRE }}</b></div>
+      <h3 style="margin-top:10px">Estado de cuenta · {{ ec.periodo|periodo }}</h3>
+      <div class="small muted">Del {{ ec.inicio|dia }} al {{ ec.fin|fecha }}{% if ec.en_curso %} · mes en curso, cifras provisorias{% endif %}</div>
+    </div>
+    <div class="small" style="text-align:right">
+      <b>{{ cli.nombre }}</b><br>
+      {{ "RUC" if cli.tipo == 'empresa' else "Documento" }} <span class="num">{{ cli.documento }}</span><br>
+      Cliente N.º <span class="num">{{ '%06d'|format(cli.id) }}</span>
+    </div>
+  </header>
+
+  <section class="resumen" aria-label="Resumen del mes">
+    <div><span class="lab">Valor al inicio</span><b>{{ ec.valor_inicial|usd }}</b></div>
+    <div><span class="lab">Aportes</span><b class="up">+{{ ec.aportes|usd }}</b></div>
+    <div><span class="lab">Retiros</span><b class="{{ 'down' if ec.retiros }}">−{{ ec.retiros|usd }}</b></div>
+    <div><span class="lab">Comisiones</span><b class="{{ 'down' if ec.comisiones }}">−{{ ec.comisiones|usd }}</b></div>
+    <div><span class="lab">Resultado de mercado</span><b class="{{ 'up' if ec.mercado >= 0 else 'down' }}">{{ "+" if ec.mercado >= 0 else "" }}{{ ec.mercado|usd }}</b></div>
+    <div class="total"><span class="lab">Valor al {{ "día de hoy" if ec.en_curso else "cierre" }}</span><b>{{ ec.valor_final|usd }}</b></div>
+  </section>
+
+  <section>
+    <h3 style="margin-bottom:8px">Posiciones al {{ ec.fin|dia }}</h3>
+    {% if ec.posiciones %}
+    <div class="tablewrap"><table class="tabla">
+      <thead><tr><th>Activo</th><th class="r">Cantidad</th><th class="r">Precio</th><th class="r">Valor</th><th class="r">Peso</th></tr></thead>
+      <tbody>{% for f in ec.posiciones %}
+        <tr><td><i class="dot" style="background:{{ f.color }}"></i> {{ f.nombre }}</td>
+          <td class="r num">{% if f.activo != 'USD' %}{{ f.unidades|unidades(f.activo) }}{% else %}—{% endif %}</td>
+          <td class="r num">{% if f.precio %}{{ f.precio|precio }}{% else %}—{% endif %}</td>
+          <td class="r num">{{ f.valor|usd }}</td><td class="r num">{{ (f.peso * 100)|pct(1, false) }}</td></tr>
+      {% endfor %}</tbody>
+      <tfoot><tr><th colspan="3">Total</th><th class="r num">{{ ec.valor_final|usd }}</th><th class="r num">100%</th></tr></tfoot>
+    </table></div>
+    {% else %}<p class="small muted">Sin posiciones al cierre del mes.</p>{% endif %}
+  </section>
+
+  <section>
+    <h3 style="margin-bottom:8px">Movimientos del mes</h3>
+    {% if ec.ops %}
+    <div class="tablewrap"><table class="tabla">
+      <thead><tr><th>Fecha</th><th>Concepto</th><th>Detalle</th><th class="r">Importe</th></tr></thead>
+      <tbody>{% for o in ec.ops %}
+        <tr><td class="num" style="white-space:nowrap">{{ o.resuelto_ts|fecha }}</td><td>{{ tipo_op(o) }}</td>
+          <td class="small">{% for r in ec.ordenes.get(o.id, []) %}{{ "Compra" if r.lado == "compra" else "Venta" }} {{ r.cantidad|unidades(r.activo) }} a {{ r.precio|precio }}{{ "; " if not loop.last }}{% else %}—{% endfor %}</td>
+          <td class="r num {{ 'up' if o.tipo == 'aporte' else 'down' }}" style="white-space:nowrap">{{ signo(o) }}{{ o.liquidado_cent|usd }}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% else %}<p class="small muted">No hubo aportes, retiros ni comisiones en este mes.</p>{% endif %}
+  </section>
+
+  <footer class="small muted" style="border-top:1px solid var(--line);padding-top:12px">
+    Valores en dólares estadounidenses calculados con el último precio registrado de cada activo al inicio y al cierre del período. El resultado de mercado es la diferencia de valor que no se explica por aportes, retiros ni comisiones. Las criptomonedas son inversiones de alto riesgo; los resultados pasados no garantizan resultados futuros. Emitido el {{ ahora()|fecha }}{% if config.URL_PUBLICA %} · {{ config.URL_PUBLICA }}{% endif %}.
+  </footer>
+</article>
+{% endblock %}

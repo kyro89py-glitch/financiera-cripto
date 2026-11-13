@@ -27,6 +27,7 @@
   var cv = el.querySelector(".c-pts"), cG = el.querySelector(".c-glow"), cO = el.querySelector(".c-ovl"), cP = document.createElement("canvas");
   var ctx = cv.getContext("2d"), ctxP = cP.getContext("2d"), ctxG = cG.getContext("2d"), ctxO = cO.getContext("2d");
   var still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var deco = el.classList.contains("decorativo");
   var VIS = { moneda: [0.3, 0.9, 1], esferas: [0.5, 0.36, 1.28], bloques: [0.7, 0.52, 1.02] };
   var NOM = { moneda: "Moneda", esferas: "Esferas", bloques: "Bloques" };
   var G = [], N = 0, total = 0, form = "moneda", sel = -1, W = 0, H = 0, BS = 1, BW = 0, BH = 0, img, d8, d32;
@@ -147,8 +148,10 @@
       }
     }
     ctxP.putImageData(img, 0, 0);
-    ctx.fillStyle = !still && now - mov < 2600 ? "rgba(10,14,23,0.3)" : "#0A0E17"; ctx.fillRect(0, 0, BW, BH); ctx.drawImage(cP, 0, 0);
-    ctxG.drawImage(cv, 0, 0, cG.width, cG.height);
+    if (deco) ctx.clearRect(0, 0, BW, BH);
+    else { ctx.fillStyle = !still && now - mov < 2600 ? "rgba(8,12,21,0.3)" : "#080C15"; ctx.fillRect(0, 0, BW, BH); }
+    ctx.drawImage(cP, 0, 0);
+    ctxG.clearRect(0, 0, cG.width, cG.height); ctxG.drawImage(cv, 0, 0, cG.width, cG.height);
 
     var So = escala();
     var P = function (x, y, z) { var X = x * cyw + z * syw, Z0 = -x * syw + z * cyw, d = CAM + (-y * sp + Z0 * cp), s = So * CAM / Math.max(4, d); return { x: W / 2 + X * s, y: H / 2 - (y * cp + Z0 * sp) * s, d: d }; };
@@ -156,6 +159,7 @@
     ctxO.strokeStyle = "rgba(138,150,173,.14)"; ctxO.lineWidth = 1; ctxO.beginPath();
     for (var q = 2.5; q <= 7.6; q += 2.5) for (var kk = 0; kk <= 48; kk++) { var an = kk / 48 * TAU, w = P(q * Math.cos(an), -4.1, q * Math.sin(an)); if (kk === 0) ctxO.moveTo(w.x, w.y); else ctxO.lineTo(w.x, w.y); }
     ctxO.stroke();
+    if (deco) return;
     var fuente = 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif', mono = 'ui-monospace, Menlo, Consolas, monospace';
     if (!N) { ctxO.font = "600 14px " + fuente; ctxO.textAlign = "center"; ctxO.fillStyle = "#8A96AD"; ctxO.fillText("Todavía no hay dinero invertido", W / 2, H / 2); return; }
     lab.length = 0; var rects = [];

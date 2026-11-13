@@ -1,24 +1,28 @@
 {% extends "base.html" %}
-{% from "macros.html" import escena3d %}
+{% from "macros.html" import escena3d, ph, vacio with context %}
 {% block titulo %}Tu cartera{% endblock %}
-{% block cabeza %}<script src="{{ url_for('static', filename='js/escena3d.js') }}" defer></script>{% endblock %}
+{% block cabeza %}<script src="{{ url_for('static', filename='js/escena3d.js') }}?v={{ VERSION }}" defer></script>{% endblock %}
 {% block contenido %}
-<div class="row spread"><h2>Tu cartera</h2><span class="num">{{ total|usd }}</span></div>
-<section class="card col">
-  {{ escena3d(datos3d) }}
-  <p class="small muted">Cada punto es una porción igual de tu dinero. Arrastra para girar, pellizca para acercar y toca un grupo para ver cuánto vale.</p>
-</section>
-<section class="card">
-  <div class="row spread"><h3>Tenencias</h3><a class="btn sm" href="{{ url_for('cliente.estado_cuenta') }}">Descargar estado de cuenta</a></div>
-  <div class="list" style="margin-top:4px">
-  {% for f in filas %}
-    <div class="item"><i class="dot" style="background:{{ f.color }}"></i>
-      <div class="grow"><div class="t">{{ f.nombre }}</div>
-        <div class="d num">{% if f.activo != 'USD' %}{{ f.unidades|unidades(f.activo) }}{% if f.precio %} · {{ f.precio|precio }}{% endif %}{% else %}Disponible para invertir o retirar{% endif %}</div></div>
-      <div class="amt num">{{ f.valor|usd }}{% if f.cambio is not none %}<span class="{{ 'up' if f.cambio >= 0 else 'down' }}">{{ f.cambio|pct }} 24 h</span>{% endif %}</div></div>
-  {% else %}
-    <div class="empty">Todavía no tienes inversiones. <a href="{{ url_for('cliente.invertir') }}">Haz tu primer aporte</a>.</div>
-  {% endfor %}
-  </div>
-</section>
+{% call ph("Tu cartera", "Valor actual " ~ (total|usd) ~ ". Cada punto de la vista 3D es una porción igual de tu dinero.") %}
+  <a class="btn" href="{{ url_for('cliente.movimientos') }}">{{ icono('documento') }}Estados de cuenta</a>
+{% endcall %}
+<div class="g2">
+  <section class="card">
+    {{ escena3d(datos3d) }}
+    <p class="small muted" style="margin-top:10px">Arrastra para girar, pellizca para acercar y toca un grupo para ver cuánto vale.</p>
+  </section>
+  <section class="card flush">
+    <div class="ch"><h3>Tenencias</h3></div>
+    <div class="list">
+    {% for f in filas %}
+      <div class="item"><i class="dot" style="background:{{ f.color }}"></i>
+        <div class="grow"><div class="t">{{ f.nombre }}</div>
+          <div class="d num">{% if f.activo != 'USD' %}{{ f.unidades|unidades(f.activo) }}{% if f.precio %} · {{ f.precio|precio }}{% endif %}{% else %}Disponible para invertir o retirar{% endif %}</div></div>
+        <div class="amt num">{{ f.valor|usd }}{% if f.cambio is not none %}<span class="{{ 'up' if f.cambio >= 0 else 'down' }}">{{ f.cambio|pct }} 24 h</span>{% endif %}</div></div>
+    {% else %}
+      {{ vacio('cartera', 'Todavía no tienes inversiones.') }}
+    {% endfor %}
+    </div>
+  </section>
+</div>
 {% endblock %}

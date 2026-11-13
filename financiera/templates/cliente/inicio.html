@@ -1,39 +1,45 @@
 {% extends "base.html" %}
-{% from "macros.html" import kyc, barra, grafico, estado %}
+{% from "macros.html" import kyc, barra, linea, estado, ph, tipo_op, signo, vacio with context %}
 {% block titulo %}Inicio{% endblock %}
 {% block contenido %}
 {% set cli = g.cliente %}
-<div class="row spread"><h2>Hola, {{ cli.nombre.split()[0] }}</h2>{{ kyc(cli) }}</div>
-{% if cli.kyc_estado == 'observado' and cli.kyc_nota %}<div class="flash error">Tu verificación tiene una observación: {{ cli.kyc_nota }} Hasta resolverla no se pueden aprobar nuevas operaciones.</div>{% endif %}
+{% call ph("Hola, " ~ cli.nombre.split()[0], "Así está tu cartera hoy.") %}{{ kyc(cli) }}{% endcall %}
+{% if cli.kyc_estado == 'observado' and cli.kyc_nota %}
+  <div class="flash error">Tu verificación tiene una observación: {{ cli.kyc_nota }} Hasta resolverla no se pueden aprobar nuevas operaciones. <a href="{{ url_for('cliente.perfil') }}">Ir a Mi perfil</a></div>
+{% elif faltan %}
+  <div class="flash warn">Para completar tu verificación falta: {{ faltan|join('; ') }}. <a href="{{ url_for('cliente.perfil') }}#legajo">Subir documentos</a></div>
+{% endif %}
 
-<section class="card hero col">
-  <div>
-    <span class="lab">Valor de tu cartera</span>
-    <div class="big num">{{ total|usd }}</div>
-    {% if total %}
-      <div class="num {{ 'up' if var7 >= 0 else 'down' }}">{{ var7|usd }} ({{ (var7 / graf.inicio * 100 if graf and graf.inicio else 0)|pct }}) en 7 días</div>
-    {% else %}
-      <div class="muted">Todavía no tienes inversiones.</div>
-    {% endif %}
+<section class="card hero col" style="gap:18px">
+  <div class="row spread" style="align-items:flex-start">
+    <div>
+      <span class="lab">Valor de tu cartera</span>
+      <div class="big">{{ total|usd }}</div>
+      {% if total %}
+        <div class="num {{ 'up' if var7 >= 0 else 'down' }}" style="margin-top:4px">{{ ("+" if var7 >= 0 else "") }}{{ var7|usd }} ({{ (var7 / graf.inicio_valor * 100 if graf and graf.inicio_valor else 0)|pct }}) en 7 días</div>
+      {% else %}
+        <div class="muted" style="margin-top:4px">Todavía no tienes inversiones.</div>
+      {% endif %}
+    </div>
+    <div class="row">
+      <a class="btn primary" href="{{ url_for('cliente.invertir') }}">Aportar</a>
+      <a class="btn" href="{{ url_for('cliente.invertir') }}#retirar">Retirar</a>
+    </div>
   </div>
-  <div class="row" style="gap:20px">
+  <div class="stats">
     <div><span class="lab">Aportado neto</span><div class="num">{{ aportado|usd }}</div></div>
-    <div><span class="lab">Resultado</span><div class="num {{ 'up' if total - aportado >= 0 else 'down' }}">{{ (total - aportado)|usd }}{% if aportado > 0 %} ({{ ((total - aportado) / aportado * 100)|pct }}){% endif %}</div></div>
+    <div><span class="lab">Resultado</span><div class="num {{ 'up' if total - aportado >= 0 else 'down' }}">{{ ("+" if total - aportado >= 0 else "") }}{{ (total - aportado)|usd }}{% if aportado > 0 %} ({{ ((total - aportado) / aportado * 100)|pct }}){% endif %}</div></div>
     <div><span class="lab">Cartera</span><div>{{ modelo.nombre }}</div></div>
-  </div>
-  <div class="row">
-    <a class="btn primary" href="{{ url_for('cliente.invertir') }}">Aportar</a>
-    <a class="btn" href="{{ url_for('cliente.invertir') }}#retirar">Retirar</a>
   </div>
 </section>
 
 {% if abiertas %}
 <section class="card">
-  <div class="row spread"><h3>Solicitudes en curso</h3><a class="small" href="{{ url_for('cliente.movimientos', ver='abiertos') }}">Ver todas</a></div>
-  <div class="list" style="margin-top:4px">
+  <div class="ch"><h3>Solicitudes en curso</h3><a class="small" href="{{ url_for('cliente.movimientos', ver='abiertos') }}">Ver todas</a></div>
+  <div class="list">
   {% for o in abiertas %}
-    <div class="item"><div class="grow"><div class="t">{{ "Aporte" if o.tipo == "aporte" else "Retiro" }} #{{ o.id }} {{ estado(o) }}</div><div class="d">{{ o.creado|fecha }}</div></div>
-      <div class="amt num {{ 'up' if o.tipo == 'aporte' else 'down' }}">{{ ("+" if o.tipo == "aporte" else "−") }}{{ o.monto_cent|usd }}</div></div>
+    <div class="item"><div class="grow"><div class="t">{{ tipo_op(o) }} {{ estado(o) }}</div><div class="d">{{ o.creado|fecha }}</div></div>
+      <div class="amt num {{ 'up' if o.tipo == 'aporte' else 'down' }}">{{ signo(o) }}{{ o.monto_cent|usd }}</div></div>
   {% endfor %}
   </div>
 </section>
@@ -41,14 +47,14 @@
 
 {% if filas %}
 <div class="g2">
-  <section class="card col">
-    <div class="row spread"><h3>Evolución en 7 días</h3><span class="small muted">con tus tenencias de hoy</span></div>
-    {% if graf %}{{ grafico(graf) }}{% endif %}
+  <section class="card">
+    <div class="ch"><h3>Evolución en 7 días</h3><span class="meta">con tus tenencias de hoy</span></div>
+    {% if graf %}{{ linea(graf, "Evolución del valor de tu cartera en 7 días") }}{% endif %}
   </section>
-  <section class="card col">
-    <div class="row spread"><h3>Distribución</h3><a class="btn sm" href="{{ url_for('cliente.cartera') }}">Ver en 3D</a></div>
+  <section class="card">
+    <div class="ch"><h3>Distribución</h3><a class="btn sm" href="{{ url_for('cliente.cartera') }}">Ver en 3D</a></div>
     {{ barra(filas) }}
-    <div class="list">
+    <div class="list" style="margin-top:6px">
     {% for f in filas %}
       <div class="item"><i class="dot" style="background:{{ f.color }}"></i><div class="grow"><div class="t">{{ f.activo if f.activo != 'USD' else 'Dólares' }}</div><div class="d">{{ f.nombre }}</div></div>
         <div class="amt num">{{ f.valor|usd }}<span class="muted">{{ (f.peso * 100)|pct(1, false) }}</span></div></div>
@@ -56,6 +62,8 @@
     </div>
   </section>
 </div>
+{% else %}
+<section class="card">{{ vacio('invertir', 'Cuando hagas tu primer aporte vas a ver aquí la evolución y la distribución de tu cartera.') }}</section>
 {% endif %}
 <p class="note">Invertir en criptomonedas implica riesgo: su precio puede bajar con fuerza y puedes perder parte o todo lo invertido. Los resultados pasados no garantizan resultados futuros.</p>
 {% endblock %}

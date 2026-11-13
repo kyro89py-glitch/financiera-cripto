@@ -26,7 +26,7 @@ def create_app(config=None):
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_SECURE=_env("COOKIE_SEGURA", "1" if prod else "0") == "1",
         PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
-        MAX_CONTENT_LENGTH=512 * 1024,
+        MAX_CONTENT_LENGTH=10 * 1024 * 1024,
         INACTIVIDAD_MIN=int(_env("INACTIVIDAD_MIN", "30")),
         INTENTOS_LOGIN=int(_env("INTENTOS_LOGIN", "5")),
         BLOQUEO_MIN=int(_env("BLOQUEO_MIN", "15")),
@@ -42,6 +42,15 @@ def create_app(config=None):
             "El equipo confirma la recepción del dinero antes de invertirlo."),
         ZONA_HORARIA=_env("ZONA_HORARIA", "America/Asuncion"),
         TRAS_PROXY=_env("TRAS_PROXY", "0") == "1",
+        COMISION_ANUAL_PCT=_env("COMISION_ANUAL_PCT", "1.5"),
+        DOCUMENTO_MAX_MB=int(_env("DOCUMENTO_MAX_MB", "8")),
+        DOCUMENTOS_DIR=_env("DOCUMENTOS_DIR", ""),
+        URL_PUBLICA=_env("URL_PUBLICA", "").rstrip("/"),
+        SMTP_HOST=_env("SMTP_HOST", ""),
+        SMTP_PUERTO=int(_env("SMTP_PUERTO", "587")),
+        SMTP_USUARIO=_env("SMTP_USUARIO", ""),
+        SMTP_CLAVE=_env("SMTP_CLAVE", ""),
+        SMTP_REMITENTE=_env("SMTP_REMITENTE", ""),
         SCRYPT_N=2 ** 14,
     )
     if config:
@@ -54,6 +63,8 @@ def create_app(config=None):
 
     carpeta = os.path.dirname(os.path.abspath(app.config["DATABASE"]))
     os.makedirs(carpeta, exist_ok=True)
+    if not app.config["DOCUMENTOS_DIR"]:
+        app.config["DOCUMENTOS_DIR"] = os.path.join(carpeta, "documentos")
 
     if app.config["TRAS_PROXY"]:
         from werkzeug.middleware.proxy_fix import ProxyFix
@@ -66,16 +77,18 @@ def create_app(config=None):
     from .rutas_admin import bp as bp_admin
     from .rutas_auth import bp as bp_auth
     from .rutas_cliente import bp as bp_cliente
+    from .rutas_documentos import bp as bp_documentos
     from .rutas_equipo import bp as bp_equipo
-    for bp in (bp_auth, bp_cliente, bp_equipo, bp_admin):
+    for bp in (bp_auth, bp_cliente, bp_equipo, bp_admin, bp_documentos):
         app.register_blueprint(bp)
 
-    from . import demo
-    for cmd in (cuentas.cmd_crear_admin, precios.cmd_actualizar, auditoria.cmd_verificar, demo.cmd_sembrar):
+    from . import comisiones, demo, notificaciones
+    for cmd in (cuentas.cmd_crear_admin, precios.cmd_actualizar, auditoria.cmd_verificar, demo.cmd_sembrar,
+                comisiones.cmd_cobrar, notificaciones.cmd_enviar):
         app.cli.add_command(cmd)
 
     with app.app_context():
-        db.crear_esquema()
+        db.migrar()
 
     @app.get("/")
     def inicio():

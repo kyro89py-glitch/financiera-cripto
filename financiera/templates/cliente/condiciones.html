@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph with context %}
+{% block titulo %}Condiciones del servicio{% endblock %}
+{% block contenido %}
+{{ ph("Condiciones del servicio y aviso de riesgos", "Versión " ~ version ~ (". Aceptadas el " ~ (g.usuario.terminos_ts|dia) if vigente else ". Léelas antes de usar tu cuenta.")) }}
+{% if error %}<div class="flash error" role="alert">{{ error }}</div>{% endif %}
+<section class="card texto-legal">
+  <h3>1. Qué hacemos</h3>
+  <p>Administramos tu dinero en carteras de criptomonedas con una composición fija que eliges tú. Cada aporte se compra y cada retiro se vende a los precios del momento en que el equipo aprueba la operación. Llevamos un registro contable de cada movimiento a tu nombre y puedes consultarlo en cualquier momento en <em>Movimientos</em>.</p>
+  <h3>2. Riesgos que asumes</h3>
+  <ul>
+    <li><b>Puedes perder dinero.</b> El precio de las criptomonedas cambia con fuerza, a veces más de un 10&nbsp;% en un día, y puede caer por largos periodos. Puedes perder una parte o la totalidad de lo invertido.</li>
+    <li><b>No hay rentabilidad garantizada.</b> Los resultados pasados, incluidos los que ves en los gráficos, no anticipan resultados futuros.</li>
+    <li><b>No es un depósito bancario.</b> Tu inversión no está cubierta por ningún seguro o garantía de depósitos.</li>
+    <li><b>Riesgo de custodia y tecnológico.</b> Las criptomonedas se guardan en cuentas de custodia de terceros, expuestas a fallas técnicas, ataques o la quiebra del custodio. Conciliamos los saldos de custodia con nuestro registro de forma periódica.</li>
+    <li><b>Riesgo regulatorio.</b> Las normas sobre criptoactivos pueden cambiar y afectar la operativa o el valor de tus inversiones.</li>
+  </ul>
+  <h3>3. Costos</h3>
+  <p>Cobramos una comisión de gestión de <b>{{ comision }}&nbsp;% anual</b> sobre el valor de tu cartera, calculada y descontada una vez al mes (la doceava parte). Se descuenta de tu saldo en dólares o, si no alcanza, vendiendo una parte proporcional de cada moneda, y aparece en tus movimientos y estados de cuenta.</p>
+  <h3>4. Verificación y origen de los fondos</h3>
+  <p>Para aprobar operaciones necesitamos verificar tu identidad con los documentos que te pedimos en <em>Mi perfil</em>. Para aportes importantes podemos pedirte que justifiques el origen del dinero. Podemos rechazar o demorar operaciones mientras esa información esté incompleta.</p>
+  <h3>5. Retiros</h3>
+  <p>Puedes pedir un retiro cuando quieras. Se paga en tu cuenta bancaria registrada después de que el equipo lo aprueba. Las operaciones grandes requieren la firma de dos personas del equipo y pueden tardar más.</p>
+  <h3>6. Tu perfil de riesgo</h3>
+  <p>Te asignamos un perfil según tu situación y objetivos. Si eliges una cartera con más riesgo que tu perfil, te lo advertimos y debes confirmarlo de forma expresa.</p>
+</section>
+{% if not vigente %}
+<form class="card col" method="post" action="{{ url_for('cliente.condiciones') }}">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <label class="check"><input type="checkbox" name="acepto" value="si" required><span>Leí las condiciones y el aviso de riesgos, entiendo que puedo perder parte o todo lo invertido y las acepto.</span></label>
+  <div class="row"><button class="btn primary" type="submit">Aceptar y continuar</button><span class="small muted">Si no estás de acuerdo, puedes cerrar sesión desde el menú de tu cuenta y escribirnos.</span></div>
+</form>
+{% endif %}
+{% endblock %}

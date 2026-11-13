@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% from "macros.html" import kyc, pill, riesgo, ph, check with context %}
+{% block titulo %}Mi perfil{% endblock %}
+{% block contenido %}
+{% set cli = g.cliente %}
+{% call ph("Mi perfil", "Tus datos, tu verificación y la seguridad de tu cuenta.") %}{{ kyc(cli) }}{% endcall %}
+<div class="g2">
+  <div class="col">
+    <section class="card">
+      <div class="ch"><h3>Datos</h3></div>
+      <dl class="datos">
+        <div><dt>Titular</dt><dd>{{ cli.nombre }}</dd></div>
+        <div><dt>{{ "RUC" if cli.tipo == 'empresa' else "Documento" }}</dt><dd class="num">{{ cli.documento }}</dd></div>
+        <div><dt>Correo</dt><dd>{{ g.usuario.email }}</dd></div>
+        <div><dt>Teléfono</dt><dd>{{ cli.telefono or "—" }}</dd></div>
+        <div><dt>Perfil de riesgo</dt><dd>{{ PERFILES[cli.perfil_riesgo] }} {{ riesgo(riesgo_max) }}</dd></div>
+        <div><dt>Cartera</dt><dd>{{ modelo.nombre }}</dd></div>
+        <div><dt>Cliente desde</dt><dd>{{ cli.creado|dia }}</dd></div>
+      </dl>
+      <p class="note">Para cambiar tus datos o tu perfil de riesgo escríbenos: lo actualiza el equipo después de verificarlo.</p>
+    </section>
+
+    <section class="card col">
+      <div class="ch" style="margin:0"><h3>Seguridad</h3></div>
+      <ul class="checks">
+        {{ check(g.usuario.totp_secreto is not none, "Verificación en dos pasos activada" if g.usuario.totp_secreto else "Verificación en dos pasos desactivada: te recomendamos activarla") }}
+        {% if g.usuario.ultimo_ingreso %}{{ check(none, "Último ingreso: " ~ (g.usuario.ultimo_ingreso|fecha)) }}{% endif %}
+        {% if g.usuario.terminos_ts %}{{ check(true, "Condiciones aceptadas el " ~ (g.usuario.terminos_ts|dia)) }}{% endif %}
+      </ul>
+      <div class="row">
+        <a class="btn" href="{{ url_for('auth.seguridad') }}">{{ icono('escudo') }}Verificación en dos pasos</a>
+        <a class="btn" href="{{ url_for('auth.clave') }}">{{ icono('llave') }}Cambiar clave</a>
+        <a class="btn" href="{{ url_for('cliente.condiciones') }}">{{ icono('documento') }}Condiciones</a>
+      </div>
+    </section>
+  </div>
+
+  <section class="card col" id="legajo">
+    <div class="ch" style="margin:0"><h3>Documentos</h3><span class="meta">PDF, JPG o PNG · hasta {{ config.DOCUMENTO_MAX_MB }} MB</span></div>
+    <p class="small muted">Los documentos marcados como obligatorios son necesarios para verificar tu identidad. Cumplimiento los revisa y te avisa del resultado.</p>
+    <div class="list">
+    {% for x in legajo %}
+      <div class="item">
+        <div class="grow">
+          <div class="t">{{ x.nombre }}{% if x.requerido %} <span class="xs muted">obligatorio</span>{% endif %}</div>
+          {% for d in x.docs[:3] %}
+            <div class="d"><a href="{{ url_for('documentos.ver', did=d.id) }}" target="_blank" rel="noopener">{{ d.nombre_original }}</a> · {{ d.subido_ts|fecha(false) }} · {{ estados_doc[d.estado][1]|lower }}{% if d.estado == 'rechazado' and d.nota %}: {{ d.nota }}{% endif %}</div>
+          {% else %}
+            <div class="d">Todavía no subiste este documento.</div>
+          {% endfor %}
+        </div>
+        {% if x.estado == 'falta' %}{{ pill('warn' if x.requerido else '', 'Falta') }}{% else %}{{ pill(estados_doc[x.estado][0], estados_doc[x.estado][1]) }}{% endif %}
+      </div>
+    {% endfor %}
+    </div>
+    <form class="col" method="post" enctype="multipart/form-data" action="{{ url_for('cliente.perfil') }}" style="gap:12px;border-top:1px solid var(--line);padding-top:14px">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <label class="field" for="tipo">Tipo de documento
+        <select id="tipo" name="tipo" required>
+          {% set primero = legajo|selectattr('requerido')|rejectattr('estado', 'in', ['aceptado', 'pendiente'])|first %}
+          {% for t, n in tipos %}{% set x = legajo[loop.index0] %}<option value="{{ t }}" {{ 'selected' if primero and primero.tipo == t }}>{{ n }}{{ " (ya aceptado)" if x.estado == 'aceptado' }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="field" for="archivo">Archivo<input id="archivo" name="archivo" type="file" accept="application/pdf,image/png,image/jpeg" required></label>
+      <button class="btn primary" type="submit">{{ icono('descargar') }}Subir documento</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

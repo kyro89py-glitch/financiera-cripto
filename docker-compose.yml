@@ -8,13 +8,24 @@ services:
     volumes:
       - datos:/datos
 
-  precios:
+  # Tareas de fondo: precios y correos cada 5 minutos; el día 1 de cada mes, la comisión del mes anterior
+  # (es idempotente: repetirla no cobra dos veces).
+  tareas:
     build: .
     restart: unless-stopped
     env_file: .env
     volumes:
       - datos:/datos
-    entrypoint: ["sh", "-c", "while true; do flask --app financiera actualizar-precios || true; sleep 300; done"]
+    entrypoint:
+      - sh
+      - -c
+      - |
+        while true; do
+          flask --app financiera actualizar-precios || true
+          flask --app financiera enviar-correos || true
+          if [ "$$(date +%d)" = "01" ]; then flask --app financiera cobrar-comisiones || true; fi
+          sleep 300
+        done
 
   caddy:
     image: caddy:2

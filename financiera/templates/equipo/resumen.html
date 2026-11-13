@@ -1,29 +1,54 @@
 {% extends "base.html" %}
-{% from "macros.html" import barra, escena3d %}
+{% from "macros.html" import barra, escena3d, linea, barras as barras_svg, ph, pill, alerta_item, vacio with context %}
 {% block titulo %}Resumen{% endblock %}
-{% block cabeza %}<script src="{{ url_for('static', filename='js/escena3d.js') }}" defer></script>{% endblock %}
+{% block cabeza %}<script src="{{ url_for('static', filename='js/escena3d.js') }}?v={{ VERSION }}" defer></script>{% endblock %}
 {% block contenido %}
-<h2>Resumen de la casa</h2>
+{% call ph("Resumen de la casa", "Activos, flujo de dinero y controles al " ~ (ahora()|fecha) ~ ".") %}
+  {% if puede('clientes.crear') %}<a class="btn primary" href="{{ url_for('equipo.cliente_nuevo') }}">Nuevo cliente</a>{% endif %}
+  {% if puede('reportes.exportar') %}<a class="btn" href="{{ url_for('equipo.reporte_operaciones') }}">{{ icono('descargar') }}Reporte</a>{% endif %}
+{% endcall %}
+
 <div class="kpis">
-  <div class="kpi"><span class="lab">Activos bajo gestión</span><b class="num">{{ casa.total|usd(0) }}</b><span class="s">{{ con_saldo }} clientes con saldo</span></div>
-  <div class="kpi"><span class="lab">Clientes</span><b class="num">{{ clientes|length }}</b><span class="s">{{ clientes|selectattr('kyc_estado', 'equalto', 'verificado')|list|length }} verificados</span></div>
-  <div class="kpi"><span class="lab">Por aprobar</span><b class="num">{{ abiertas|length }}</b><span class="s"><a href="{{ url_for('equipo.operaciones') }}">Revisar operaciones</a></span></div>
-  <div class="kpi"><span class="lab">Flujo neto pendiente</span><b class="num {{ 'up' if neto >= 0 else 'down' }}">{{ neto|usd(0) }}</b><span class="s">aportes menos retiros</span></div>
+  <div class="kpi"><span class="lab">Activos bajo gestión</span><b class="num">{{ casa.total|usd(0) }}</b>
+    {% if graf %}{% set d = graf.fin_valor - graf.inicio_valor %}<span class="s {{ 'up' if d >= 0 else 'down' }}">{{ "+" if d >= 0 else "" }}{{ d|usd(0) }} en 7 días</span>{% else %}<span class="s">sin saldo</span>{% endif %}</div>
+  <div class="kpi"><span class="lab">Clientes</span><b class="num">{{ clientes|length }}</b><span class="s">{{ con_saldo }} con saldo · {{ clientes|selectattr('kyc_estado', 'equalto', 'verificado')|list|length }} verificados</span></div>
+  <div class="kpi{{ ' alerta' if abiertas }}"><span class="lab">Por aprobar</span><b class="num">{{ abiertas|length }}</b>
+    {% if abiertas %}<a href="{{ url_for('equipo.operaciones') }}">La más antigua {{ mas_antigua|hace }} →</a>{% else %}<span class="s">Nada pendiente</span>{% endif %}</div>
+  <div class="kpi"><span class="lab">Flujo 14 días</span><b class="num {{ 'up' if entradas - salidas >= 0 else 'down' }}">{{ "+" if entradas - salidas >= 0 else "" }}{{ (entradas - salidas)|usd(0) }}</b><span class="s">{{ entradas|usd(0) }} entradas · {{ salidas|usd(0) }} salidas</span></div>
 </div>
 
-{% if alertas %}
-<section class="card">
-  <div class="row spread"><h3>Atención</h3>{% if puede('cumplimiento.ver') %}<a class="small" href="{{ url_for('equipo.cumplimiento') }}">Ver todas</a>{% endif %}</div>
-  <div class="list" style="margin-top:4px">
-  {% for nivel, texto, enlace in alertas %}
-    {% set url = url_for('equipo.operacion', opid=enlace[1]) if enlace[0] == 'op' else (url_for('equipo.cliente', cid=enlace[1]) if enlace[0] == 'cliente' else (url_for('admin.precios') if puede('precios.editar') else none)) %}
-    {% if url %}<a class="item" href="{{ url }}">{% else %}<div class="item">{% endif %}
-      <i class="dot" style="background:var(--{{ 'down' if nivel == 'alta' else ('warn' if nivel == 'media' else 'accent') }})"></i><div class="grow t">{{ texto }}</div>
-    {% if url %}</a>{% else %}</div>{% endif %}
-  {% endfor %}
+<div class="g2">
+  <div class="col">
+    <section class="card">
+      <div class="ch"><h3>Activos bajo gestión · 7 días</h3><span class="meta">valor de mercado</span></div>
+      {% if graf %}{{ linea(graf, "Activos bajo gestión en los últimos 7 días") }}{% else %}{{ vacio('resumen', 'Todavía no hay dinero invertido.') }}{% endif %}
+    </section>
+    <section class="card">
+      <div class="ch"><h3>Aportes y retiros · 14 días</h3>
+        <div class="leyenda"><span><i style="background:var(--up)"></i>Aportes</span><span><i style="background:var(--down)"></i>Retiros</span></div></div>
+      {{ barras_svg(barras) }}
+    </section>
+    <section class="card flush">
+      <div class="ch"><h3>Controles</h3></div>
+      <div class="list">
+        {% set est, ult = conc %}
+        <a class="item" href="{{ url_for('equipo.conciliacion') if puede('cumplimiento.ver') else '#' }}">{{ icono('custodia') }}
+          <div class="grow"><div class="t">Conciliación de custodia</div><div class="d">{% if ult %}Última {{ ult.ts|hace }} por {{ ult.nombre }}{% else %}Nunca se registró{% endif %}</div></div>
+          {{ pill('ok', 'Cuadra') if est == 'ok' else (pill('bad', 'Diferencias') if est == 'diferencias' else pill('warn', 'Vencida' if est == 'vencida' else 'Pendiente')) }}</a>
+        <a class="item" href="{{ url_for('admin.comisiones') if puede('comisiones.cobrar') else '#' }}">{{ icono('documento') }}
+          <div class="grow"><div class="t">Comisión de gestión</div><div class="d">{% if ult_comision %}{{ ult_comision.periodo|periodo|capitalize }}: {{ ult_comision.total|usd }} a {{ ult_comision.clientes }} clientes{% else %}Todavía no se cobró ningún mes{% endif %}</div></div></a>
+      </div>
+    </section>
   </div>
-</section>
-{% endif %}
+  <div class="col">
+    <section class="card flush">
+      <div class="ch"><h3>Atención</h3>{% if puede('cumplimiento.ver') %}<a class="small" href="{{ url_for('equipo.cumplimiento') }}">Ver todo</a>{% endif %}</div>
+      <div class="list">
+      {% for nivel, texto, enlace in alertas %}{{ alerta_item(nivel, texto, enlace) }}{% else %}{{ vacio('escudo', 'Sin alertas abiertas.') }}{% endfor %}
+      </div>
+    </section>
+  </div>
+</div>
 
 <div class="g2">
   <section class="card col">
@@ -35,7 +60,7 @@
       </div>
     </div>
     {{ escena3d(datos3d) }}
-    <p class="small muted">Cada punto es una porción igual del dinero bajo gestión. Toca un grupo para ver su monto.</p>
+    <p class="small muted">Cada punto es una porción igual del dinero bajo gestión. Arrastra para girar y toca un grupo para ver su monto.</p>
   </section>
   <div class="col">
     <section class="card col">
@@ -45,16 +70,16 @@
       {% for a in casa.activos %}
         <div class="item"><i class="dot" style="background:{{ a.color }}"></i><div class="grow"><div class="t">{{ a.activo if a.activo != 'USD' else 'Dólares' }}</div><div class="d">{{ a.nombre }}</div></div>
           <div class="amt num">{{ a.valor|usd(0) }}<span class="muted">{{ (a.peso * 100)|pct(1, false) }}</span></div></div>
-      {% else %}<div class="empty">Todavía no hay dinero invertido.</div>{% endfor %}
+      {% else %}{{ vacio('cartera', 'Todavía no hay dinero invertido.') }}{% endfor %}
       </div>
     </section>
-    <section class="card">
-      <h3>Mayores clientes</h3>
-      <div class="list" style="margin-top:4px">
+    <section class="card flush">
+      <div class="ch"><h3>Mayores clientes</h3><a class="small" href="{{ url_for('equipo.clientes') }}">Todos</a></div>
+      <div class="list">
       {% for v, c in top if v > 0 %}
-        <a class="item" href="{{ url_for('equipo.cliente', cid=c.id) }}"><div class="grow"><div class="t">{{ c.nombre }}</div></div>
+        <a class="item" href="{{ url_for('equipo.cliente', cid=c.id) }}"><span class="avatar sm" aria-hidden="true">{{ iniciales(c.nombre) }}</span><div class="grow"><div class="t">{{ c.nombre }}</div></div>
           <div class="amt num">{{ v|usd(0) }}<span class="muted">{{ (v / casa.total * 100)|pct(1, false) }}</span></div></a>
-      {% else %}<div class="empty">Sin clientes con saldo.</div>{% endfor %}
+      {% else %}{{ vacio('clientes', 'Sin clientes con saldo.') }}{% endfor %}
       </div>
     </section>
   </div>

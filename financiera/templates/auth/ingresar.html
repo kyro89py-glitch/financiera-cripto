@@ -1,24 +1,47 @@
 {% extends "base.html" %}
+{% from "macros.html" import escena3d with context %}
 {% block titulo %}Ingresar{% endblock %}
-{% block contenido %}
-<div class="auth">
-  <div>
-    <h2>Ingresar</h2>
-    <p class="muted">Portal de clientes y panel del equipo.</p>
-  </div>
-  {% if vencida %}<div class="flash">Tu sesión se cerró por inactividad. Vuelve a ingresar.</div>{% endif %}
-  {% if error %}<div class="flash error" role="alert">{{ error }}</div>{% endif %}
-  <form class="card col" method="post" action="{{ url_for('auth.ingresar') }}" autocomplete="on">
-    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-    <input type="hidden" name="siguiente" value="{{ siguiente }}">
-    <label class="field" for="email">Correo
-      <input id="email" name="email" type="email" autocomplete="username" required value="{{ email }}" autofocus>
-    </label>
-    <label class="field" for="clave">Contraseña
-      <input id="clave" name="clave" type="password" autocomplete="current-password" required>
-    </label>
-    <button class="btn primary block" type="submit">Ingresar</button>
-  </form>
-  <p class="note">Si olvidaste tu contraseña, pide una temporal a la empresa. Por seguridad, la cuenta se bloquea unos minutos tras {{ config.INTENTOS_LOGIN }} intentos fallidos.</p>
+{% block cabeza %}<script src="{{ url_for('static', filename='js/escena3d.js') }}?v={{ VERSION }}" defer></script>{% endblock %}
+{% block layout %}
+<div class="login">
+  <section class="marca">
+    <div class="col" style="gap:14px">
+      <span class="lab" style="color:#7B93FF;opacity:1">Inversión en criptomonedas</span>
+      <h2>Tu cartera, administrada con controles y trazabilidad.</h2>
+      <p>Cada aporte se revisa antes de invertirse, cada movimiento queda registrado y puedes ver tu cartera en todo momento.</p>
+    </div>
+    {{ escena3d({"titulo": "", "grupos": [
+      {"label": "BTC", "value": 5000000, "col": "#F5A524"}, {"label": "ETH", "value": 2200000, "col": "#7B8FF7"},
+      {"label": "USDT", "value": 1400000, "col": "#22B8A0"}, {"label": "SOL", "value": 800000, "col": "#A66BFA"},
+      {"label": "Otros", "value": 600000, "col": "#7F93B0"}]}, decorativo=true) }}
+    <ul>
+      <li>{{ icono('escudo') }}<b>Doble control</b>Los montos altos necesitan la firma de dos personas.</li>
+      <li>{{ icono('cadena') }}<b>Registro inalterable</b>Cada acción queda en una bitácora que no se puede editar.</li>
+      <li>{{ icono('llave') }}<b>Acceso protegido</b>Verificación en dos pasos y bloqueo ante intentos fallidos.</li>
+    </ul>
+  </section>
+  <section class="form-lado">
+    <div class="auth">
+      <div class="col" style="gap:4px">
+        <h2>Ingresar</h2>
+        <p class="muted">Portal de clientes y panel del equipo.</p>
+      </div>
+      {% with mensajes = get_flashed_messages(with_categories=true) %}{% for cat, msg in mensajes %}<div class="flash {{ cat }}" role="status">{{ msg }}</div>{% endfor %}{% endwith %}
+      {% if vencida %}<div class="flash">Tu sesión se cerró por inactividad. Vuelve a ingresar.</div>{% endif %}
+      {% if error %}<div class="flash error" role="alert">{{ error }}</div>{% endif %}
+      <form class="card col" method="post" action="{{ url_for('auth.ingresar') }}" autocomplete="on">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <input type="hidden" name="siguiente" value="{{ siguiente }}">
+        <label class="field" for="email">Correo
+          <input id="email" name="email" type="email" autocomplete="username" required value="{{ email }}" autofocus>
+        </label>
+        <label class="field" for="clave">Contraseña
+          <input id="clave" name="clave" type="password" autocomplete="current-password" required>
+        </label>
+        <button class="btn primary block" type="submit">Ingresar</button>
+      </form>
+      <p class="note">¿Olvidaste tu contraseña? Pide una temporal a la empresa. Por seguridad, la cuenta se bloquea unos minutos tras {{ config.INTENTOS_LOGIN }} intentos fallidos.</p>
+    </div>
+  </section>
 </div>
 {% endblock %}

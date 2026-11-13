@@ -1,0 +1,15 @@
+[project]
+name = "financiera-cripto"
+version = "0.2.0"
+description = "Plataforma de inversión en criptomonedas: portal de clientes y panel del equipo."
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = [
+  "Flask>=3.1,<4",
+  "requests>=2.32,<3",
+  "gunicorn>=23,<24",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

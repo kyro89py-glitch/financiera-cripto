@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph, vacio with context %}
+{% block titulo %}Avisos{% endblock %}
+{% block contenido %}
+{{ ph("Avisos", "Novedades sobre tus operaciones, tu verificación y tus documentos.") }}
+<section class="card flush">
+  {% for a in lista %}
+    {% if a.enlace %}<a class="aviso-item{{ ' nuevo' if not a.leida }}" href="{{ a.enlace }}">{% else %}<div class="aviso-item{{ ' nuevo' if not a.leida }}">{% endif %}
+      <span class="marca" aria-hidden="true"></span>
+      <div class="grow"><div>{{ a.texto }}</div><div class="xs muted">{{ a.ts|fecha }} · {{ a.ts|hace }}</div></div>
+    {% if a.enlace %}</a>{% else %}</div>{% endif %}
+  {% else %}
+    {{ vacio('campana', 'No tienes avisos.') }}
+  {% endfor %}
+</section>
+{% endblock %}

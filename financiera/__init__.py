@@ -34,6 +34,7 @@ def create_app(config=None):
         APORTE_MINIMO_USD=int(_env("APORTE_MINIMO_USD", "100")),
         UMBRAL_ORIGEN_FONDOS_USD=int(_env("UMBRAL_ORIGEN_FONDOS_USD", "10000")),
         UMBRAL_DOBLE_FIRMA_USD=int(_env("UMBRAL_DOBLE_FIRMA_USD", "25000")),
+        ORDEN_MAXIMA_USD=int(_env("ORDEN_MAXIMA_USD", "25000")),
         PRECIO_MAX_MINUTOS=int(_env("PRECIO_MAX_MINUTOS", "60" if prod else "1440")),
         COINGECKO_API_KEY=_env("COINGECKO_API_KEY", ""),
         INSTRUCCIONES_DEPOSITO=_env(

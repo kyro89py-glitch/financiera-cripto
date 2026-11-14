@@ -44,14 +44,14 @@ def _corto(cent, paso_cent=None, ref_cent=None):
     return texto + suf
 
 
-def linea(serie, ancho=640, alto=200):
+def linea(serie, ancho=640, alto=200, fmt=None, rango_min=100):
     """serie: [(ts_iso, valor_cent)]. Eje vertical que no arranca en cero para que se vea el movimiento."""
     if len(serie) < 2:
         return None
     izq, der, arr, aba = 56, 8, 10, 26
     vals = [v for _, v in serie]
     mn, mx = min(vals), max(vals)
-    paso = _paso_bonito(max(mx - mn, mx * 0.01, 100) * 1.2, 4)
+    paso = _paso_bonito(max(mx - mn, mx * 0.01, rango_min) * 1.2, 4)
     lo, hi = max(0, math.floor(mn / paso) * paso), math.ceil(mx / paso) * paso
     if mn - lo < paso * 0.15 and lo > 0:
         lo = max(0, lo - paso)
@@ -67,7 +67,7 @@ def linea(serie, ancho=640, alto=200):
     marcas = []
     v = lo
     while v <= hi + paso / 1000:
-        marcas.append({"y": arr + (1 - (v - lo) / (hi - lo)) * h, "texto": _corto(v, paso, hi)})
+        marcas.append({"y": arr + (1 - (v - lo) / (hi - lo)) * h, "texto": fmt(v) if fmt else _corto(v, paso, hi)})
         v += paso
     etiquetas = [{"x": izq + w * f, "texto": f_fecha(serie[int(f * (len(serie) - 1))][0], False), "ancla": a}
                  for f, a in ((0, "start"), (0.5, "middle"), (1, "end"))]

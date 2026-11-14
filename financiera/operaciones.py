@@ -2,12 +2,12 @@
 from flask import current_app
 
 from . import auditoria, cartera, conciliacion, db, ejecucion, notificaciones, precios
-from .dinero import fmt_usd
+from .dinero import fmt_usd, unidades_por, valor_cent
 from .tiempo import ahora
 
 ESTADOS_ABIERTOS = ("pendiente", "primera_firma")
 RIESGO_MAX = {"conservador": 2, "moderado": 3, "arriesgado": 5}
-NOMBRE_TIPO = {"aporte": "aporte", "retiro": "retiro", "comision": "comisión"}
+NOMBRE_TIPO = {"aporte": "aporte", "retiro": "retiro", "comision": "comisión", "compra": "compra", "venta": "venta"}
 
 
 class ErrorNegocio(Exception):
@@ -35,10 +35,12 @@ def solicitar_aporte(cliente, monto, modelo, referencia, usuario, ts=None, acept
     minimo = _umbral("APORTE_MINIMO_USD")
     if monto < minimo:
         raise ErrorNegocio(f"El aporte mínimo es de {fmt_usd(minimo, 0)}.")
-    m = db.uno("SELECT * FROM modelos WHERE codigo = ? AND activo = 1", (modelo,))
-    if not m:
+    solo_saldo = modelo in (None, "", "saldo")  # depósito que queda en dólares, para comprar monedas después
+    m = None if solo_saldo else db.uno("SELECT * FROM modelos WHERE codigo = ? AND activo = 1", (modelo,))
+    if not m and not solo_saldo:
         raise ErrorNegocio("Elige una cartera.")
-    fuera = fuera_de_perfil(cliente, m)
+    modelo = None if solo_saldo else modelo
+    fuera = bool(m) and fuera_de_perfil(cliente, m)
     if fuera and not acepta_riesgo:
         raise ErrorNegocio(f"La cartera {m['nombre']} tiene más riesgo que tu perfil {cliente['perfil_riesgo']}. "
                            "Para continuar, confirma que entiendes y aceptas ese riesgo.")
@@ -53,10 +55,61 @@ def solicitar_aporte(cliente, monto, modelo, referencia, usuario, ts=None, acept
         opid = cur.lastrowid
         extra = " Confirmó que acepta un riesgo mayor al de su perfil." if fuera else ""
         auditoria.registrar("operacion.solicitada", f"operacion:{opid}",
-                            {"texto": f"{cliente['nombre']} solicitó un aporte de {fmt_usd(monto)} a la cartera {m['nombre']}.{extra}",
+                            {"texto": f"{cliente['nombre']} solicitó un aporte de {fmt_usd(monto)} "
+                                      + (f"a la cartera {m['nombre']}.{extra}" if m else "a su saldo en dólares."),
                              "tipo": "aporte", "monto_cent": monto, "fuera_perfil": fuera}, usuario=usuario, ts=ts)
         _avisar_equipo(f"{cliente['nombre']} solicitó un aporte de {fmt_usd(monto)}.", opid, usuario, ts)
     return opid
+
+
+def operar(cliente, activo, lado, monto_cent, usuario, todo=False, ts=None, precios_usar=None):
+    """Compra o venta de una moneda por cuenta del cliente, contra su saldo en dólares. Se ejecuta en el momento, sin
+    aprobación del equipo, porque no entra ni sale dinero de la casa. Devuelve (id, 'liquidada' | 'incompleta')."""
+    ts = ts or ahora()
+    if lado not in ("compra", "venta"):
+        raise ErrorNegocio("Elige comprar o vender.")
+    a = db.uno("SELECT * FROM activos WHERE codigo = ?", (activo,))
+    if not a:
+        raise ErrorNegocio("Esa moneda no está disponible.")
+    if cliente["kyc_estado"] != "verificado":
+        raise ErrorNegocio("Para comprar y vender primero tenemos que verificar tu identidad. Revisa tu perfil.")
+    maximo = _umbral("ORDEN_MAXIMA_USD")
+    if precios_usar is None:
+        try:
+            precios.exigir_frescura([activo])
+        except precios.ErrorPrecio:
+            raise ErrorNegocio(f"El precio de {activo} no está actualizado. Vuelve a intentarlo en unos minutos.") from None
+    pr = precios_usar if precios_usar is not None else precios.vigentes()
+    cantidad = None
+    if lado == "venta":
+        tengo = cartera.tenencias(cliente["id"]).get(activo, 0)
+        if tengo <= 0:
+            raise ErrorNegocio(f"No tienes {activo} para vender.")
+        cantidad = tengo if todo else min(tengo, unidades_por(monto_cent, pr[activo]["precio"]))
+        if not todo and monto_cent > valor_cent(activo, tengo, pr[activo]["precio"]):
+            raise ErrorNegocio(f"Tienes {fmt_usd(valor_cent(activo, tengo, pr[activo]['precio']))} en {activo}; no puedes vender más que eso.")
+        monto_cent = max(1, valor_cent(activo, cantidad, pr[activo]["precio"]))
+    if monto_cent <= 0:
+        raise ErrorNegocio("Escribe un monto mayor que cero.")
+    if monto_cent > maximo:
+        raise ErrorNegocio(f"El máximo por orden es de {fmt_usd(maximo, 0)}. Para montos mayores, contáctanos.")
+    op = {"id": None, "cliente_id": cliente["id"], "tipo": lado, "monto_cent": monto_cent, "activo": activo,
+          "cantidad_pedida": cantidad, "modelo": None}
+    try:
+        plan = ejecucion.planificar(op, cliente, pr)
+        with db.transaccion() as c:
+            cur = c.execute("INSERT INTO operaciones (cliente_id, tipo, monto_cent, activo, cantidad_pedida, estado, creado, creado_por)"
+                            " VALUES (?, ?, ?, ?, ?, 'pendiente', ?, ?)",
+                            (cliente["id"], lado, monto_cent, activo, cantidad, ts, usuario["id"] if usuario else None))
+            op = c.execute("SELECT * FROM operaciones WHERE id = ?", (cur.lastrowid,)).fetchone()
+            ejecucion.registrar_plan(c, op, plan, usuario, ts)
+        resultado = ejecucion.continuar(op["id"], usuario, ts, precios_usar)
+    except ejecucion.ErrorEjecucion as e:
+        raise ErrorNegocio(str(e)) from None
+    if resultado != "liquidada":
+        _avisar_equipo(f"La {lado} de {activo} de {cliente['nombre']} (orden #{op['id']}) quedó con la ejecución incompleta.",
+                       op["id"], usuario, ts)
+    return op["id"], resultado
 
 
 def _avisar_equipo(texto, opid, usuario, ts):
@@ -103,7 +156,7 @@ def cancelar(opid, cliente, usuario):
 
 def _activos_afectados(op):
     if op["tipo"] == "aporte":
-        return [a for a, _ in cartera.pesos_modelo(op["modelo"])]
+        return [a for a, _ in cartera.pesos_modelo(op["modelo"])] if op["modelo"] else []
     return [a for a, u in cartera.tenencias(op["cliente_id"]).items() if a != "USD" and u > 0]
 
 

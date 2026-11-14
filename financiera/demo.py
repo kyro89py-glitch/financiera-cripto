@@ -184,6 +184,16 @@ def cmd_sembrar():
     agro_op = operaciones.solicitar_aporte(fila("agro"), 3000000, "equilibrio", "TRF-552408", usuario_de("agro"), ts=t(0, 2))
     operaciones.aprobar(agro_op, op_u, ts=t(0, 1))
     operaciones.solicitar_aporte(fila("itapua"), 6000000, "reserva", "TRF-552517", usuario_de("itapua"), ts=t(0, 0, 40))
+    # Lucía también opera por su cuenta: deposita en su saldo y compra y vende monedas sueltas.
+    dep = operaciones.solicitar_aporte(fila("lucia"), 150000, "saldo", "TRF-552600", usuario_de("lucia"), ts=t(0, 9))
+    operaciones.aprobar(dep, op_u, ts=t(0, 8, 30), precios_usar=precios_en(t(0, 8, 30)))
+    for activo, lado, usd, horas in (("SOL", "compra", 400, 8), ("LINK", "compra", 250, 7), ("XRP", "compra", 200, 6),
+                                     ("SOL", "venta", 150, 3)):
+        operaciones.operar(fila("lucia"), activo, lado, usd * 100, usuario_de("lucia"), ts=t(0, horas),
+                           precios_usar=precios_en(t(0, horas)))
+    for activo in ("BTC", "SOL", "LINK"):
+        db.ejecutar("INSERT OR IGNORE INTO favoritos (usuario_id, activo, creado) VALUES (?, ?, ?)",
+                    (usuario_de("lucia")["id"], activo, t(0, 9)))
     try:  # comisión del mes anterior (proporcional para quien invirtió durante el mes)
         comisiones.cobrar(comisiones.periodo_anterior(), equipo["admin"], ts=t(0, 11))
     except comisiones.ErrorComision:

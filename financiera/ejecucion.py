@@ -161,22 +161,51 @@ def _plan_venta(cliente_id, monto, pr, brk):
     return out
 
 
+def _plan_orden(op, cliente_id, pr, brk):
+    """Un solo tramo: la compra o la venta de una moneda que pidió el cliente."""
+    activo, lado = op["activo"], op["tipo"]
+    p = pr.get(activo)
+    if not p:
+        raise ErrorEjecucion(f"No hay precio para {activo}.")
+    venue = _ejecutor_de(brk, activo)
+    reglas = brk.reglas(activo) if venue != "interno" else exchange.Reglas()
+    if lado == "compra":
+        usd = op["monto_cent"]
+        if usd > cartera.tenencias(cliente_id).get("USD", 0):
+            raise ErrorEjecucion("No tienes saldo en dólares suficiente para esta compra.")
+        if usd < reglas.minimo_cent or unidades_por(usd, p["precio"]) <= 0:
+            raise ErrorEjecucion(f"El monto mínimo para comprar {activo} es de {fmt_usd(max(reglas.minimo_cent, 100))}.")
+        return [{"activo": activo, "lado": "compra", "venue": venue, "importe_pedido_cent": usd, "cantidad_pedida": None,
+                 "estado": "pendiente", "nota": None}]
+    tengo = cartera.tenencias(cliente_id).get(activo, 0)
+    q = min(op["cantidad_pedida"], tengo)
+    q -= q % reglas.paso
+    if q < max(reglas.minimo_unidades, 1) or valor_cent(activo, q, p["precio"]) < max(reglas.minimo_cent, 1):
+        raise ErrorEjecucion(f"La cantidad es menor al mínimo para vender {activo}"
+                             + (f" ({fmt_usd(reglas.minimo_cent)})." if reglas.minimo_cent else "."))
+    return [{"activo": activo, "lado": "venta", "venue": venue, "importe_pedido_cent": None, "cantidad_pedida": q,
+             "estado": "pendiente", "nota": None}]
+
+
 def planificar(op, cliente, pr):
     """Tramos de la operación a precios vigentes. Para aportes en Binance verifica que haya USDT libre suficiente."""
     exigir_activa()
     brk = exchange.broker(pr)
     try:
-        if op["tipo"] == "aporte":
-            tramos = _plan_compra(op, pr, brk)
+        if op["tipo"] in ("compra", "venta"):
+            tramos = _plan_orden(op, cliente["id"], pr, brk)
+        elif op["tipo"] == "aporte":
+            tramos = _plan_compra(op, pr, brk) if op["modelo"] else []
+        else:
+            tramos = _plan_venta(cliente["id"], op["monto_cent"], pr, brk)
+        if op["tipo"] in ("aporte", "compra"):
             necesita = sum(t["importe_pedido_cent"] for t in tramos if t["estado"] == "pendiente" and t["venue"] == brk.nombre)
             if necesita and brk.nombre == "binance":
                 libre = brk.disponible(exchange.MONEDA_COTIZACION)
                 if libre < necesita * 10 ** 6:
                     raise ErrorEjecucion(
-                        f"No hay USDT suficiente en Binance: hay {fmt_unidades(libre, 'USDT')} libres y este aporte necesita "
+                        f"No hay USDT suficiente en Binance: hay {fmt_unidades(libre, 'USDT')} libres y esta operación necesita "
                         f"{fmt_usd(necesita)}. Convierte y deposita los fondos antes de aprobar.")
-        else:
-            tramos = _plan_venta(cliente["id"], op["monto_cent"], pr, brk)
     except exchange.ErrorExchange as e:
         raise ErrorEjecucion(f"No se pudo preparar la ejecución: {e}") from None
     return tramos
@@ -186,9 +215,9 @@ def registrar_plan(c, op, tramos, usuario, ts):
     """Dentro de una transacción: guarda los tramos y deja la operación 'ejecutando'."""
     otra = c.execute("SELECT id FROM operaciones WHERE cliente_id = ? AND estado = 'ejecutando' AND id != ?",
                      (op["cliente_id"], op["id"])).fetchone()
-    if otra and op["tipo"] != "aporte":
+    if otra and op["tipo"] not in ("aporte", "compra"):
         raise ErrorEjecucion(f"La operación #{otra['id']} de este cliente todavía se está ejecutando; termínala primero.")
-    if op["tipo"] != "aporte":  # las tenencias no pueden haber bajado entre el plan y ahora
+    if op["tipo"] not in ("aporte", "compra"):  # las tenencias no pueden haber bajado entre el plan y ahora
         ten = {r["activo"]: r["u"] for r in c.execute(
             "SELECT activo, SUM(cantidad) AS u FROM libro WHERE cliente_id = ? GROUP BY activo", (op["cliente_id"],))}
         for t in tramos:
@@ -321,25 +350,30 @@ def liquidar(opid, usuario, ts):
             return "incompleta"
         cid, tipo, monto = op["cliente_id"], op["tipo"], op["monto_cent"]
         hechas = [t for t in ts_ if t["estado"] == "ejecutada"]
-        if tipo == "aporte":
-            _asiento(c, cid, "USD", monto, "deposito", opid, ts)
+        if tipo in ("aporte", "compra"):
+            if tipo == "aporte":
+                _asiento(c, cid, "USD", monto, "deposito", opid, ts)
             for t in hechas:
                 _asiento(c, cid, "USD", -t["importe_cent"], "compra", opid, ts)
                 if t["cantidad"] > 0:
                     _asiento(c, cid, t["activo"], t["cantidad"], "compra", opid, ts)
                 _orden(c, op, t, ts)
-            liquidado = monto
-            c.execute("UPDATE clientes SET modelo = ? WHERE id = ?", (op["modelo"], cid))
+            liquidado = monto if tipo == "aporte" else sum(t["importe_cent"] for t in hechas)
+            if tipo == "aporte" and op["modelo"]:
+                c.execute("UPDATE clientes SET modelo = ? WHERE id = ?", (op["modelo"], cid))
         else:
             for t in hechas:
                 _asiento(c, cid, t["activo"], -t["cantidad"], "venta", opid, ts)
                 _asiento(c, cid, "USD", t["importe_cent"], "venta", opid, ts)
                 _orden(c, op, t, ts)
-            caja = c.execute("SELECT COALESCE(SUM(cantidad), 0) AS s FROM libro WHERE cliente_id = ? AND activo = 'USD'",
-                             (cid,)).fetchone()["s"]
-            liquidado = max(0, min(monto, caja))
-            if liquidado:
-                _asiento(c, cid, "USD", -liquidado, CONCEPTO_PAGO[tipo], opid, ts)
+            if tipo == "venta":
+                liquidado = sum(t["importe_cent"] for t in hechas)
+            else:
+                caja = c.execute("SELECT COALESCE(SUM(cantidad), 0) AS s FROM libro WHERE cliente_id = ? AND activo = 'USD'",
+                                 (cid,)).fetchone()["s"]
+                liquidado = max(0, min(monto, caja))
+                if liquidado:
+                    _asiento(c, cid, "USD", -liquidado, CONCEPTO_PAGO[tipo], opid, ts)
         negativo = c.execute("SELECT activo FROM libro WHERE cliente_id = ? GROUP BY activo HAVING SUM(cantidad) < 0",
                              (cid,)).fetchone()
         if negativo:
@@ -351,15 +385,17 @@ def liquidar(opid, usuario, ts):
         donde = f" en {', '.join(venues)}" if venues else ""
         if tipo == "comision":
             texto_b = f"Cobró la comisión de gestión de {cli['nombre']} ({op['periodo']}): {fmt_usd(liquidado)}{donde}."
+        elif tipo in ("compra", "venta"):
+            texto_b = f"{cli['nombre']} {'compró' if tipo == 'compra' else 'vendió'} {op['activo']} por {fmt_usd(liquidado)}{donde} (orden #{opid})."
         else:
             texto_b = f"Liquidó el {tipo} #{opid} de {cli['nombre']} por {fmt_usd(liquidado)}{donde}."
-        auditoria.registrar("comision.cobrada" if tipo == "comision" else "operacion.liquidada", f"operacion:{opid}",
+        auditoria.registrar({"comision": "comision.cobrada", "compra": "orden.ejecutada", "venta": "orden.ejecutada"}.get(tipo, "operacion.liquidada"), f"operacion:{opid}",
                             {"texto": texto_b, "monto_cent": monto, "liquidado_cent": liquidado,
                              "ordenes": [{"activo": t["activo"], "lado": t["lado"], "venue": t["venue"], "ref": t["ref_exchange"]}
                                          for t in hechas]}, usuario=usuario, ts=ts)
-        if cli["usuario_id"]:
+        if cli["usuario_id"] and tipo not in ("compra", "venta"):
             if tipo == "aporte":
-                texto = f"Tu aporte #{opid} de {fmt_usd(monto)} fue aprobado e invertido."
+                texto = f"Tu aporte #{opid} de {fmt_usd(monto)} fue aprobado" + (" e invertido." if op["modelo"] else " y está en tu saldo en dólares.")
             elif tipo == "retiro":
                 texto = f"Tu retiro #{opid} de {fmt_usd(liquidado)} fue aprobado. El pago se acredita en tu cuenta bancaria."
                 if liquidado < monto:

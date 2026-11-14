@@ -3,31 +3,30 @@
    Layout: barra superior fija; en teléfono, pestañas abajo; en escritorio, menú lateral fijo.
    Sin fuentes ni recursos externos (la política de seguridad no permite cargarlos). */
 :root{
+  /* Tema oscuro tipo exchange (por defecto). El claro se elige desde el menú de la cuenta. */
+  --bg:#070A12; --surface:#0E1320; --surface-2:#141B2C; --surface-3:#1B2438; --line:#1E2840; --line-strong:#2C3956;
+  --ink:#EAEEF7; --ink-2:#C7CFDE; --muted:#8792AA;
+  --accent:#7B93FF; --accent-ink:#081033; --accent-soft:#17214A; --accent-line:#33437F;
+  --up:#2FD08C; --down:#F6465D; --warn:#E8B04C; --info:#7B93FF;
+  --up-bg:#0C2A1F; --down-bg:#3A141B; --warn-bg:#33260E;
+  --hero:#101A3A; --hero-ink:#EEF2FB;
+  --shadow:0 1px 2px rgba(0,0,0,.3);
+  --shadow-lg:0 16px 40px rgba(0,0,0,.5);
+  --sans:ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono:ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
+  --r:14px; --r-sm:10px;
+  color-scheme:dark;
+}
+html[data-tema="claro"]{
   --bg:#F4F6FA; --surface:#FFFFFF; --surface-2:#EEF1F6; --surface-3:#E4E8F0; --line:#DDE2EA; --line-strong:#C9D0DC;
   --ink:#0B1324; --ink-2:#2B3445; --muted:#5B6577;
   --accent:#2446E8; --accent-ink:#FFFFFF; --accent-soft:#E7ECFE; --accent-line:#BBC8FB;
   --up:#0B8457; --down:#C23A31; --warn:#9A5B05; --info:#2446E8;
   --up-bg:#DFF3EA; --down-bg:#FBE3E0; --warn-bg:#FBEFD9;
   --hero:#0B1530; --hero-ink:#EEF2FB;
-  --sans:ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --mono:ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
-  --r:14px; --r-sm:10px;
   --shadow:0 1px 2px rgba(11,19,36,.04), 0 2px 8px rgba(11,19,36,.04);
   --shadow-lg:0 12px 36px rgba(11,19,36,.16);
   color-scheme:light;
-}
-@media (prefers-color-scheme: dark){
-  :root{
-    --bg:#080C15; --surface:#0F1522; --surface-2:#151D2E; --surface-3:#1C2639; --line:#222D43; --line-strong:#2E3B56;
-    --ink:#E9EDF6; --ink-2:#C7CFDE; --muted:#8C97AE;
-    --accent:#7B93FF; --accent-ink:#081033; --accent-soft:#18224A; --accent-line:#33437F;
-    --up:#3ECB8F; --down:#F2766C; --warn:#E3AA4E; --info:#7B93FF;
-    --up-bg:#0E2B20; --down-bg:#371917; --warn-bg:#33260E;
-    --hero:#121C3D; --hero-ink:#EEF2FB;
-    --shadow:0 1px 2px rgba(0,0,0,.3);
-    --shadow-lg:0 16px 40px rgba(0,0,0,.5);
-    color-scheme:dark;
-  }
 }
 
 *{box-sizing:border-box}
@@ -332,7 +331,40 @@ details.item summary::-webkit-details-marker{display:none}
 .desv-barra i{position:absolute;top:-4px;width:2px;height:16px;background:var(--ink);border-radius:2px;transform:translateX(-1px)}
 .login .marca .stage{min-height:300px}
 
+/* ---------- exchange: cinta, monedas, favoritos y panel de órdenes ---------- */
+.cinta{overflow:hidden;border-bottom:1px solid var(--line);background:var(--surface);font-size:12.5px}
+.cinta-in{display:flex;gap:0;width:max-content;animation:cinta 60s linear infinite}
+.cinta:hover .cinta-in{animation-play-state:paused}
+.cinta a{display:flex;gap:8px;align-items:baseline;padding:7px 18px;color:var(--ink-2);text-decoration:none;white-space:nowrap;border-right:1px solid var(--line)}
+.cinta a b{color:var(--ink);font-weight:650}
+@keyframes cinta{to{transform:translateX(-50%)}}
+@media (prefers-reduced-motion:reduce){.cinta-in{animation:none}}
+.pulso{animation:pulso .9s ease-out}
+@keyframes pulso{0%{background:color-mix(in srgb, var(--accent) 35%, transparent)}100%{background:transparent}}
+.moneda-ico{--c:var(--accent);flex:none;display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;font-weight:750;font-size:13px;color:#fff;
+  background:radial-gradient(circle at 30% 28%, color-mix(in srgb, var(--c) 70%, #fff) 0%, var(--c) 55%, color-mix(in srgb, var(--c) 70%, #000) 100%);box-shadow:0 0 0 1px rgba(255,255,255,.08), 0 4px 12px color-mix(in srgb, var(--c) 35%, transparent)}
+.moneda-ico.g{width:40px;height:40px;font-size:17px}
+.estrella{display:inline-grid;place-items:center;background:none;border:0;padding:4px;color:var(--muted);cursor:pointer;border-radius:8px;min-width:32px;min-height:32px}
+.estrella .ico{width:18px;height:18px}
+.estrella:hover{color:var(--warn)}
+.estrella.on{color:#F5B93A}
+.estrella.on .ico path{fill:currentColor}
+span.estrella{min-width:0;min-height:0;padding:0;cursor:inherit}
+.tabla.mercado td{padding-top:13px;padding-bottom:13px}
+.operar .lados{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border-radius:12px;background:var(--surface-2)}
+.operar .lados button{border:0;background:none;color:var(--muted);font:inherit;font-weight:650;padding:9px;border-radius:9px;cursor:pointer;min-height:40px}
+.operar .lados button[aria-selected="true"][data-lado="compra"]{background:var(--up);color:#04130C}
+.operar .lados button[aria-selected="true"][data-lado="venta"]{background:var(--down);color:#fff}
+.operar .lados button:disabled{opacity:.4;cursor:not-allowed}
+.operar .pcts{display:grid;grid-template-columns:repeat(4,1fr)}
+.operar .pcts button{justify-content:center}
+.resumen-op{display:flex;flex-direction:column;gap:8px;padding:12px 14px;border-radius:10px;background:var(--surface-2);font-size:14px}
+.btn.primary.compra{background:var(--up);border-color:var(--up);color:#04130C}
+.btn.primary.venta{background:var(--down);border-color:var(--down);color:#fff}
+.btn.on{border-color:#F5B93A}
+
 @media (min-width:900px){
+  .g2.ancho-izq{grid-template-columns:minmax(0,1.7fr) minmax(300px,1fr)}
   .kpis.tres{grid-template-columns:repeat(3,minmax(0,1fr))}
   .hero3d{grid-template-columns:minmax(300px,40%) 1fr;min-height:400px}
   .hero3d .info{padding:30px 0 30px 34px}
@@ -364,6 +396,8 @@ details.item summary::-webkit-details-marker{display:none}
   .cola-doc{grid-template-columns:1fr}
 }
 @media print{
+  :root{--bg:#F4F6FA; --surface:#FFFFFF; --surface-2:#EEF1F6; --surface-3:#E4E8F0; --line:#DDE2EA; --line-strong:#C9D0DC; --ink:#0B1324; --ink-2:#2B3445; --muted:#5B6577; --accent:#2446E8; --accent-ink:#FFFFFF; --accent-soft:#E7ECFE; --accent-line:#BBC8FB; --up:#0B8457; --down:#C23A31; --warn:#9A5B05; --info:#2446E8; --up-bg:#DFF3EA; --down-bg:#FBE3E0; --warn-bg:#FBEFD9; --hero:#0B1530; --hero-ink:#EEF2FB; --shadow:0 1px 2px rgba(11,19,36,.04), 0 2px 8px rgba(11,19,36,.04); --shadow-lg:0 12px 36px rgba(11,19,36,.16);}
+  .cinta{display:none !important}
   .top,nav.tabs,.entorno,.no-imprimir,.flash{display:none !important}
   .solo-imprimir{display:block}
   body{background:#fff;color:#000;font-size:12px}

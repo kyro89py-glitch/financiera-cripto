@@ -60,6 +60,32 @@ def inicio():
                            datos3d=datos3d(filas, ""), mercado=_mercado()[:5], mayor_desvio=mayor)
 
 
+@bp.post("/operar")
+def operar():
+    activo = (request.form.get("activo") or "").upper()
+    lado = request.form.get("lado")
+    todo = request.form.get("todo") == "si"
+    destino = url_for("auth.moneda", codigo=activo) if activo.isalnum() else url_for("auth.mercado")
+    try:
+        monto = 0 if (todo and lado == "venta") else leer_monto(request.form.get("monto"))
+    except ValueError:
+        flash("Escribe el monto en dólares, por ejemplo 250 o 250,50.", "error")
+        return redirect(destino)
+    try:
+        opid, r = operaciones.operar(g.cliente, activo, lado, monto, g.usuario, todo=todo)
+    except operaciones.ErrorNegocio as e:
+        flash(str(e), "error")
+        return redirect(destino)
+    if r == "liquidada":
+        o = db.uno("SELECT * FROM ordenes WHERE operacion_id = ?", (opid,))
+        from .dinero import fmt_precio, fmt_unidades, fmt_usd
+        flash(f"{'Compraste' if lado == 'compra' else 'Vendiste'} {fmt_unidades(o['cantidad'], activo)} a {fmt_precio(Decimal(o['precio']))} "
+              f"por {fmt_usd(o['importe_cent'])}.", "ok")
+    else:
+        flash("Tu orden quedó en proceso: el equipo ya fue avisado y la vas a ver en Movimientos.", "error")
+    return redirect(destino)
+
+
 @bp.get("/cartera", endpoint="cartera")
 def ver_cartera():
     c = g.cliente

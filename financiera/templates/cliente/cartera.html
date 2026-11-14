@@ -1,9 +1,11 @@
 {% extends "base.html" %}
 {% from "macros.html" import escena3d, ph, vacio, pill, rendimiento with context %}
-{% block titulo %}Tu cartera{% endblock %}
+{% block titulo %}Billetera{% endblock %}
 {% block cabeza %}<script src="{{ url_for('static', filename='js/escena3d.js') }}?v={{ VERSION }}" defer></script>{% endblock %}
 {% block contenido %}
-{% call ph("Tu cartera", "Cada punto de la vista 3D es una porción igual de tu dinero.") %}
+{% call ph("Billetera", "Tu saldo en dólares y cada moneda que tienes. Cada punto de la vista 3D es una porción igual de tu dinero.") %}
+  <a class="btn primary" href="{{ url_for('cliente.invertir') }}">Depositar</a>
+  <a class="btn" href="{{ url_for('cliente.invertir') }}#retirar">Retirar</a>
   <a class="btn" href="{{ url_for('cliente.movimientos') }}">{{ icono('documento') }}Estados de cuenta</a>
 {% endcall %}
 <section class="hero3d">
@@ -23,12 +25,13 @@
     <div class="ch"><h3>Tenencias</h3></div>
     <div class="list">
     {% for f in filas %}
-      <div class="item"><i class="dot" style="background:{{ f.color }}"></i>
-        <div class="grow"><div class="t">{{ f.nombre }}</div>
-          <div class="d num">{% if f.activo != 'USD' %}{{ f.unidades|unidades(f.activo) }}{% if f.precio %} · {{ f.precio|precio }}{% endif %}{% else %}Disponible para invertir o retirar{% endif %}</div></div>
-        <div class="amt num">{{ f.valor|usd }}{% if f.cambio is not none %}<span class="{{ 'up' if f.cambio >= 0 else 'down' }}">{{ f.cambio|pct }} 24 h</span>{% endif %}</div></div>
+      <div class="item wrap"><span class="moneda-ico" style="--c:{{ f.color }}">{{ '$' if f.activo == 'USD' else f.activo[0] }}</span>
+        <div class="grow"><div class="t">{% if f.activo != 'USD' %}<a class="fila" href="{{ url_for('auth.moneda', codigo=f.activo) }}">{{ f.nombre }}</a>{% else %}{{ f.nombre }}{% endif %}</div>
+          <div class="d num">{% if f.activo != 'USD' %}{{ f.unidades|unidades(f.activo) }}{% if f.precio %} · <span data-px="{{ f.activo }}">{{ f.precio|precio }}</span>{% endif %}{% else %}Disponible para comprar o retirar{% endif %}</div></div>
+        <div class="amt num">{{ f.valor|usd }}{% if f.cambio is not none %}<span class="{{ 'up' if f.cambio >= 0 else 'down' }}">{{ f.cambio|pct }} 24 h</span>{% endif %}</div>
+        <div class="acts row" style="gap:6px">{% if f.activo != 'USD' %}<a class="btn sm" href="{{ url_for('auth.moneda', codigo=f.activo) }}#operar">Comprar</a><a class="btn sm" href="{{ url_for('auth.moneda', codigo=f.activo, lado='venta') }}#operar">Vender</a>{% else %}<a class="btn sm" href="{{ url_for('auth.mercado') }}">Comprar monedas</a><a class="btn sm" href="{{ url_for('cliente.invertir') }}">Invertir en una cartera</a>{% endif %}</div></div>
     {% else %}
-      {{ vacio('cartera', 'Todavía no tienes inversiones.') }}
+      {{ vacio('cartera', 'Tu billetera está vacía. Deposita dólares para empezar.') }}
     {% endfor %}
     </div>
   </section>

@@ -23,9 +23,13 @@ ESTADOS = {
 KYC = {"verificado": ("ok", "Identidad verificada"), "pendiente": ("warn", "Verificación pendiente"),
        "observado": ("bad", "Verificación observada")}
 PERFILES = {"conservador": "Conservador", "moderado": "Moderado", "arriesgado": "Arriesgado"}
-TIPOS_OP = {"aporte": "Aporte", "retiro": "Retiro", "comision": "Comisión de gestión"}
+TIPOS_OP = {"aporte": "Aporte", "retiro": "Retiro", "comision": "Comisión de gestión", "compra": "Compra", "venta": "Venta"}
 
 ICONOS = {
+    "mercado": '<path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-7"/>',
+    "billetera": '<path d="M4 7a2 2 0 0 1 2-2h11v4M4 7v10a2 2 0 0 0 2 2h13a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1H6a2 2 0 0 1-2-2z"/><circle cx="16" cy="14" r="1.2"/>',
+    "estrella": '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.8-5.2 2.8 1-5.8-4.3-4.1 5.9-.9z"/>',
+    "tema": '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
     "inicio": '<path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/>',
     "cartera": '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5V12l6 6"/>',
     "invertir": '<circle cx="12" cy="12" r="8.5"/><path d="M12 16V8M8.5 11.5L12 8l3.5 3.5"/>',
@@ -47,18 +51,19 @@ ICONOS = {
 }
 
 NAV = {
-    "cliente": [("cliente.inicio", "Inicio", "inicio", None), ("cliente.cartera", "Cartera", "cartera", None),
-                ("cliente.invertir", "Invertir", "invertir", None), ("cliente.movimientos", "Movimientos", "movimientos", None),
+    "cliente": [("cliente.inicio", "Inicio", "inicio", None), ("cliente.cartera", "Billetera", "billetera", None),
+                ("auth.mercado", "Mercado", "mercado", None), ("cliente.movimientos", "Movimientos", "movimientos", None),
                 ("cliente.perfil", "Perfil", "perfil", None)],
-    "equipo": [("equipo.resumen", "Resumen", "resumen", None), ("equipo.operaciones", "Operaciones", "operaciones", None),
+    "equipo": [("equipo.resumen", "Resumen", "resumen", None), ("auth.mercado", "Mercado", "mercado", None),
+               ("equipo.operaciones", "Operaciones", "operaciones", None),
                ("equipo.clientes", "Clientes", "clientes", None),
                ("equipo.cumplimiento", "Cumplimiento", "cumplimiento", "cumplimiento.ver"),
                ("admin.precios", "Ajustes", "ajustes", "precios.editar")],
 }
 ACTIVO = {  # qué rutas marcan cada pestaña como activa
     "cliente.movimientos": ("cliente.movimientos", "cliente.estado_mensual"),
-    "cliente.inicio": ("cliente.inicio", "auth.mercado"),
-    "equipo.resumen": ("equipo.resumen", "auth.mercado"),
+    "auth.mercado": ("auth.mercado", "auth.moneda"),
+    "cliente.cartera": ("cliente.cartera", "cliente.invertir"),
     "equipo.operaciones": ("equipo.operaciones", "equipo.operacion"),
     "equipo.clientes": ("equipo.clientes", "equipo.cliente", "equipo.cliente_nuevo", "equipo.estado_mensual"),
     "equipo.cumplimiento": ("equipo.cumplimiento", "equipo.bitacora", "equipo.documentos", "equipo.conciliacion"),
@@ -126,6 +131,16 @@ def navegacion():
     return out
 
 
+def cinta():
+    """Precios vigentes para la cinta superior."""
+    from . import precios
+    try:
+        vig = precios.vigentes()
+    except Exception:
+        return []
+    return [{"codigo": a, "precio": p["precio"], "cambio": p["cambio"]} for a, p in vig.items()]
+
+
 def avisos_no_leidos():
     u = g.get("usuario")
     if not u:
@@ -151,5 +166,5 @@ def init_app(app):
     )
     app.jinja_env.filters["periodo"] = periodo_txt
     app.jinja_env.globals.update(ROLES=ROLES, ESTADOS=ESTADOS, KYC=KYC, PERFILES=PERFILES, TIPOS_OP=TIPOS_OP,
-                                 iniciales=iniciales, icono=icono, navegacion=navegacion, avisos_no_leidos=avisos_no_leidos,
+                                 iniciales=iniciales, icono=icono, navegacion=navegacion, avisos_no_leidos=avisos_no_leidos, cinta=cinta,
                                  VERSION=VERSION, ahora=tiempo.ahora)

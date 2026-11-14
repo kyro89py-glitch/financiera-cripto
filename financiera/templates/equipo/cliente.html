@@ -27,7 +27,7 @@
       <div class="ch"><h3>Operaciones</h3><span class="meta">últimas 50</span></div>
       <div class="list">{% for o in ops %}
         <a class="item" href="{{ url_for('equipo.operacion', opid=o.id) }}"><div class="grow"><div class="t">{{ tipo_op(o) }} {{ estado(o) }}</div><div class="d">{{ o.creado|fecha }}</div></div>
-          <div class="amt num {{ 'up' if o.tipo == 'aporte' else 'down' }}">{{ signo(o) }}{{ (o.liquidado_cent if o.liquidado_cent is not none else o.monto_cent)|usd }}</div></a>
+          <div class="amt num {{ 'up' if o.tipo == 'aporte' else ('' if o.tipo in ('compra', 'venta') else 'down') }}">{{ signo(o) }}{{ (o.liquidado_cent if o.liquidado_cent is not none else o.monto_cent)|usd }}</div></a>
       {% else %}{{ vacio('operaciones', 'Sin operaciones.') }}{% endfor %}</div>
     </section>
 

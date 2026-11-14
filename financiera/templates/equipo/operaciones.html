@@ -18,7 +18,7 @@
     {% for o in ops %}
       <tr>
         <td><a class="fila" href="{{ url_for('equipo.operacion', opid=o.id) }}">{{ o.nombre }}</a><span class="sec">{{ tipo_op(o) }} · {{ o.documento }}</span></td>
-        <td class="r num {{ 'up' if o.tipo == 'aporte' else 'down' }}" style="white-space:nowrap">{{ signo(o) }}{{ (o.liquidado_cent if o.liquidado_cent is not none else o.monto_cent)|usd }}</td>
+        <td class="r num {{ 'up' if o.tipo == 'aporte' else ('' if o.tipo in ('compra', 'venta') else 'down') }}" style="white-space:nowrap">{{ signo(o) }}{{ (o.liquidado_cent if o.liquidado_cent is not none else o.monto_cent)|usd }}</td>
         <td class="full"><div class="row" style="gap:6px">
           {{ estado(o) }}
           {% if o.estado in ('pendiente', 'primera_firma') %}

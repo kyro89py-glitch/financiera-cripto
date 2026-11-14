@@ -18,6 +18,69 @@
     });
   });
 
+  // ---- precios en vivo: actualiza cada elemento con data-px / data-cambio ----
+  var vivos = document.querySelector("[data-px]");
+  function refrescar() {
+    if (document.hidden) return;
+    fetch("/mercado/precios.json", { credentials: "same-origin", headers: { Accept: "application/json" } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (!j) return;
+        document.querySelectorAll("[data-px]").forEach(function (el) {
+          var x = j[el.getAttribute("data-px")]; if (!x || el.textContent === x.precio) return;
+          el.textContent = x.precio; el.classList.remove("pulso"); void el.offsetWidth; el.classList.add("pulso");
+        });
+        document.querySelectorAll("[data-cambio]").forEach(function (el) {
+          var x = j[el.getAttribute("data-cambio")]; if (!x || !x.cambio) return;
+          el.textContent = x.cambio; var t = el.classList.contains("up") || el.classList.contains("down") ? el : el.parentNode;
+          t.classList.toggle("up", x.sube); t.classList.toggle("down", !x.sube);
+        });
+        var panel = document.getElementById("operar");
+        if (panel && j[panel.getAttribute("data-activo")]) { panel.setAttribute("data-precio", j[panel.getAttribute("data-activo")].valor); panel.dispatchEvent(new Event("precio")); }
+      }).catch(function () { /* sin conexión: se reintenta en el próximo ciclo */ });
+  }
+  if (vivos) setInterval(refrescar, 20000);
+
+  // ---- panel de compra y venta ----
+  (function () {
+    var panel = document.getElementById("operar"); if (!panel) return;
+    var form = panel.querySelector("form"), monto = form.querySelector("[name=monto]"), lado = form.querySelector("[name=lado]"), todo = form.querySelector("[name=todo]");
+    var boton = form.querySelector("button[type=submit]"), est = form.querySelector("[data-estimado]"), disp = form.querySelector("[data-disponible]"), rot = form.querySelector("[data-rotulo]");
+    var activo = panel.getAttribute("data-activo"), bloqueado = boton.disabled;
+    function n2(n, dec) { var p = n.toFixed(dec).split("."); return p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".") + (p[1] ? "," + p[1] : ""); }
+    function leerUsd(t) { var x = String(t || "").replace(/[^0-9.,]/g, ""); if (x.indexOf(",") >= 0) x = x.replace(/\./g, "").replace(",", "."); return parseFloat(x); }
+    function tope() { return +panel.getAttribute(lado.value === "compra" ? "data-caja" : "data-tengo") / 100; }
+    function pintar() {
+      var compra = lado.value === "compra", precio = +panel.getAttribute("data-precio"), m = leerUsd(monto.value);
+      rot.textContent = compra ? "Saldo disponible" : "Tienes en " + activo;
+      disp.textContent = "US$ " + n2(tope(), 2);
+      boton.textContent = (compra ? "Comprar " : "Vender ") + activo;
+      boton.className = "btn primary block " + (compra ? "compra" : "venta");
+      form.querySelector(".resumen-op .muted").textContent = compra ? "Recibes aprox." : "Recibes aprox. (en dólares)";
+      if (!(m > 0) || !(precio > 0)) est.textContent = "—";
+      else est.textContent = compra ? n2(m / precio, 8).replace(/,?0+$/, "") + " " + activo : "US$ " + n2(m, 2);
+      var excede = m > tope() + 0.005;
+      monto.setCustomValidity(excede ? (compra ? "No tienes saldo suficiente." : "No tienes tanto " + activo + ".") : "");
+      boton.disabled = bloqueado;
+    }
+    function elegir(l) {
+      lado.value = l; todo.value = ""; monto.value = "";
+      panel.querySelectorAll(".lados button").forEach(function (b) { b.setAttribute("aria-selected", String(b.getAttribute("data-lado") === l)); });
+      pintar();
+    }
+    panel.querySelectorAll(".lados button").forEach(function (b) { b.addEventListener("click", function () { if (!b.disabled) elegir(b.getAttribute("data-lado")); }); });
+    form.querySelectorAll("[data-pct]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var p = +b.getAttribute("data-pct"), v = Math.floor(tope() * p) / 100;
+        monto.value = n2(v, 2); todo.value = p === 100 && lado.value === "venta" ? "si" : ""; pintar();
+      });
+    });
+    monto.addEventListener("input", function () { todo.value = ""; pintar(); });
+    panel.addEventListener("precio", pintar);
+    document.querySelectorAll('a[data-lado="venta"]').forEach(function (x) { x.addEventListener("click", function () { elegir("venta"); }); });
+    if (/[?&]lado=venta/.test(location.search)) elegir("venta"); else pintar();
+  })();
+
   var fuente = document.getElementById("datos-invertir");
   if (!fuente) return;
   var d = JSON.parse(fuente.textContent);
@@ -56,6 +119,11 @@
     document.querySelectorAll("[data-monto]").forEach(function (b) { b.setAttribute("aria-pressed", String(Math.round(+b.getAttribute("data-monto") * 100) === m)); });
     prev.textContent = "";
     if (!sel) return;
+    if (sel.value === "saldo") {
+      var ps = document.createElement("p"); ps.className = "small muted";
+      ps.textContent = m >= d.minimo ? usd(m) + " quedan en tu saldo en dólares, listos para comprar monedas en Mercado." : "Escribe un monto desde " + usd(d.minimo) + ".";
+      prev.appendChild(ps); return;
+    }
     if (!(m >= d.minimo)) {
       var p = document.createElement("p"); p.className = "small muted"; p.textContent = "Escribe un monto desde " + usd(d.minimo) + " para ver qué se compraría a los precios de ahora.";
       prev.appendChild(p); return;

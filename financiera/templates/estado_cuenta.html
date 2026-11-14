@@ -63,7 +63,7 @@
       <tbody>{% for o in ec.ops %}
         <tr><td class="num" style="white-space:nowrap">{{ o.resuelto_ts|fecha }}</td><td>{{ tipo_op(o) }}</td>
           <td class="small">{% for r in ec.ordenes.get(o.id, []) %}{{ "Compra" if r.lado == "compra" else "Venta" }} {{ r.cantidad|unidades(r.activo) }} a {{ r.precio|precio }}{{ "; " if not loop.last }}{% else %}—{% endfor %}</td>
-          <td class="r num {{ 'up' if o.tipo == 'aporte' else 'down' }}" style="white-space:nowrap">{{ signo(o) }}{{ o.liquidado_cent|usd }}</td></tr>
+          <td class="r num {{ 'up' if o.tipo == 'aporte' else ('' if o.tipo in ('compra', 'venta') else 'down') }}" style="white-space:nowrap">{{ signo(o) }}{{ o.liquidado_cent|usd }}</td></tr>
       {% endfor %}</tbody>
     </table></div>
     {% else %}<p class="small muted">No hubo aportes, retiros ni comisiones en este mes.</p>{% endif %}

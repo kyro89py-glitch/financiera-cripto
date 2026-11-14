@@ -28,11 +28,11 @@
       {{ rendimiento(rend) }}
     </div>
     <div class="row">
-      <a class="btn primary" href="{{ url_for('cliente.invertir') }}">Aportar</a>
+      <a class="btn primary" href="{{ url_for('cliente.invertir') }}">Depositar</a>
+      <a class="btn" href="{{ url_for('auth.mercado') }}">Comprar y vender</a>
       <a class="btn" href="{{ url_for('cliente.invertir') }}#retirar">Retirar</a>
-      <a class="btn" href="{{ url_for('cliente.cartera') }}">Ver detalle</a>
     </div>
-    <span class="xs" style="opacity:.6">Cartera {{ modelo.nombre }} · arrastra la figura para girarla</span>
+    <span class="xs" style="opacity:.6">Arrastra la figura para girarla y toca un color para ver cuánto vale.</span>
   </div>
   {{ escena3d(datos3d, heroe=true) }}
 </section>
@@ -45,7 +45,7 @@
   <div class="list">
   {% for o in abiertas %}
     <div class="item"><div class="grow"><div class="t">{{ tipo_op(o) }} {{ estado(o) }}</div><div class="d">{{ o.creado|fecha }}</div></div>
-      <div class="amt num {{ 'up' if o.tipo == 'aporte' else 'down' }}">{{ signo(o) }}{{ o.monto_cent|usd }}</div></div>
+      <div class="amt num {{ 'up' if o.tipo == 'aporte' else ('' if o.tipo in ('compra', 'venta') else 'down') }}">{{ signo(o) }}{{ o.monto_cent|usd }}</div></div>
   {% endfor %}
   </div>
 </section>

@@ -2,6 +2,20 @@
 
 Este proyecto sigue [versionado semántico](https://semver.org/lang/es/). Las fechas son de Paraguay.
 
+## [0.5.0] - 2026-11-14
+
+### Nuevo
+- **Compra y venta libre de cada moneda:** el cliente opera por su cuenta contra su saldo en dólares, a precio de mercado y en el momento, con el mismo motor de ejecución (simulador o Binance). Controles: identidad verificada, precio vigente, saldo suficiente, mínimo del exchange, máximo por orden (`ORDEN_MAXIMA_USD`) y pausa de emergencia.
+- **Depósito a saldo:** un aporte puede quedar en dólares, sin invertirse en una cartera, para comprar monedas después.
+- **Página de cada moneda:** precio en grande con escena 3D, gráfico de 24 horas, 7 y 30 días, máximo y mínimo, tenencia, precio promedio de compra, panel de órdenes y últimas órdenes.
+- **Mercado tipo exchange:** favoritas, filtros (todas, favoritas, en mi billetera), orden por las que más suben o bajan, y **precios que se actualizan solos**.
+- **Cinta de precios** en todas las pantallas y **billetera** con saldo por moneda y accesos para comprar y vender.
+- **Tema oscuro por defecto**, con opción de tema claro desde el menú de la cuenta.
+- Migración 0003 (tipos de operación `compra` y `venta`, activo negociado y favoritos).
+
+### Pruebas
+- 88 pruebas automáticas.
+
 ## [0.4.0] - 2026-11-13
 
 ### Nuevo

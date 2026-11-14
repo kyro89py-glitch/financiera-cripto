@@ -3,12 +3,13 @@
 Plataforma de inversión en criptomonedas para operar con clientes reales, con dos espacios:
 
 - **Portal del cliente:** su cartera (también en 3D), aportes y retiros, movimientos, estados de cuenta mensuales para imprimir, su legajo de documentos y avisos.
+- **Compra y venta tipo exchange:** además de las carteras armadas por la casa, el cliente puede depositar en su saldo y comprar o vender cada moneda por su cuenta, con mercado en vivo, página por moneda, favoritas y billetera.
 - **Panel del equipo:** aprobación de operaciones con controles de cumplimiento y doble firma, fichas de clientes con legajo, revisión de documentos, conciliación de custodia, comisiones de gestión, bitácora inalterable, precios y usuarios.
 - **Ejecución en Binance:** al aprobar, las compras y ventas se envían como órdenes de mercado a Binance (o a su red de pruebas) y el libro se asienta con las cantidades, precios y comisiones reales. Sin Binance configurado, un simulador ejecuta al precio vigente.
 
 Es un sistema propio e independiente: corre en tu servidor y guarda todo en tu base de datos. Los únicos servicios externos son opcionales: Binance para ejecutar y cotizar, CoinGecko para los precios cuando no se usa Binance (también se cargan a mano) y un servidor de correo para los avisos por email.
 
-> **Estado:** versión 0.4, lista para pruebas internas con el equipo y para operar en la red de pruebas de Binance. Antes de recibir dinero de clientes lee [Antes de operar con dinero real](#antes-de-operar-con-dinero-real).
+> **Estado:** versión 0.5, lista para pruebas internas con el equipo y para operar en la red de pruebas de Binance. Antes de recibir dinero de clientes lee [Antes de operar con dinero real](#antes-de-operar-con-dinero-real).
 
 ---
 
@@ -131,7 +132,7 @@ financiera/
   rutas_*.py         pantallas de acceso, cliente, equipo, administración y documentos
   templates/         pantallas
   static/            estilos y JavaScript (sin recursos externos)
-tests/               82 pruebas automáticas (incluye una imitación completa de la API de Binance)
+tests/               88 pruebas automáticas (incluye una imitación completa de la API de Binance)
 ```
 
 ### Seguridad incluida
@@ -208,6 +209,7 @@ Todas las opciones están comentadas en `.env.example`. Las principales:
 | `UMBRAL_ORIGEN_FONDOS_USD`, `UMBRAL_DOBLE_FIRMA_USD` | Montos a partir de los cuales se exige el origen de los fondos y la doble firma. |
 | `PRECIO_MAX_MINUTOS` | Antigüedad máxima de un precio para ejecutar operaciones. |
 | `INSTRUCCIONES_DEPOSITO` | Datos bancarios que ve el cliente al aportar. |
+| `ORDEN_MAXIMA_USD` | Monto máximo de cada compra o venta que hace el cliente por su cuenta. |
 | `EJECUCION` | `simulado` (por defecto) o `binance`. |
 | `BINANCE_API_KEY`, `BINANCE_API_SECRET`, `BINANCE_URL` | Clave de API y dirección (red de pruebas por defecto; `https://api.binance.com` para operar en real). |
 | `FUENTE_PRECIOS` | `binance` o `coingecko`. Por defecto, Binance si se ejecuta en Binance. |

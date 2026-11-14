@@ -105,7 +105,7 @@ def operacion(opid):
     asientos = db.todos("SELECT * FROM libro WHERE operacion_id = ? ORDER BY id", (opid,))
     pr = precios.vigentes()
     plan = []
-    if op["estado"] in operaciones.ESTADOS_ABIERTOS and op["tipo"] == "aporte":
+    if op["estado"] in operaciones.ESTADOS_ABIERTOS and op["tipo"] == "aporte" and op["modelo"]:
         for a, pb in cartera.pesos_modelo(op["modelo"]):
             usd = op["monto_cent"] * pb // 10000
             p = pr.get(a)

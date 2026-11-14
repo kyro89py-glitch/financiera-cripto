@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% from "macros.html" import escena3d, linea, ph, pill, vacio with context %}
+{% block titulo %}{{ a.nombre }} ({{ a.codigo }}){% endblock %}
+{% block cabeza %}<script src="{{ url_for('static', filename='js/escena3d.js') }}?v={{ VERSION }}" defer></script>{% endblock %}
+{% block contenido %}
+<div class="ph">
+  <div class="tit"><a class="volver" href="{{ url_for('auth.mercado') }}">← Mercado</a>
+    <h2 class="row" style="gap:12px"><span class="moneda-ico g" style="--c:{{ a.color }}">{{ a.codigo[0] }}</span>{{ a.nombre }} <span class="muted" style="font-weight:500">{{ a.codigo }}</span></h2></div>
+  <div class="acc">
+    <form method="post" action="{{ url_for('auth.favorito', codigo=a.codigo) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="volver" value="{{ request.path }}">
+      <button class="btn{{ ' on' if favorito }}" type="submit" aria-pressed="{{ 'true' if favorito else 'false' }}"><span class="estrella{{ ' on' if favorito }}">{{ icono('estrella') }}</span>{{ "En favoritas" if favorito else "Agregar a favoritas" }}</button></form>
+  </div>
+</div>
+
+<section class="hero3d">
+  <div class="info">
+    <div><span class="lab">Precio de {{ a.codigo }}</span>
+      <div class="big" data-px="{{ a.codigo }}">{% if vig %}{{ vig.precio|precio }}{% else %}Sin precio{% endif %}</div>
+      {% if vig and vig.cambio is not none %}<div class="num {{ 'up' if vig.cambio >= 0 else 'down' }}" style="margin-top:4px"><span data-cambio="{{ a.codigo }}">{{ vig.cambio|pct }}</span> en 24 h</div>{% endif %}</div>
+    <div class="stats">
+      {% if stats %}
+      <div><span class="lab">Máximo {{ rangos[rango][1] }}</span><div class="num">{{ stats.max|precio }}</div></div>
+      <div><span class="lab">Mínimo {{ rangos[rango][1] }}</span><div class="num">{{ stats.min|precio }}</div></div>
+      {% endif %}
+      <div><span class="lab">{{ "Tienes" if cli else "Bajo gestión" }}</span><div class="num">{{ tengo_usd|usd }}</div><span class="xs" style="opacity:.7">{{ tengo_u|unidades(a.codigo) }}</span></div>
+      {% if promedio %}<div><span class="lab">Tu precio promedio</span><div class="num">{{ promedio|precio }}</div>{% if vig %}{% set dif = (vig.precio / promedio - 1) * 100 %}<span class="xs {{ 'up' if dif >= 0 else 'down' }}">{{ dif|pct }} frente a hoy</span>{% endif %}</div>{% endif %}
+    </div>
+    {% if cli %}<div class="row"><a class="btn primary" href="#operar">Comprar</a>{% if tengo_u %}<a class="btn" href="#operar" data-lado="venta">Vender</a>{% endif %}</div>{% endif %}
+  </div>
+  {{ escena3d(datos3d, heroe=true) }}
+</section>
+
+<div class="g2 ancho-izq">
+  <section class="card">
+    <div class="ch"><h3>Precio · {{ rangos[rango][1] }}{% if stats and stats.var is not none %} <span class="num small {{ 'up' if stats.var >= 0 else 'down' }}">{{ stats.var|pct }}</span>{% endif %}</h3>
+      <div class="chips">{% for k, v in rangos.items() %}<a href="{{ url_for('auth.moneda', codigo=a.codigo, r=k) }}" aria-current="{{ 'true' if rango == k else 'false' }}">{{ v[1] }}</a>{% endfor %}</div></div>
+    {% if graf %}{{ linea(graf, "Precio de " ~ a.codigo ~ " en " ~ rangos[rango][1]) }}{% else %}{{ vacio('mercado', 'Todavía no hay historial de precios para este período.') }}{% endif %}
+  </section>
+
+  {% if cli %}
+  <section class="card col operar" id="operar" data-precio="{{ vig.precio if vig else 0 }}" data-caja="{{ caja }}" data-tengo="{{ tengo_usd }}" data-activo="{{ a.codigo }}">
+    <div class="lados" role="tablist">
+      <button type="button" role="tab" data-lado="compra" aria-selected="true">Comprar</button>
+      <button type="button" role="tab" data-lado="venta" aria-selected="false" {{ 'disabled' if not tengo_u }}>Vender</button>
+    </div>
+    {% if cli.kyc_estado != 'verificado' %}<div class="flash warn">Para operar primero tenemos que verificar tu identidad. <a href="{{ url_for('cliente.perfil') }}#legajo">Ver qué falta</a></div>{% endif %}
+    <form class="col" method="post" action="{{ url_for('cliente.operar') }}" data-confirmar="¿Confirmar la orden al precio de mercado?">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="activo" value="{{ a.codigo }}">
+      <input type="hidden" name="lado" value="compra"><input type="hidden" name="todo" value="">
+      <div class="row spread small"><span class="muted" data-rotulo>Saldo disponible</span><b class="num" data-disponible>{{ caja|usd }}</b></div>
+      <label class="field" for="op-monto">Monto en dólares<input id="op-monto" name="monto" inputmode="decimal" autocomplete="off" placeholder="0,00" required></label>
+      <div class="chips pcts">{% for p in (25, 50, 75, 100) %}<button type="button" data-pct="{{ p }}">{{ p }}%</button>{% endfor %}</div>
+      <div class="resumen-op"><div class="row spread"><span class="muted">Recibes aprox.</span><b class="num" data-estimado>—</b></div>
+        <div class="row spread"><span class="muted">Precio de referencia</span><span class="num" data-px="{{ a.codigo }}">{{ vig.precio|precio if vig else "—" }}</span></div></div>
+      <button class="btn primary block compra" type="submit" {{ 'disabled' if cli.kyc_estado != 'verificado' or not vig }}>Comprar {{ a.codigo }}</button>
+    </form>
+    <p class="note">Orden a precio de mercado: se ejecuta en el momento y el precio final puede diferir levemente del de referencia. Máximo por orden: {{ (maximo * 100)|usd(0) }}.{% if not caja %} Para comprar necesitas saldo en dólares: <a href="{{ url_for('cliente.invertir') }}">deposita</a>.{% endif %}</p>
+  </section>
+  {% else %}
+  <section class="card col"><h3>Solo consulta</h3><p class="small muted">Los clientes compran y venden esta moneda desde su portal, contra su saldo en dólares. Las órdenes se ejecutan en el momento y quedan en Operaciones y en la bitácora.</p>
+    <a class="btn" href="{{ url_for('equipo.operaciones', ver='todas') }}">Ver operaciones</a></section>
+  {% endif %}
+</div>
+
+{% if cli %}
+<section class="card flush">
+  <div class="ch"><h3>Tus últimas órdenes de {{ a.codigo }}</h3><a class="small" href="{{ url_for('cliente.movimientos') }}">Todos los movimientos</a></div>
+  {% if ordenes %}
+  <div class="tablewrap"><table class="tabla">
+    <thead><tr><th>Fecha</th><th>Lado</th><th class="r">Cantidad</th><th class="r">Precio</th><th class="r">Importe</th></tr></thead>
+    <tbody>{% for o in ordenes %}<tr><td class="num small" style="white-space:nowrap">{{ o.ts|fecha }}</td><td>{{ pill('ok' if o.lado == 'compra' else 'bad', 'Compra' if o.lado == 'compra' else 'Venta') }}</td>
+      <td class="r num">{{ o.cantidad|unidades(a.codigo) }}</td><td class="r num">{{ o.precio|precio }}</td><td class="r num">{{ o.importe_cent|usd }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}{{ vacio('operaciones', 'Todavía no compraste ni vendiste ' ~ a.codigo ~ '.') }}{% endif %}
+</section>
+{% endif %}
+{% endblock %}

@@ -4,9 +4,9 @@
 
 {% macro kyc(cli) -%}{{ pill(KYC[cli.kyc_estado][0], KYC[cli.kyc_estado][1]) }}{%- endmacro %}
 
-{% macro tipo_op(o) -%}{{ TIPOS_OP[o.tipo] }}{% if o.tipo == 'comision' and o.periodo %} · {{ o.periodo|periodo }}{% else %} #{{ o.id }}{% endif %}{%- endmacro %}
+{% macro tipo_op(o) -%}{{ TIPOS_OP[o.tipo] }}{% if o.tipo in ('compra', 'venta') %} de {{ o.activo }} #{{ o.id }}{% elif o.tipo == 'comision' and o.periodo %} · {{ o.periodo|periodo }}{% else %}{% if o.tipo == 'aporte' and not o.modelo %} a saldo{% endif %} #{{ o.id }}{% endif %}{%- endmacro %}
 
-{% macro signo(o) -%}{{ "+" if o.tipo == "aporte" else "−" }}{%- endmacro %}
+{% macro signo(o) -%}{{ "+" if o.tipo == "aporte" else ("" if o.tipo in ("compra", "venta") else "−") }}{%- endmacro %}
 
 {% macro riesgo(r) -%}
 <span class="risk" role="img" aria-label="Riesgo {{ r }} de 5">{% for i in range(1, 6) %}<i class="{{ 'on' if i <= r }}"></i>{% endfor %}</span>

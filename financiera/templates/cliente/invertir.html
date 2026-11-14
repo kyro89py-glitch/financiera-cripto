@@ -2,7 +2,7 @@
 {% from "macros.html" import riesgo, ph with context %}
 {% block titulo %}Invertir{% endblock %}
 {% block contenido %}
-{{ ph("Invertir", "Elige una cartera, indica el monto y envía la solicitud. La compra se hace cuando el equipo confirma que recibió el dinero.") }}
+{{ ph("Depositar e invertir", "Elige una cartera armada por la casa o deposita en tu saldo para comprar monedas por tu cuenta. El dinero se acredita cuando el equipo confirma que lo recibió.") }}
 {% if g.cliente.kyc_estado != 'verificado' %}
 <div class="flash warn">Tu identidad todavía no está verificada. Puedes enviar la solicitud, pero el equipo no podrá aprobarla hasta completar la verificación. <a href="{{ url_for('cliente.perfil') }}#legajo">Ver qué falta</a></div>
 {% endif %}
@@ -11,7 +11,7 @@
 <form class="col" method="post" action="{{ url_for('cliente.invertir') }}" style="gap:16px">
   <input type="hidden" name="csrf" value="{{ csrf_token() }}">
   <section class="card col">
-    <div class="ch" style="margin:0"><h3>1. Elige una cartera</h3><span class="meta">Tu perfil: {{ PERFILES[g.cliente.perfil_riesgo]|lower }}</span></div>
+    <div class="ch" style="margin:0"><h3>1. Elige qué hacer con el depósito</h3><span class="meta">Tu perfil: {{ PERFILES[g.cliente.perfil_riesgo]|lower }}</span></div>
     <div class="models" role="radiogroup" aria-label="Cartera">
     {% for m in modelos %}
       <label class="model">
@@ -23,6 +23,11 @@
         {% if m.fuera %}<span class="pill warn">Más riesgo que tu perfil</span>{% endif %}
       </label>
     {% endfor %}
+      <label class="model">
+        <input type="radio" name="modelo" value="saldo" {{ 'checked' if form.modelo == 'saldo' }}>
+        <div class="row spread"><b>Solo depositar</b><span class="pill">Sin invertir</span></div>
+        <span class="small">El dinero queda en tu saldo en dólares para que compres las monedas que quieras desde Mercado.</span>
+      </label>
     </div>
     <label class="check" id="confirmar-riesgo" {% if form.modelo not in datos.fuera %}hidden{% endif %}>
       <input type="checkbox" name="acepta_riesgo" value="si" {{ 'checked' if form.acepta_riesgo == 'si' }}>

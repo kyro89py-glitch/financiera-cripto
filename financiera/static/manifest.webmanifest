@@ -1,0 +1,22 @@
+{
+  "name": "Financiera Cripto",
+  "short_name": "Financiera",
+  "description": "Compra, vende y ahorra en criptomonedas, en dólares o en guaraníes.",
+  "lang": "es-PY",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#070A12",
+  "theme_color": "#070A12",
+  "icons": [
+    {"src": "/static/img/icono-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "/static/img/icono-512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "/static/img/icono-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
+    {"src": "/static/img/icono-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ],
+  "shortcuts": [
+    {"name": "Mercado", "url": "/mercado"},
+    {"name": "Billetera", "url": "/cliente/cartera"},
+    {"name": "Enviar", "url": "/cliente/enviar"}
+  ]
+}

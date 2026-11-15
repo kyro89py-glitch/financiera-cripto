@@ -7,6 +7,11 @@
 <meta name="color-scheme" content="light dark">
 <title>{% block titulo %}{% endblock %} · {{ config.NOMBRE }}</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232446E8'/%3E%3Ccircle cx='16' cy='16' r='8' fill='none' stroke='white' stroke-width='3'/%3E%3C/svg%3E">
+<link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='img/apple-touch-icon.png') }}">
+<meta name="theme-color" content="#070A12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Financiera">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ VERSION }}">
 <script src="{{ url_for('static', filename='js/app.js') }}?v={{ VERSION }}" defer></script>
 {% block cabeza %}{% endblock %}
@@ -38,7 +43,7 @@
       </div>
     </details>
     {% elif request.endpoint == 'inicio' %}
-    <a class="btn primary" href="{{ url_for('auth.ingresar') }}" style="margin-left:auto">Ingresar</a>
+    <div class="row" style="margin-left:auto;gap:8px"><a class="btn" href="{{ url_for('auth.ingresar') }}">Ingresar</a><a class="btn primary" href="{{ url_for('auth.abrir_cuenta') }}">Abrir cuenta</a></div>
     {% endif %}
   </div>
 </header>

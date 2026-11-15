@@ -34,6 +34,7 @@
     <div><span class="lab">Valor al inicio</span><b>{{ ec.valor_inicial|usd }}</b></div>
     <div><span class="lab">Aportes</span><b class="up">+{{ ec.aportes|usd }}</b></div>
     <div><span class="lab">Retiros</span><b class="{{ 'down' if ec.retiros }}">−{{ ec.retiros|usd }}</b></div>
+    {% if ec.recibido or ec.enviado %}<div><span class="lab">Envíos de otros clientes</span><b class="num">{{ ("+" ~ (ec.recibido|usd)) if ec.recibido else "" }}{{ " / " if ec.recibido and ec.enviado }}{{ ("−" ~ (ec.enviado|usd)) if ec.enviado else "" }}</b></div>{% endif %}
     <div><span class="lab">Comisiones</span><b class="{{ 'down' if ec.comisiones }}">−{{ ec.comisiones|usd }}</b></div>
     <div><span class="lab">Resultado de mercado</span><b class="{{ 'up' if ec.mercado >= 0 else 'down' }}">{{ "+" if ec.mercado >= 0 else "" }}{{ ec.mercado|usd }}</b></div>
     <div class="total"><span class="lab">Valor al {{ "día de hoy" if ec.en_curso else "cierre" }}</span><b>{{ ec.valor_final|usd }}</b></div>
@@ -69,8 +70,21 @@
     {% else %}<p class="small muted">No hubo aportes, retiros ni comisiones en este mes.</p>{% endif %}
   </section>
 
+  {% if ec.transferencias %}
+  <section>
+    <h3 style="margin-bottom:8px">Envíos entre clientes</h3>
+    <div class="tablewrap"><table class="tabla">
+      <thead><tr><th>Fecha</th><th>Detalle</th><th class="r">Cantidad</th><th class="r">Valor</th></tr></thead>
+      <tbody>{% for t in ec.transferencias %}{% set sale = t.de_cliente == cli.id %}
+        <tr><td class="num small" style="white-space:nowrap">{{ t.ts|fecha }}</td><td>{{ "Envío a " ~ ocultar(t.a_nombre) if sale else "Recibido de " ~ ocultar(t.de_nombre) }}</td>
+          <td class="r num">{{ t.cantidad|unidades(t.activo) }}</td><td class="r num {{ 'down' if sale else 'up' }}">{{ '−' if sale else '+' }}{{ t.valor_cent|usd }}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+  </section>
+  {% endif %}
+
   <footer class="small muted" style="border-top:1px solid var(--line);padding-top:12px">
-    Valores en dólares estadounidenses calculados con el último precio registrado de cada activo al inicio y al cierre del período. El resultado de mercado es la diferencia de valor que no se explica por aportes, retiros ni comisiones. Las criptomonedas son inversiones de alto riesgo; los resultados pasados no garantizan resultados futuros. Emitido el {{ ahora()|fecha }}{% if config.URL_PUBLICA %} · {{ config.URL_PUBLICA }}{% endif %}.
+    Valores en dólares estadounidenses calculados con el último precio registrado de cada activo al inicio y al cierre del período. El resultado de mercado es la diferencia de valor que no se explica por aportes, retiros, comisiones ni envíos entre clientes. Las criptomonedas son inversiones de alto riesgo; los resultados pasados no garantizan resultados futuros. Emitido el {{ ahora()|fecha }}{% if config.URL_PUBLICA %} · {{ config.URL_PUBLICA }}{% endif %}.
   </footer>
 </article>
 {% endblock %}

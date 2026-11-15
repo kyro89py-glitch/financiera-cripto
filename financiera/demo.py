@@ -205,6 +205,13 @@ def cmd_sembrar():
     programadas.crear(fila("lucia"), "BTC", "compra", (btc_hoy * Decimal("0.95")).quantize(Decimal("1")), 30000, usuario_de("lucia"), ts=t(0, 1))
     programadas.crear(fila("lucia"), "BTC", "venta", (btc_hoy * Decimal("0.88")).quantize(Decimal("1")), 0, usuario_de("lucia"), todo=True, ts=t(0, 1))
     alertas.crear(usuario_de("lucia"), "BTC", precios.vigentes()["BTC"]["precio"] * Decimal("1.05"), precios.vigentes()["BTC"]["precio"])
+    # Envío entre clientes y una cuenta abierta en línea (todavía sin documentos).
+    from . import transferencias
+    transferencias.enviar(fila("lucia"), "diego@demo.local", "USD", 4500, usuario_de("lucia"), CLAVE_DEMO,
+                          nota="Mitad de la cena", ts=t(0, 0, 40))
+    cuentas.registrar_web({"tipo": "persona", "nombre": "Marcelo Duarte Aquino", "documento": "CI 6.112.903", "email": "marcelo@demo.local",
+                           "telefono": "0985 220 431", "clave": CLAVE_DEMO, "clave2": CLAVE_DEMO, "acepto": "si",
+                           "plazo": "2", "caida": "2", "experiencia": "1", "parte": "3"}, ts=t(0, 0, 30))
     try:  # comisión del mes anterior (proporcional para quien invirtió durante el mes)
         comisiones.cobrar(comisiones.periodo_anterior(), equipo["admin"], ts=t(0, 11))
     except comisiones.ErrorComision:

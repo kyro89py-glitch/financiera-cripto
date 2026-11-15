@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph, vacio with context %}
+{% block titulo %}Enviar{% endblock %}
+{% block contenido %}
+{{ ph("Enviar a otro cliente", "Al instante y sin comisión. Solo necesitas el correo o el número de cédula de la otra persona.", volver=url_for('cliente.cartera'), volver_txt="Billetera") }}
+{% if g.cliente.kyc_estado != 'verificado' %}<div class="flash warn">Para enviar primero tenemos que verificar tu identidad. <a href="{{ url_for('cliente.perfil') }}#legajo">Ver qué falta</a></div>{% endif %}
+{% if error %}<div class="flash error" role="alert">{{ error }}</div>{% endif %}
+<div class="g2 ancho-izq">
+  <form class="card col enviar" method="post" action="{{ url_for('cliente.enviar') }}" data-confirmar="¿Confirmar el envío? No se puede deshacer." autocomplete="off">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="todo" value="">
+    <label class="field" for="destino">Para<input id="destino" name="destino" required value="{{ form.destino or '' }}" placeholder="Correo o número de cédula" autocomplete="off"></label>
+    <p class="small" id="destino-info" aria-live="polite"></p>
+    <div class="form" style="grid-template-columns:1fr 1fr">
+      <label class="field" for="env-activo">Qué envías<select id="env-activo" name="activo">
+        {% for f in filas %}<option value="{{ f.activo }}" {{ 'selected' if form.activo == f.activo }}>{{ 'Dólares (USD)' if f.activo == 'USD' else f.activo ~ ' · ' ~ f.nombre }}</option>{% else %}<option value="USD">Dólares (USD)</option>{% endfor %}
+      </select></label>
+      <label class="field" for="env-monto">Valor en dólares<input id="env-monto" name="monto" inputmode="decimal" value="{{ form.monto or '' }}" placeholder="0,00" required></label>
+    </div>
+    <div class="row spread small"><span class="muted">Tienes <b class="num" data-tengo>—</b></span><button type="button" class="link" data-todo>Enviar todo</button></div>
+    <label class="field" for="env-nota">Nota para quien recibe (opcional)<input id="env-nota" name="nota" maxlength="120" value="{{ form.nota or '' }}" placeholder="Ej.: devolución del almuerzo"></label>
+    <div class="form" style="grid-template-columns:{{ '1fr 1fr' if dos_pasos else '1fr' }}">
+      <label class="field" for="env-clave">Tu contraseña<input id="env-clave" name="clave" type="password" autocomplete="current-password" required></label>
+      {% if dos_pasos %}<label class="field" for="env-codigo">Código de 6 dígitos<input id="env-codigo" name="codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required></label>{% endif %}
+    </div>
+    <button class="btn primary block" type="submit" {{ 'disabled' if g.cliente.kyc_estado != 'verificado' }}>Enviar ahora</button>
+    <p class="note">Límite diario: {{ limite|usd(0) }} · hoy llevas {{ hoy|usd }}. Los envíos son inmediatos y no se pueden revertir: revisa a quién envías. Las monedas se envían tal cual, valuadas al precio del momento.</p>
+  </form>
+  <section class="card flush">
+    <div class="ch"><h3>Últimos envíos</h3></div>
+    <div class="list">{% for t in historial %}{% set sale = t.de_cliente == g.cliente.id %}
+      <div class="item"><span class="moneda-ico" style="--c:{{ 'var(--down)' if sale else 'var(--up)' }}">{{ '↑' if sale else '↓' }}</span>
+        <div class="grow"><div class="t">{{ "Enviaste a " ~ ocultar(t.a_nombre) if sale else "Recibiste de " ~ ocultar(t.de_nombre) }}</div><div class="d">{{ t.ts|fecha }}{% if t.nota %} · «{{ t.nota }}»{% endif %}</div></div>
+        <div class="amt num {{ 'down' if sale else 'up' }}">{{ '−' if sale else '+' }}{{ t.valor_cent|usd }}{% if t.activo != 'USD' %}<span class="muted">{{ t.cantidad|unidades(t.activo) }}</span>{% endif %}</div></div>
+    {% else %}{{ vacio('billetera', 'Todavía no enviaste ni recibiste dinero de otros clientes.') }}{% endfor %}</div>
+  </section>
+</div>
+<script type="application/json" id="datos-enviar">{{ {"tengo": tengo}|tojson }}</script>
+{% endblock %}

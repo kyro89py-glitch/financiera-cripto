@@ -6,6 +6,7 @@
 {% call ph("Billetera", "Tu saldo en dólares y cada moneda que tienes. Cada punto de la vista 3D es una porción igual de tu dinero.") %}
   <a class="btn primary" href="{{ url_for('cliente.invertir') }}">Depositar</a>
   <a class="btn" href="{{ url_for('cliente.convertir') }}">Convertir</a>
+  <a class="btn" href="{{ url_for('cliente.enviar') }}">Enviar</a>
   <a class="btn" href="{{ url_for('cliente.invertir') }}#retirar">Retirar</a>
   <a class="btn" href="{{ url_for('cliente.movimientos') }}">{{ icono('documento') }}Estados de cuenta</a>
 {% endcall %}
@@ -16,6 +17,8 @@
       <div><span class="lab">Aportado neto</span><div class="num">{{ aportado|usd }}</div></div>
       <div><span class="lab">Resultado</span><div class="num {{ 'up' if total - aportado >= 0 else 'down' }}">{{ ("+" if total - aportado >= 0 else "") }}{{ (total - aportado)|usd }}</div></div>
       {{ rendimiento(rend) }}
+      <div><span class="lab">Ganancia sin realizar</span><div class="num {{ 'up' if no_realizado >= 0 else 'down' }}">{{ "+" if no_realizado >= 0 else "" }}{{ no_realizado|usd }}</div><span class="xs" style="opacity:.7">frente a lo que pagaste</span></div>
+      <div><span class="lab">Ganancia realizada</span><div class="num {{ 'up' if realizado >= 0 else 'down' }}">{{ "+" if realizado >= 0 else "" }}{{ realizado|usd }}</div><span class="xs" style="opacity:.7">en ventas</span></div>
     </div>
     <span class="xs" style="opacity:.6">Arrastra para girar, pellizca para acercar y toca un grupo para ver cuánto vale. Prueba las cuatro formas.</span>
   </div>
@@ -29,7 +32,7 @@
       <div class="item wrap"><span class="moneda-ico" style="--c:{{ f.color }}">{{ '$' if f.activo == 'USD' else f.activo[0] }}</span>
         <div class="grow"><div class="t">{% if f.activo != 'USD' %}<a class="fila" href="{{ url_for('auth.moneda', codigo=f.activo) }}">{{ f.nombre }}</a>{% else %}{{ f.nombre }}{% endif %}</div>
           <div class="d num">{% if f.activo != 'USD' %}{{ f.unidades|unidades(f.activo) }}{% if f.precio %} · <span data-px="{{ f.activo }}">{{ f.precio|precio }}</span>{% endif %}{% else %}Disponible para comprar o retirar{% endif %}</div></div>
-        <div class="amt num">{{ f.valor|usd }}{% if f.cambio is not none %}<span class="{{ 'up' if f.cambio >= 0 else 'down' }}">{{ f.cambio|pct }} 24 h</span>{% endif %}</div>
+        <div class="amt num">{{ f.valor|usd }}{% set k = costos.get(f.activo) %}{% if k and k.cantidad and k.costo %}{% set gan = f.valor - k.costo %}<span class="{{ 'up' if gan >= 0 else 'down' }}" title="Ganancia o pérdida sin realizar frente a lo que pagaste">{{ "+" if gan >= 0 else "" }}{{ gan|usd }} ({{ (gan / k.costo * 100)|pct }})</span>{% elif f.cambio is not none %}<span class="{{ 'up' if f.cambio >= 0 else 'down' }}">{{ f.cambio|pct }} 24 h</span>{% endif %}</div>
         <div class="acts row" style="gap:6px">{% if f.activo != 'USD' %}<a class="btn sm" href="{{ url_for('auth.moneda', codigo=f.activo) }}#operar">Comprar</a><a class="btn sm" href="{{ url_for('auth.moneda', codigo=f.activo, lado='venta') }}#operar">Vender</a>{% else %}<a class="btn sm" href="{{ url_for('auth.mercado') }}">Comprar monedas</a><a class="btn sm" href="{{ url_for('cliente.invertir') }}">Invertir en una cartera</a>{% endif %}</div></div>
     {% else %}
       {{ vacio('cartera', 'Tu billetera está vacía. Deposita dólares para empezar.') }}

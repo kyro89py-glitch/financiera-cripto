@@ -39,7 +39,7 @@ PERMISOS = {
 TERMINOS_VERSION = 1
 
 # Rutas a las que se puede entrar aunque el usuario tenga un paso obligatorio pendiente.
-SIN_FORZAR = {"auth.clave", "auth.seguridad", "auth.salir", "cliente.condiciones", "static"}
+SIN_FORZAR = {"auth.clave", "auth.seguridad", "auth.salir", "cliente.condiciones", "static", "auth.service_worker", "auth.sin_conexion"}
 
 
 # ---------- contraseñas ----------

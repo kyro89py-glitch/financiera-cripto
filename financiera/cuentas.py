@@ -4,7 +4,9 @@ import re
 import click
 
 from . import auditoria, db, seguridad
-from .tiempo import ahora
+from datetime import timedelta
+
+from .tiempo import ahora, iso, leer
 
 EMAIL = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,190}\.[^@\s]{2,24}$")
 
@@ -70,6 +72,64 @@ def crear_cliente(datos, creador=None, ts=None):
                             {"texto": f"Dio de alta al cliente {nombre} ({documento}).", "documento": documento},
                             usuario=creador, ts=ts)
     return cid, clave
+
+
+CUESTIONARIO = [
+    ("plazo", "¿Por cuánto tiempo piensas dejar invertido tu dinero?",
+     [("1", "Menos de 1 año"), ("2", "Entre 1 y 3 años"), ("3", "Más de 3 años")]),
+    ("caida", "Si tu inversión cae un 30 % en un mes, ¿qué harías?",
+     [("1", "Vendería todo para no perder más"), ("2", "Esperaría a que se recupere"), ("3", "Aprovecharía para comprar más")]),
+    ("experiencia", "¿Cuánta experiencia tienes con criptomonedas u otras inversiones de riesgo?",
+     [("1", "Ninguna"), ("2", "Algo: invertí alguna vez"), ("3", "Bastante: invierto con frecuencia")]),
+    ("parte", "¿Qué parte de tus ahorros vas a invertir aquí?",
+     [("3", "Menos del 10 %"), ("2", "Entre el 10 % y el 30 %"), ("1", "Más del 30 %")]),
+]
+MODELO_POR_PERFIL = {"conservador": "reserva", "moderado": "equilibrio", "arriesgado": "impulso"}
+
+
+def perfil_de(respuestas):
+    """Perfil de riesgo a partir del cuestionario (4 a 12 puntos)."""
+    puntos = 0
+    for clave, _, opciones in CUESTIONARIO:
+        valor = respuestas.get(clave)
+        if valor not in {v for v, _ in opciones}:
+            raise ErrorDatos("Responde todas las preguntas del perfil de inversor.")
+        puntos += int(valor)
+    return "conservador" if puntos <= 6 else ("moderado" if puntos <= 9 else "arriesgado")
+
+
+def registrar_web(datos, ip=None, ts=None):
+    """Apertura de cuenta desde la web. La cuenta queda con la identidad sin verificar: puede depositar y ver el mercado,
+    pero no operar hasta que Cumplimiento acepte sus documentos. Devuelve el id del cliente."""
+    if datos.get("web"):  # campo trampa para robots: una persona no lo ve ni lo completa
+        raise ErrorDatos("No se pudo crear la cuenta.")
+    ts = ts or ahora()
+    hace_1h = iso(leer(ts) - timedelta(hours=1))
+    if ip and db.uno("SELECT COUNT(*) AS n FROM bitacora WHERE accion = 'cliente.registro_web' AND ip = ? AND ts > ?", (ip, hace_1h))["n"] >= 5:
+        raise ErrorDatos("Se crearon demasiadas cuentas desde esta conexión. Vuelve a intentarlo en una hora.")
+    if datos.get("acepto") != "si":
+        raise ErrorDatos("Para abrir la cuenta tienes que aceptar las condiciones y el aviso de riesgos.")
+    if datos.get("clave") != datos.get("clave2"):
+        raise ErrorDatos("Las contraseñas no coinciden.")
+    error = seguridad.validar_clave_nueva(datos.get("clave") or "", datos.get("email"))
+    if error:
+        raise ErrorDatos(error)
+    perfil = perfil_de(datos)
+    cid, _ = crear_cliente({"nombre": datos.get("nombre"), "documento": datos.get("documento"), "tipo": datos.get("tipo"),
+                            "telefono": datos.get("telefono"), "email": datos.get("email"), "perfil_riesgo": perfil,
+                            "modelo": MODELO_POR_PERFIL[perfil], "clave": datos.get("clave")}, ts=ts)
+    with db.transaccion() as c:
+        c.execute("UPDATE clientes SET origen = 'web' WHERE id = ?", (cid,))
+        cli = c.execute("SELECT * FROM clientes WHERE id = ?", (cid,)).fetchone()
+        u = c.execute("SELECT * FROM usuarios WHERE id = ?", (cli["usuario_id"],)).fetchone()
+        aceptar_terminos(u, ts=ts)
+        auditoria.registrar("cliente.registro_web", f"cliente:{cid}",
+                            {"texto": f"{cli['nombre']} ({cli['documento']}) abrió su cuenta en línea con perfil {perfil}.",
+                             "perfil": perfil}, usuario=u, ts=ts)
+        from . import notificaciones
+        notificaciones.notificar_rol(("cumplimiento", "admin"), f"Nueva cuenta abierta en línea: {cli['nombre']}. Revisa su legajo "
+                                     "cuando suba los documentos.", f"/equipo/clientes/{cid}", ts=ts)
+    return cid
 
 
 @click.command("crear-admin")

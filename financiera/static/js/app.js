@@ -41,6 +41,36 @@
   }
   if (vivos) setInterval(refrescar, 20000);
 
+  // ---- app instalable ----
+  if ("serviceWorker" in navigator && location.protocol === "https:") {
+    window.addEventListener("load", function () { navigator.serviceWorker.register("/sw.js").catch(function () {}); });
+  }
+
+  // ---- enviar a otro cliente ----
+  (function () {
+    var f = document.getElementById("datos-enviar"); if (!f) return;
+    var d = JSON.parse(f.textContent), form = document.querySelector("form.enviar");
+    var activo = form.querySelector("[name=activo]"), monto = form.querySelector("[name=monto]"), todo = form.querySelector("[name=todo]");
+    var tengo = form.querySelector("[data-tengo]"), destino = form.querySelector("[name=destino]"), info = document.getElementById("destino-info");
+    function n2(n) { var p = n.toFixed(2).split("."); return p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "," + p[1]; }
+    function pintar() { tengo.textContent = "US$ " + n2((d.tengo[activo.value] || 0) / 100); }
+    activo.addEventListener("change", function () { todo.value = ""; pintar(); });
+    monto.addEventListener("input", function () { todo.value = ""; });
+    form.querySelector("[data-todo]").addEventListener("click", function () { monto.value = n2((d.tengo[activo.value] || 0) / 100); todo.value = "si"; });
+    var reloj, ultimo = "";
+    function consultar() {
+      var q = destino.value.trim(); if (q === ultimo) return; ultimo = q;
+      if (q.length < 5) { info.textContent = ""; info.className = "small"; return; }
+      fetch("/cliente/enviar/destinatario?q=" + encodeURIComponent(q), { credentials: "same-origin" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) { if (!j || destino.value.trim() !== q) return; info.textContent = j.texto; info.className = "small " + (j.ok ? "up" : "down"); })
+        .catch(function () {});
+    }
+    destino.addEventListener("input", function () { clearTimeout(reloj); reloj = setTimeout(consultar, 450); });
+    destino.addEventListener("blur", consultar);
+    pintar(); if (destino.value) consultar();
+  })();
+
   // ---- convertir ----
   (function () {
     var f = document.getElementById("datos-convertir"); if (!f) return;

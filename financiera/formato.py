@@ -26,6 +26,7 @@ PERFILES = {"conservador": "Conservador", "moderado": "Moderado", "arriesgado": 
 TIPOS_OP = {"aporte": "Aporte", "retiro": "Retiro", "comision": "Comisión de gestión", "compra": "Compra", "venta": "Venta"}
 
 ICONOS = {
+    "enviar": '<path d="M4 12l16-8-6 16-2.5-6.5z"/><path d="M11.5 13.5L20 4"/>',
     "mercado": '<path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-7"/>',
     "billetera": '<path d="M4 7a2 2 0 0 1 2-2h11v4M4 7v10a2 2 0 0 0 2 2h13a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1H6a2 2 0 0 1-2-2z"/><circle cx="16" cy="14" r="1.2"/>',
     "estrella": '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.8-5.2 2.8 1-5.8-4.3-4.1 5.9-.9z"/>',
@@ -63,7 +64,7 @@ NAV = {
 ACTIVO = {  # qué rutas marcan cada pestaña como activa
     "cliente.movimientos": ("cliente.movimientos", "cliente.estado_mensual"),
     "auth.mercado": ("auth.mercado", "auth.moneda"),
-    "cliente.cartera": ("cliente.cartera", "cliente.invertir", "cliente.convertir"),
+    "cliente.cartera": ("cliente.cartera", "cliente.invertir", "cliente.convertir", "cliente.enviar"),
     "equipo.operaciones": ("equipo.operaciones", "equipo.operacion"),
     "equipo.clientes": ("equipo.clientes", "equipo.cliente", "equipo.cliente_nuevo", "equipo.estado_mensual"),
     "equipo.cumplimiento": ("equipo.cumplimiento", "equipo.bitacora", "equipo.documentos", "equipo.conciliacion"),
@@ -172,7 +173,8 @@ def init_app(app):
         """Equivalente en guaraníes de un importe en dólares, o None si no hay tipo de cambio cargado."""
         ref = guarani.referencia()
         return guarani.fmt(guarani.de_usd_cent(cent or 0, ref)) if ref else None
-    app.jinja_env.globals.update(en_gs=en_gs, cambios_pyg=guarani.cambios)
+    from .transferencias import ocultar
+    app.jinja_env.globals.update(en_gs=en_gs, cambios_pyg=guarani.cambios, ocultar=ocultar)
     app.jinja_env.globals.update(ROLES=ROLES, ESTADOS=ESTADOS, KYC=KYC, PERFILES=PERFILES, TIPOS_OP=TIPOS_OP,
                                  iniciales=iniciales, icono=icono, navegacion=navegacion, avisos_no_leidos=avisos_no_leidos, cinta=cinta,
                                  VERSION=VERSION, ahora=tiempo.ahora)

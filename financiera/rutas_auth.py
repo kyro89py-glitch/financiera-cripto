@@ -199,6 +199,46 @@ def _favoritos():
     return {f["activo"] for f in db.todos("SELECT activo FROM favoritos WHERE usuario_id = ?", (g.usuario["id"],))}
 
 
+@bp.route("/abrir-cuenta", methods=["GET", "POST"])
+def abrir_cuenta():
+    if g.get("usuario"):
+        return redirect(url_for("inicio"))
+    from . import cuentas
+    error, form = None, {}
+    if request.method == "POST":
+        form = request.form.to_dict()
+        try:
+            cuentas.registrar_web(form, ip=request.remote_addr)
+            flash("¡Tu cuenta está creada! Ingresa con tu correo y contraseña y sube tus documentos para verificar tu identidad.", "ok")
+            return redirect(url_for("auth.ingresar"))
+        except cuentas.ErrorDatos as e:
+            error = str(e)
+    form.pop("clave", None)
+    form.pop("clave2", None)
+    return render_template("auth/abrir_cuenta.html", error=error, form=form, cuestionario=cuentas.CUESTIONARIO,
+                           comision=current_app.config["COMISION_ANUAL_PCT"])
+
+
+@bp.get("/condiciones")
+def condiciones_publicas():
+    from . import seguridad as seg
+    return render_template("condiciones_publicas.html", version=seg.TERMINOS_VERSION, comision=current_app.config["COMISION_ANUAL_PCT"])
+
+
+@bp.get("/sin-conexion")
+def sin_conexion():
+    return render_template("sin_conexion.html")
+
+
+@bp.get("/sw.js")
+def service_worker():
+    resp = current_app.send_static_file("js/sw.js")
+    resp.headers["Content-Type"] = "application/javascript; charset=utf-8"
+    resp.headers["Service-Worker-Allowed"] = "/"
+    resp.headers["Cache-Control"] = "no-cache"
+    return resp
+
+
 @bp.get("/mercado")
 def mercado():
     r = seguridad.exigir_sesion()

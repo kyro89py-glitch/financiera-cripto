@@ -10,7 +10,7 @@
       <span class="p-etiqueta">Hecho en Paraguay</span>
       <h2>Compra, vende y ahorra en criptomonedas, en dólares o en guaraníes.</h2>
       <p>Una plataforma pensada para Paraguay: opera las monedas principales, programa compras automáticas y sigue tu billetera en 3D. Cada movimiento queda registrado y lo puedes ver cuando quieras.</p>
-      <div class="row"><a class="btn primary g" href="{{ url_for('auth.ingresar') }}">Ingresar</a><a class="btn g" href="#como">Cómo abrir una cuenta</a></div>
+      <div class="row"><a class="btn primary g" href="{{ url_for('auth.abrir_cuenta') }}">Abrir una cuenta gratis</a><a class="btn g" href="{{ url_for('auth.ingresar') }}">Ingresar</a></div>
       <ul class="p-datos">
         <li><b>{{ filas|length }}</b><span>monedas para operar</span></li>
         <li><b>24/7</b><span>precios actualizados</span></li>
@@ -41,14 +41,15 @@
       <article>{{ icono('cartera') }}<h4>Carteras armadas</h4><p>Si no quieres elegir moneda por moneda, invierte en una cartera diversificada según tu perfil de riesgo.</p></article>
       <article>{{ icono('campana') }}<h4>Alertas de precio</h4><p>Elige un precio y te avisamos cuando la moneda lo alcance.</p></article>
       <article>{{ icono('resumen') }}<h4>Tu billetera en 3D</h4><p>Mira cómo se reparte tu dinero con una vista 3D que puedes girar, y tu rentabilidad real comparada con Bitcoin.</p></article>
+      <article>{{ icono('enviar') }}<h4>Envíos entre clientes</h4><p>Manda dólares o criptomonedas a otro cliente con su correo o cédula: al instante y sin comisión.</p></article>
       <article>{{ icono('documento') }}<h4>Estados de cuenta</h4><p>Resumen mensual con cada compra, venta y comisión, listo para imprimir o guardar.</p></article>
     </div>
   </section>
 
   <section class="p-seccion" id="como">
-    <div class="p-cab"><h3>Cómo abrir una cuenta</h3><p>La cuenta se abre con una persona del equipo, porque verificamos la identidad de cada cliente.</p></div>
+    <div class="p-cab"><h3>Cómo abrir una cuenta</h3><p>Desde el celular y en pocos minutos. Verificamos la identidad de cada cliente antes de que opere.</p></div>
     <ol class="p-pasos">
-      <li><b>Nos contactas</b><span>Nos pasas tus datos y te creamos el acceso al portal con una contraseña temporal.</span></li>
+      <li><b>Te registras</b><span>Completas tus datos y un cuestionario corto para conocer tu perfil de inversor. <a href="{{ url_for('auth.abrir_cuenta') }}">Abrir cuenta</a></span></li>
       <li><b>Verificas tu identidad</b><span>Subes tu cédula y un comprobante de domicilio desde tu perfil. Cumplimiento los revisa.</span></li>
       <li><b>Depositas y operas</b><span>Transfieres en guaraníes o dólares y, cuando se acredita, compras, vendes o programas tu ahorro.</span></li>
     </ol>

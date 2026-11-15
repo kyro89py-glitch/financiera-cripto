@@ -17,7 +17,7 @@
     <tbody>
     {% for c in filas %}
       <tr>
-        <td><a class="fila" href="{{ url_for('equipo.cliente', cid=c.id) }}">{{ c.nombre }}</a><span class="sec">{{ c.documento }} · {{ c.email or "sin acceso al portal" }}</span></td>
+        <td><a class="fila" href="{{ url_for('equipo.cliente', cid=c.id) }}">{{ c.nombre }}</a><span class="sec">{{ c.documento }} · {{ c.email or "sin acceso al portal" }}{% if c.origen == 'web' %} · en línea{% endif %}</span></td>
         <td class="r num">{{ valores.get(c.id, 0)|usd(0) }}</td>
         <td class="full">{{ kyc(c) }}</td>
         <td class="oc">{{ modelos[c.modelo] }}</td>

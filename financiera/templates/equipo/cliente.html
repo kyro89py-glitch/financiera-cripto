@@ -2,7 +2,7 @@
 {% from "macros.html" import kyc, estado, barra, check, ph, pill, tipo_op, signo, riesgo, vacio with context %}
 {% block titulo %}{{ cli.nombre }}{% endblock %}
 {% block contenido %}
-{% call ph(cli.nombre, cli.documento ~ " · " ~ ("Empresa" if cli.tipo == 'empresa' else "Persona") ~ " · cliente desde " ~ (cli.creado|dia), volver=url_for('equipo.clientes'), volver_txt="Clientes") %}{{ kyc(cli) }}{% endcall %}
+{% call ph(cli.nombre, cli.documento ~ " · " ~ ("Empresa" if cli.tipo == 'empresa' else "Persona") ~ " · cliente desde " ~ (cli.creado|dia) ~ (" · cuenta abierta en línea" if cli.origen == 'web' else ""), volver=url_for('equipo.clientes'), volver_txt="Clientes") %}{{ kyc(cli) }}{% endcall %}
 
 <div class="kpis">
   <div class="kpi"><span class="lab">Valor actual</span><b class="num">{{ total|usd }}</b><span class="s">cartera {{ modelo.nombre }}</span></div>
@@ -31,6 +31,15 @@
       {% else %}{{ vacio('operaciones', 'Sin operaciones.') }}{% endfor %}</div>
     </section>
 
+    {% if envios %}
+    <section class="card flush">
+      <div class="ch"><h3>Envíos entre clientes</h3><span class="meta">últimos 30</span></div>
+      <div class="list">{% for t in envios %}{% set sale = t.de_cliente == cli.id %}
+        <a class="item" href="{{ url_for('equipo.cliente', cid=t.a_cliente if sale else t.de_cliente) }}"><div class="grow"><div class="t">{{ "Envió a " ~ t.a_nombre if sale else "Recibió de " ~ t.de_nombre }}</div><div class="d">{{ t.ts|fecha }}{% if t.activo != 'USD' %} · {{ t.cantidad|unidades(t.activo) }}{% endif %}{% if t.nota %} · «{{ t.nota }}»{% endif %}</div></div>
+          <div class="amt num {{ 'down' if sale else 'up' }}">{{ '−' if sale else '+' }}{{ t.valor_cent|usd }}</div></a>
+      {% endfor %}</div>
+    </section>
+    {% endif %}
     <section class="card">
       <div class="ch"><h3>Estados de cuenta</h3></div>
       <div class="chips">{% for p in periodos[:12] %}<a href="{{ url_for('equipo.estado_mensual', cid=cli.id, periodo=p) }}">{{ p|periodo }}</a>{% endfor %}</div>

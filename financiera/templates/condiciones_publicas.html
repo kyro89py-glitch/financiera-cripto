@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block titulo %}Condiciones del servicio{% endblock %}
+{% block layout %}
+<div class="registro">
+  <a class="volver" href="{{ url_for('inicio') }}">← Volver</a>
+  <h2>Condiciones del servicio y aviso de riesgos</h2>
+  <p class="muted">Versión {{ version }}.</p>
+  {% include "_texto_condiciones.html" %}
+</div>
+{% endblock %}

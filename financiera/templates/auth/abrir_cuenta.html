@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block titulo %}Abrir una cuenta{% endblock %}
+{% block layout %}
+<div class="registro">
+  <a class="volver" href="{{ url_for('inicio') }}">← Volver</a>
+  <h2>Abre tu cuenta</h2>
+  <p class="muted">Tarda unos minutos. Después subes tu cédula desde tu perfil y, cuando la verifiquemos, ya puedes operar.</p>
+  {% if error %}<div class="flash error" role="alert">{{ error }}</div>{% endif %}
+  <form class="col" method="post" action="{{ url_for('auth.abrir_cuenta') }}" autocomplete="on" style="gap:22px">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <div class="trampa" aria-hidden="true"><label>No completar<input name="web" tabindex="-1" autocomplete="off"></label></div>
+    <section class="card col">
+      <h3>1. Tus datos</h3>
+      <div class="chips moneda-sel" role="radiogroup" aria-label="Tipo de cuenta">
+        <label><input type="radio" name="tipo" value="persona" {{ 'checked' if form.tipo != 'empresa' }}><span>Persona</span></label>
+        <label><input type="radio" name="tipo" value="empresa" {{ 'checked' if form.tipo == 'empresa' }}><span>Empresa</span></label>
+      </div>
+      <div class="form">
+        <label class="field" for="nombre">Nombre completo o razón social<input id="nombre" name="nombre" required maxlength="120" value="{{ form.nombre or '' }}" autocomplete="name"></label>
+        <label class="field" for="documento">Cédula o RUC<input id="documento" name="documento" required maxlength="30" value="{{ form.documento or '' }}" placeholder="Ej.: CI 4.567.890"></label>
+        <label class="field" for="email">Correo<input id="email" name="email" type="email" required value="{{ form.email or '' }}" autocomplete="email"></label>
+        <label class="field" for="telefono">Celular<input id="telefono" name="telefono" type="tel" value="{{ form.telefono or '' }}" placeholder="Ej.: 0981 123 456" autocomplete="tel"></label>
+        <label class="field" for="clave">Contraseña<input id="clave" name="clave" type="password" required minlength="10" autocomplete="new-password"></label>
+        <label class="field" for="clave2">Repite la contraseña<input id="clave2" name="clave2" type="password" required minlength="10" autocomplete="new-password"></label>
+      </div>
+      <p class="note">Al menos 10 caracteres, con letras y números.</p>
+    </section>
+    <section class="card col">
+      <h3>2. Tu perfil de inversor</h3>
+      <p class="small muted">Con tus respuestas te asignamos un perfil de riesgo y te avisamos si eliges inversiones más riesgosas que ese perfil.</p>
+      {% for clave, pregunta, opciones in cuestionario %}
+      <fieldset class="pregunta"><legend>{{ pregunta }}</legend>
+        {% for v, t in opciones %}<label class="check"><input type="radio" name="{{ clave }}" value="{{ v }}" required {{ 'checked' if form.get(clave) == v }}><span>{{ t }}</span></label>{% endfor %}
+      </fieldset>
+      {% endfor %}
+    </section>
+    <section class="card col">
+      <h3>3. Condiciones</h3>
+      <p class="small">Invertir en criptomonedas implica riesgo: su precio puede bajar con fuerza y puedes perder parte o todo lo invertido. No son depósitos bancarios ni están garantizadas. La comisión de gestión de las carteras armadas es de {{ comision }} % anual.</p>
+      <label class="check"><input type="checkbox" name="acepto" value="si" required><span>Leí y acepto las <a href="{{ url_for('auth.condiciones_publicas') }}" target="_blank" rel="noopener">condiciones del servicio y el aviso de riesgos</a>.</span></label>
+      <button class="btn primary block" type="submit">Crear mi cuenta</button>
+      <p class="small muted" style="text-align:center">¿Ya tienes cuenta? <a href="{{ url_for('auth.ingresar') }}">Ingresa</a></p>
+    </section>
+  </form>
+</div>
+{% endblock %}

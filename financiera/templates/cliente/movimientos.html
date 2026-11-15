@@ -34,6 +34,16 @@
       </div>
     </section>
   </div>
+  <div class="col">
+  {% if envios %}
+  <section class="card flush">
+    <div class="ch"><h3>Envíos entre clientes</h3><a class="small" href="{{ url_for('cliente.enviar') }}">Enviar</a></div>
+    <div class="list">{% for t in envios[:10] %}{% set sale = t.de_cliente == g.cliente.id %}
+      <div class="item"><div class="grow"><div class="t">{{ "Enviaste a " ~ ocultar(t.a_nombre) if sale else "Recibiste de " ~ ocultar(t.de_nombre) }}</div><div class="d">{{ t.ts|fecha }}{% if t.activo != 'USD' %} · {{ t.cantidad|unidades(t.activo) }}{% endif %}{% if t.nota %} · «{{ t.nota }}»{% endif %}</div></div>
+        <div class="amt num {{ 'down' if sale else 'up' }}">{{ '−' if sale else '+' }}{{ t.valor_cent|usd }}</div></div>
+    {% endfor %}</div>
+  </section>
+  {% endif %}
   <section class="card">
     <div class="ch"><h3>Estados de cuenta</h3></div>
     <p class="small muted">Resumen mensual con el valor inicial y final, tus movimientos y el resultado. Puedes imprimirlo o guardarlo como PDF.</p>
@@ -43,5 +53,6 @@
     {% endfor %}
     </div>
   </section>
+  </div>
 </div>
 {% endblock %}

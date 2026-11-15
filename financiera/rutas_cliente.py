@@ -131,6 +131,45 @@ def convertir():
                            de=(request.values.get("de") or "USD").upper(), a=(request.values.get("a") or "BTC").upper())
 
 
+@bp.route("/enviar", methods=["GET", "POST"])
+def enviar():
+    from . import transferencias as tr
+    c = g.cliente
+    error, form = None, {}
+    if request.method == "POST":
+        form = request.form.to_dict()
+        todo = form.get("todo") == "si"
+        try:
+            monto = 0 if todo else leer_monto(form.get("monto"))
+            tr.enviar(c, form.get("destino"), form.get("activo"), monto, g.usuario, form.get("clave"), form.get("codigo"),
+                      nota=form.get("nota"), todo=todo)
+            dest = tr.buscar(form.get("destino"), c["id"])
+            flash(f"Envío hecho a {tr.ocultar(dest['nombre']).rstrip('.')}. Ya lo tiene en su billetera.", "ok")
+            return redirect(url_for("cliente.enviar"))
+        except ValueError:
+            error = "Escribe el monto en dólares, por ejemplo 50 o 50,25."
+        except tr.ErrorEnvio as e:
+            error = str(e)
+        form.pop("clave", None)
+        form.pop("codigo", None)
+    filas, _ = cartera.posiciones(c["id"])
+    return render_template("cliente/enviar.html", filas=filas, error=error, form=form, historial=tr.del_cliente(c["id"]),
+                           hoy=tr.enviado_hoy(c["id"]), limite=tr.limite_dia(), dos_pasos=bool(g.usuario["totp_secreto"]),
+                           tengo={f["activo"]: f["valor"] for f in filas})
+
+
+@bp.get("/enviar/destinatario")
+def destinatario():
+    from . import transferencias as tr
+    d = tr.buscar(request.args.get("q"), g.cliente["id"])
+    if not d:
+        return {"ok": False, "texto": "No encontramos a otro cliente con ese dato."}
+    if d["kyc_estado"] != "verificado":
+        return {"ok": False, "texto": f"{tr.ocultar(d['nombre'])} todavía no puede recibir envíos."}
+    nombre = tr.ocultar(d["nombre"])
+    return {"ok": True, "texto": f"Vas a enviar a {nombre}" + ("" if nombre.endswith(".") else ".")}
+
+
 @bp.post("/planes")
 def plan_crear():
     activo = (request.form.get("activo") or "").upper()
@@ -175,7 +214,11 @@ def ver_cartera():
     filas, total = cartera.posiciones(c["id"])
     desv, mayor = cartera.desvio(filas, total, c["modelo"]) if total else ([], 0)
     modelo = db.uno("SELECT * FROM modelos WHERE codigo = ?", (c["modelo"],))
+    costos = cartera.costos(c["id"])
+    realizado = sum(x["realizado"] for x in costos.values())
+    no_realizado = sum(f["valor"] - costos[f["activo"]]["costo"] for f in filas if f["activo"] in costos and costos[f["activo"]]["cantidad"])
     return render_template("cliente/cartera.html", filas=filas, total=total, desvio=desv, mayor_desvio=mayor, modelo=modelo,
+                           costos=costos, realizado=realizado, no_realizado=no_realizado,
                            planes=planes.del_cliente(c["id"]), frecuencias=planes.FRECUENCIAS,
                            rend=cartera.rendimiento(c["id"], total), aportado=cartera.aportado_neto(c["id"]),
                            datos3d=datos3d(filas, f"Cartera de {c['nombre'].split()[0]}"))
@@ -242,8 +285,9 @@ def movimientos():
     for o in db.todos("SELECT * FROM ordenes WHERE cliente_id = ? ORDER BY id", (c["id"],)):
         ordenes.setdefault(o["operacion_id"], []).append(o)
     modelos = {m["codigo"]: m["nombre"] for m in db.todos("SELECT codigo, nombre FROM modelos")}
+    from .transferencias import del_cliente as envios
     return render_template("cliente/movimientos.html", ops=ops, ordenes=ordenes, filtro=filtro, modelos=modelos,
-                           periodos=cartera.periodos_cliente(c))
+                           periodos=cartera.periodos_cliente(c), envios=envios(c["id"], 50))
 
 
 @bp.post("/operaciones/<int:opid>/cancelar")
@@ -277,13 +321,14 @@ def estado_cuenta():
     filas = db.todos("SELECT l.*, o.precio AS precio_orden FROM libro l LEFT JOIN ordenes o ON o.operacion_id = l.operacion_id"
                      " AND o.activo = l.activo WHERE l.cliente_id = ? ORDER BY l.ts, l.id", (c["id"],))
     nombres = {"deposito": "Depósito", "compra": "Compra", "venta": "Venta", "pago_retiro": "Pago de retiro",
-               "comision": "Comisión de gestión"}
+               "comision": "Comisión de gestión", "envio": "Envío a otro cliente", "recepcion": "Recibido de otro cliente"}
     for f in filas:
+        ref = f["operacion_id"] or (f"E{f['transferencia_id']}" if f["transferencia_id"] else "")
         if f["activo"] == "USD":
-            w.writerow([f_fecha(f["ts"]), f["operacion_id"], nombres[f["concepto"]], "USD", "", "",
+            w.writerow([f_fecha(f["ts"]), ref, nombres.get(f["concepto"], f["concepto"]), "USD", "", "",
                         fmt_num(Decimal(f["cantidad"]) / 100, 2)])
         else:
-            w.writerow([f_fecha(f["ts"]), f["operacion_id"], nombres[f["concepto"]], f["activo"],
+            w.writerow([f_fecha(f["ts"]), ref, nombres.get(f["concepto"], f["concepto"]), f["activo"],
                         fmt_num(Decimal(f["cantidad"]) / 10 ** 8, 8), f["precio_orden"] or "", ""])
     nombre = "estado-de-cuenta-" + "".join(ch for ch in c["documento"] if ch.isalnum()) + ".csv"
     return Response(buf.getvalue(), mimetype="text/csv",

@@ -196,7 +196,8 @@ def cliente(cid):
     usuarios = {u["id"]: u for u in db.todos("SELECT id, nombre FROM usuarios")}
     modelo = db.uno("SELECT * FROM modelos WHERE codigo = ?", (cli["modelo"],))
     acepto = db.uno("SELECT terminos_version, terminos_ts FROM usuarios WHERE id = ?", (cli["usuario_id"],)) if cli["usuario_id"] else None
-    return render_template("equipo/cliente.html", cli=cli, filas=filas, total=total, ops=ops, usuarios=usuarios,
+    from .transferencias import del_cliente as envios
+    return render_template("equipo/cliente.html", cli=cli, filas=filas, total=total, ops=ops, usuarios=usuarios, envios=envios(cid, 30),
                            modelo=modelo, aportado=cartera.aportado_neto(cid), legajo=documentos.legajo(cli),
                            tipos=documentos.TIPOS[cli["tipo"]], estados_doc=documentos.ESTADOS, acepto=acepto,
                            faltan=documentos.faltantes(cli), periodos=cartera.periodos_cliente(cli))

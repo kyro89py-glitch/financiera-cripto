@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block titulo %}Sin conexión{% endblock %}
+{% block layout %}
+<div class="auth auth-solo"><div class="card col" style="max-width:420px;margin:12vh auto;text-align:center;gap:14px">
+  <span class="logo" aria-hidden="true" style="margin:0 auto"></span>
+  <h2>No hay conexión</h2>
+  <p class="muted">Revisa tu internet y vuelve a intentarlo. Por seguridad, tus datos no se guardan en el teléfono.</p>
+  <a class="btn primary" href="/">Reintentar</a>
+</div></div>
+{% endblock %}

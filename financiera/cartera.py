@@ -50,9 +50,13 @@ def posiciones(cliente_id, precios=None, ten=None):
 
 
 def aportado_neto(cliente_id):
+    """Dinero neto que entró a la cuenta: depósitos menos retiros, más lo recibido de otros clientes menos lo enviado
+    (valuado en el momento de cada envío)."""
     f = db.uno("SELECT COALESCE(SUM(cantidad), 0) AS s FROM libro WHERE cliente_id = ? AND activo = 'USD'"
                " AND concepto IN ('deposito', 'pago_retiro')", (cliente_id,))
-    return f["s"]
+    t = db.uno("SELECT COALESCE(SUM(CASE WHEN a_cliente = ? THEN valor_cent ELSE -valor_cent END), 0) AS s FROM transferencias"
+               " WHERE a_cliente = ? OR de_cliente = ?", (cliente_id, cliente_id, cliente_id))
+    return f["s"] + t["s"]
 
 
 def serie_tenencias(ten, dias=7, puntos=29):
@@ -192,9 +196,16 @@ def estado_cuenta(cliente, periodo):
     aportes = sum(o["liquidado_cent"] for o in ops if o["tipo"] == "aporte")
     retiros = sum(o["liquidado_cent"] for o in ops if o["tipo"] == "retiro")
     comisiones = sum(o["liquidado_cent"] for o in ops if o["tipo"] == "comision")
-    mercado = v_fin - v_ini - aportes + retiros + comisiones
+    from .transferencias import en_periodo
+    recibido, enviado = en_periodo(cliente["id"], ini, fin)
+    mercado = v_fin - v_ini - aportes + retiros + comisiones - recibido + enviado
     return {"periodo": periodo, "inicio": ini, "fin": fin, "en_curso": en_curso, "valor_inicial": v_ini, "valor_final": v_fin,
             "aportes": aportes, "retiros": retiros, "comisiones": comisiones, "mercado": mercado, "ops": ops,
+            "recibido": recibido, "enviado": enviado,
+            "transferencias": db.todos("SELECT t.*, d.nombre AS de_nombre, a.nombre AS a_nombre FROM transferencias t"
+                                       " JOIN clientes d ON d.id = t.de_cliente JOIN clientes a ON a.id = t.a_cliente"
+                                       " WHERE (t.a_cliente = ? OR t.de_cliente = ?) AND t.ts > ? AND t.ts <= ? ORDER BY t.ts",
+                                       (cliente["id"], cliente["id"], ini, fin)),
             "ordenes": ordenes, "posiciones": filas}
 
 
@@ -232,11 +243,14 @@ def rendimiento(cliente_id, total_actual=None):
     Devuelve None si el cliente nunca invirtió."""
     filas = db.todos("SELECT tipo, liquidado_cent, resuelto_ts FROM operaciones WHERE cliente_id = ? AND estado = 'liquidada'"
                      " AND tipo IN ('aporte', 'retiro') ORDER BY resuelto_ts, id", (cliente_id,))
-    if not filas:
+    if not filas and not db.uno("SELECT 1 FROM transferencias WHERE a_cliente = ?", (cliente_id,)):
         return None
     flujos = {}
     for f in filas:
         flujos[f["resuelto_ts"]] = flujos.get(f["resuelto_ts"], 0) + (f["liquidado_cent"] if f["tipo"] == "aporte" else -f["liquidado_cent"])
+    for t in db.todos("SELECT ts, valor_cent, a_cliente FROM transferencias WHERE a_cliente = ? OR de_cliente = ?", (cliente_id, cliente_id)):
+        flujos[t["ts"]] = flujos.get(t["ts"], 0) + (t["valor_cent"] if t["a_cliente"] == cliente_id else -t["valor_cent"])
+    flujos = dict(sorted(flujos.items()))
     factor, previo = Decimal(1), 0
     for ts, neto in flujos.items():
         despues, _ = valor_en(cliente_id, ts)
@@ -270,3 +284,28 @@ def desvio(filas, total, modelo):
         out.append({"activo": a, "nombre": "Dólares sin invertir" if a == "USD" else info[a]["nombre"],
                     "color": f["color"] if f else info[a]["color"], "actual": act, "objetivo": obj, "dif": act - obj})
     return out, max((abs(x["dif"]) for x in out), default=0.0)
+
+
+def costos(cliente_id):
+    """Costo y resultado por moneda con el método de costo promedio: cada compra (y cada moneda recibida de otro
+    cliente, a su valor de ese momento) suma al costo; cada venta descarga el costo promedio y genera resultado realizado.
+    Devuelve {activo: {"costo": centavos del saldo actual, "realizado": centavos}}."""
+    eventos = []
+    for o in db.todos("SELECT activo, lado, cantidad, importe_cent, ts, id FROM ordenes WHERE cliente_id = ?", (cliente_id,)):
+        eventos.append((o["ts"], 0, o["id"], o["activo"], o["lado"], o["cantidad"], o["importe_cent"]))
+    for t in db.todos("SELECT * FROM transferencias WHERE (a_cliente = ? OR de_cliente = ?) AND activo != 'USD'", (cliente_id, cliente_id)):
+        eventos.append((t["ts"], 1, t["id"], t["activo"], "entra" if t["a_cliente"] == cliente_id else "sale", t["cantidad"], t["valor_cent"]))
+    out = {}
+    for _, _, _, activo, lado, cant, importe in sorted(eventos):
+        e = out.setdefault(activo, {"cantidad": 0, "costo": 0, "realizado": 0})
+        if lado in ("compra", "entra"):
+            e["cantidad"] += cant
+            e["costo"] += importe
+        elif e["cantidad"] > 0:
+            fr = min(1.0, cant / e["cantidad"])
+            base = round(e["costo"] * fr)
+            if lado == "venta":
+                e["realizado"] += importe - base
+            e["costo"] -= base
+            e["cantidad"] = max(0, e["cantidad"] - cant)
+    return out

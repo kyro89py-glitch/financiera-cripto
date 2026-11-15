@@ -2,6 +2,19 @@
 
 Este proyecto sigue [versionado semántico](https://semver.org/lang/es/). Las fechas son de Paraguay.
 
+## [0.8.0] - 2026-11-15
+
+### Nuevo
+- **Envíos entre clientes:** dólares o monedas a otro cliente por correo o número de cédula, al instante y sin comisión. Confirmación del destinatario con nombre parcial, contraseña (y código de dos pasos si está activo) en cada envío, límite diario configurable (`ENVIO_MAX_DIA_USD`) y aviso a Cumplimiento en envíos altos (`ENVIO_AVISO_USD`). Registros inmutables y reflejados en el libro, el estado de cuenta, la rentabilidad y el CSV.
+- **Apertura de cuenta en línea** con cuestionario de perfil de inversor, aceptación de condiciones, protección contra robots y límite de registros por conexión. La cuenta queda sin verificar hasta que Cumplimiento acepte los documentos.
+- **Resultado por moneda:** costo promedio, ganancia sin realizar y ganancia realizada en la billetera.
+- **App instalable** en el celular (manifiesto, íconos y página sin conexión). No guarda datos de la cuenta en el teléfono.
+- Condiciones del servicio públicas en `/condiciones`.
+- Migración 0006 (transferencias y libro con los conceptos de envío y recepción).
+
+### Pruebas
+- 103 pruebas automáticas.
+
 ## [0.7.0] - 2026-11-14
 
 ### Nuevo

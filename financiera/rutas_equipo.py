@@ -263,6 +263,40 @@ def bitacora():
                            texto=auditoria.texto)
 
 
+@bp.get("/reportes/criptoactivos.csv")
+@seguridad.requiere("reportes.exportar")
+def reporte_criptoactivos():
+    """Resumen anual por cliente (compras, ventas y tenencia al cierre), como base para las declaraciones informativas."""
+    try:
+        anio = int(request.args.get("anio") or ahora_dt().astimezone(zona()).year)
+    except ValueError:
+        abort(400)
+    ini, fin = f"{anio}-01-01T03:00:00Z", f"{anio + 1}-01-01T03:00:00Z"
+    corte = min(fin, iso(ahora_dt()))
+    salida = io.StringIO()
+    w = csv.writer(salida, delimiter=";")
+    w.writerow(["Año", "Cliente", "Documento", "Tipo", "Compras (USD)", "Ventas (USD)", "Cantidad de órdenes",
+                "Depósitos (USD)", "Retiros (USD)", "Tenencia al cierre (USD)", "Detalle de tenencia"])
+    for c in db.todos("SELECT * FROM clientes ORDER BY nombre"):
+        o = db.uno("SELECT COALESCE(SUM(CASE WHEN lado = 'compra' THEN importe_cent END), 0) AS compras,"
+                   " COALESCE(SUM(CASE WHEN lado = 'venta' THEN importe_cent END), 0) AS ventas, COUNT(*) AS n"
+                   " FROM ordenes WHERE cliente_id = ? AND ts >= ? AND ts < ?", (c["id"], ini, fin))
+        f = db.uno("SELECT COALESCE(SUM(CASE WHEN tipo = 'aporte' THEN liquidado_cent END), 0) AS dep,"
+                   " COALESCE(SUM(CASE WHEN tipo = 'retiro' THEN liquidado_cent END), 0) AS ret FROM operaciones"
+                   " WHERE cliente_id = ? AND estado = 'liquidada' AND resuelto_ts >= ? AND resuelto_ts < ?", (c["id"], ini, fin))
+        total, filas = cartera.valor_en(c["id"], corte)
+        if not (o["n"] or f["dep"] or f["ret"] or total):
+            continue
+        detalle = ", ".join(f"{x['activo']} {fmt_num(Decimal(x['unidades']) / (100 if x['activo'] == 'USD' else 10 ** 8), 2 if x['activo'] == 'USD' else 8)}"
+                            for x in filas)
+        w.writerow([anio, c["nombre"], c["documento"], c["tipo"]] + [fmt_num(Decimal(v) / 100, 2) for v in (o["compras"], o["ventas"])]
+                   + [o["n"]] + [fmt_num(Decimal(v) / 100, 2) for v in (f["dep"], f["ret"], total)] + [detalle])
+    auditoria.registrar("reporte.criptoactivos", "reportes", {"texto": f"Exportó el resumen anual de criptoactivos de {anio}."},
+                        usuario=g.usuario)
+    return Response("\ufeff" + salida.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition": f'attachment; filename="criptoactivos-{anio}.csv"'})
+
+
 @bp.get("/reportes/operaciones.csv")
 @seguridad.requiere("reportes.exportar")
 def reporte_operaciones():

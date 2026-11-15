@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from flask import Blueprint, Response, abort, current_app, flash, g, redirect, render_template, request, url_for
 
-from . import cartera, cuentas, db, documentos, graficos, operaciones, precios, seguridad
+from . import alertas, cartera, cuentas, db, documentos, graficos, guarani, operaciones, planes, precios, seguridad
 from .dinero import fmt_num, leer_monto
 from .formato import f_fecha
 
@@ -86,6 +86,48 @@ def operar():
     return redirect(destino)
 
 
+def _volver(activo):
+    return url_for("auth.moneda", codigo=activo) if activo.isalnum() else url_for("auth.mercado")
+
+
+@bp.post("/planes")
+def plan_crear():
+    activo = (request.form.get("activo") or "").upper()
+    try:
+        planes.crear(g.cliente, activo, leer_monto(request.form.get("monto")), request.form.get("frecuencia"), g.usuario)
+        flash("Compra automática programada. Te avisamos cada vez que se ejecute.", "ok")
+    except (ValueError, operaciones.ErrorNegocio) as e:
+        flash(str(e), "error")
+    return redirect(_volver(activo) + "#automatica")
+
+
+@bp.post("/planes/<int:pid>/cancelar")
+def plan_cancelar(pid):
+    if planes.cancelar(pid, g.cliente, g.usuario):
+        flash("Compra automática cancelada.", "ok")
+    destino = request.form.get("volver", "")
+    return redirect(destino if destino.startswith("/") and not destino.startswith("//") else url_for("cliente.cartera"))
+
+
+@bp.post("/alertas")
+def alerta_crear():
+    activo = (request.form.get("activo") or "").upper()
+    try:
+        from .dinero import leer_precio
+        vig = precios.vigentes().get(activo)
+        _, sentido = alertas.crear(g.usuario, activo, leer_precio(request.form.get("precio")), vig["precio"] if vig else None)
+        flash(f"Listo: te avisamos cuando {activo} {'suba' if sentido == 'sube' else 'baje'} a ese precio.", "ok")
+    except (ValueError, operaciones.ErrorNegocio) as e:
+        flash(str(e), "error")
+    return redirect(_volver(activo) + "#alertas")
+
+
+@bp.post("/alertas/<int:aid>/borrar")
+def alerta_borrar(aid):
+    alertas.borrar(aid, g.usuario)
+    return redirect(_volver((request.form.get("activo") or "").upper()) + "#alertas")
+
+
 @bp.get("/cartera", endpoint="cartera")
 def ver_cartera():
     c = g.cliente
@@ -93,6 +135,7 @@ def ver_cartera():
     desv, mayor = cartera.desvio(filas, total, c["modelo"]) if total else ([], 0)
     modelo = db.uno("SELECT * FROM modelos WHERE codigo = ?", (c["modelo"],))
     return render_template("cliente/cartera.html", filas=filas, total=total, desvio=desv, mayor_desvio=mayor, modelo=modelo,
+                           planes=planes.del_cliente(c["id"]), frecuencias=planes.FRECUENCIAS,
                            rend=cartera.rendimiento(c["id"], total), aportado=cartera.aportado_neto(c["id"]),
                            datos3d=datos3d(filas, f"Cartera de {c['nombre'].split()[0]}"))
 
@@ -105,9 +148,11 @@ def invertir():
     if request.method == "POST":
         form = {k: (request.form.get(k) or "").strip() for k in form}
         try:
-            monto = leer_monto(form["monto"])
+            en_gs = request.form.get("moneda") == "PYG"
+            monto = 0 if en_gs else leer_monto(form["monto"])
             opid = operaciones.solicitar_aporte(c, monto, form["modelo"], form["referencia"], g.usuario,
-                                                acepta_riesgo=form["acepta_riesgo"] == "si")
+                                                acepta_riesgo=form["acepta_riesgo"] == "si",
+                                                monto_pyg=guarani.leer(form["monto"]) if en_gs else None)
             flash(f"Solicitud de aporte #{opid} enviada. El equipo confirma la recepción del dinero y, al aprobarla, "
                   "se compra al precio de ese momento.", "ok")
             return redirect(url_for("cliente.movimientos"))
@@ -136,7 +181,7 @@ def retiro():
     c = g.cliente
     try:
         monto = leer_monto(request.form.get("monto"))
-        opid = operaciones.solicitar_retiro(c, monto, g.usuario)
+        opid = operaciones.solicitar_retiro(c, monto, g.usuario, en_guaranies=request.form.get("moneda") == "PYG")
         flash(f"Solicitud de retiro #{opid} enviada. Te avisamos cuando el equipo la apruebe.", "ok")
         return redirect(url_for("cliente.movimientos"))
     except (ValueError, operaciones.ErrorNegocio) as e:

@@ -43,6 +43,14 @@
         <button class="btn" type="submit">{{ icono('descargar') }}Descargar CSV</button>
       </form>
     </section>
+    <section class="card col">
+      <h3>Resumen anual de criptoactivos</h3>
+      <p class="small muted">Por cada cliente: compras, ventas, depósitos, retiros y tenencia al cierre del año. Sirve de base para preparar la declaración informativa de criptoactivos ante la DNIT; revísalo con tu contador antes de presentarlo.</p>
+      <form class="row" method="get" action="{{ url_for('equipo.reporte_criptoactivos') }}" style="align-items:flex-end">
+        <label class="field" for="anio">Año<input id="anio" name="anio" inputmode="numeric" pattern="\d{4}" value="{{ ahora()[:4] }}" required></label>
+        <button class="btn" type="submit">{{ icono('descargar') }}Descargar CSV</button>
+      </form>
+    </section>
     {% endif %}
   </div>
 </div>

@@ -2,6 +2,18 @@
 
 Este proyecto sigue [versionado semántico](https://semver.org/lang/es/). Las fechas son de Paraguay.
 
+## [0.6.0] - 2026-11-14
+
+### Nuevo: pensado para Paraguay
+- **Guaraníes:** Administración carga el tipo de cambio de la casa (depósitos y retiros, con margen máximo configurable). El cliente puede depositar y cobrar retiros en guaraníes; cada operación guarda los guaraníes y el tipo de cambio aplicado. Los valores principales muestran su equivalente en guaraníes.
+- **Compra automática (ahorro programado):** compra de una moneda por un monto fijo cada semana, cada 15 días o cada mes (`flask ejecutar-planes`, incluido en las tareas de Docker). Si no hay saldo, avisa y pasa a la fecha siguiente.
+- **Alertas de precio:** aviso único cuando una moneda sube o baja hasta el precio elegido.
+- **Resumen anual de criptoactivos** por cliente (compras, ventas, depósitos, retiros y tenencia al cierre), como base para las declaraciones informativas.
+- Migración 0004.
+
+### Pruebas
+- 92 pruebas automáticas.
+
 ## [0.5.0] - 2026-11-14
 
 ### Nuevo

@@ -31,7 +31,19 @@ def fuera_de_perfil(cliente, modelo):
     return modelo["riesgo"] > RIESGO_MAX.get(cliente["perfil_riesgo"], 5)
 
 
-def solicitar_aporte(cliente, monto, modelo, referencia, usuario, ts=None, acepta_riesgo=False):
+def _en_guaranies(monto_pyg, tipo):
+    """(centavos de dólar, cambio aplicado) para un depósito hecho en guaraníes."""
+    from . import guarani
+    cambio = guarani.cambios()[tipo]
+    if not cambio:
+        raise ErrorNegocio("Por ahora no hay tipo de cambio cargado para operar en guaraníes. Usa dólares o consúltanos.")
+    return guarani.a_usd_cent(monto_pyg, cambio), cambio
+
+
+def solicitar_aporte(cliente, monto, modelo, referencia, usuario, ts=None, acepta_riesgo=False, monto_pyg=None):
+    cambio_pyg = None
+    if monto_pyg:
+        monto, cambio_pyg = _en_guaranies(monto_pyg, "deposito")
     minimo = _umbral("APORTE_MINIMO_USD")
     if monto < minimo:
         raise ErrorNegocio(f"El aporte mínimo es de {fmt_usd(minimo, 0)}.")
@@ -47,10 +59,10 @@ def solicitar_aporte(cliente, monto, modelo, referencia, usuario, ts=None, acept
     ts = ts or ahora()
     with db.transaccion() as c:
         cur = c.execute(
-            "INSERT INTO operaciones (cliente_id, tipo, monto_cent, modelo, referencia, estado, creado, creado_por, fuera_perfil)"
-            " VALUES (?, 'aporte', ?, ?, ?, 'pendiente', ?, ?, ?)",
+            "INSERT INTO operaciones (cliente_id, tipo, monto_cent, modelo, referencia, estado, creado, creado_por, fuera_perfil,"
+            " monto_pyg, cambio_pyg) VALUES (?, 'aporte', ?, ?, ?, 'pendiente', ?, ?, ?, ?, ?)",
             (cliente["id"], monto, modelo, (referencia or "").strip()[:80] or None, ts, usuario["id"] if usuario else None,
-             1 if fuera else 0),
+             1 if fuera else 0, monto_pyg or None, cambio_pyg),
         )
         opid = cur.lastrowid
         extra = " Confirmó que acepta un riesgo mayor al de su perfil." if fuera else ""
@@ -117,9 +129,16 @@ def _avisar_equipo(texto, opid, usuario, ts):
                                  excepto=usuario["id"] if usuario else None, ts=ts)
 
 
-def solicitar_retiro(cliente, monto, usuario, ts=None):
+def solicitar_retiro(cliente, monto, usuario, ts=None, en_guaranies=False):
     if monto <= 0:
         raise ErrorNegocio("Escribe el monto que quieres retirar.")
+    cambio_pyg = monto_pyg = None
+    if en_guaranies:
+        from . import guarani
+        cambio_pyg = guarani.cambios()["retiro"]
+        if not cambio_pyg:
+            raise ErrorNegocio("Por ahora no hay tipo de cambio cargado para retirar en guaraníes. Elige dólares o consúltanos.")
+        monto_pyg = guarani.de_usd_cent(monto, cambio_pyg)
     ts = ts or ahora()
     with db.transaccion() as c:
         _, total = cartera.posiciones(cliente["id"])
@@ -130,8 +149,9 @@ def solicitar_retiro(cliente, monto, usuario, ts=None):
         if monto > disponible:
             raise ErrorNegocio(f"El retiro supera lo disponible en tu cartera ({fmt_usd(max(disponible, 0))}).")
         cur = c.execute(
-            "INSERT INTO operaciones (cliente_id, tipo, monto_cent, estado, creado, creado_por)"
-            " VALUES (?, 'retiro', ?, 'pendiente', ?, ?)", (cliente["id"], monto, ts, usuario["id"] if usuario else None))
+            "INSERT INTO operaciones (cliente_id, tipo, monto_cent, estado, creado, creado_por, monto_pyg, cambio_pyg)"
+            " VALUES (?, 'retiro', ?, 'pendiente', ?, ?, ?, ?)",
+            (cliente["id"], monto, ts, usuario["id"] if usuario else None, monto_pyg, cambio_pyg))
         opid = cur.lastrowid
         auditoria.registrar("operacion.solicitada", f"operacion:{opid}",
                             {"texto": f"{cliente['nombre']} solicitó un retiro de {fmt_usd(monto)}.",

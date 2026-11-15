@@ -281,11 +281,17 @@ def moneda(codigo):
     graf = stats = None
     if len(serie) >= 2:
         vals = [v for _, v in serie]
-        graf = graficos.linea(serie, 760, 300, fmt=lambda v: f_precio(Decimal(str(round(v, 6)))).replace("US$ ", ""),
+        graf = graficos.linea(serie, 760, 300, fmt=lambda v: (f"{v:,.0f}".replace(",", ".") if v >= 1000
+                                             else f_precio(Decimal(str(round(v, 6)))).replace("US$ ", "")),
                               rango_min=max(vals) * 0.004)
         stats = {"max": Decimal(str(max(vals))), "min": Decimal(str(min(vals))), "var": (vals[-1] / vals[0] - 1) * 100 if vals[0] else None}
     cli = _cliente_actual()
-    ctx = {"tengo_u": 0, "tengo_usd": 0, "caja": 0, "promedio": None, "ordenes": [], "grupos": []}
+    cli_es = bool(cli)
+    from . import alertas, planes
+    ctx = {"tengo_u": 0, "tengo_usd": 0, "caja": 0, "promedio": None, "ordenes": [], "grupos": [],
+           "planes": [], "frecuencias": planes.FRECUENCIAS, "alertas": alertas.del_usuario(g.usuario["id"], codigo) if cli_es else []}
+    if cli:
+        ctx["planes"] = planes.del_cliente(cli["id"], codigo)
     if cli:
         ten = cartera.tenencias(cli["id"])
         filas, total = cartera.posiciones(cli["id"], None, ten)

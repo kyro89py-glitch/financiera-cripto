@@ -22,6 +22,7 @@ services:
       - |
         while true; do
           flask --app financiera actualizar-precios || true
+          flask --app financiera ejecutar-planes || true
           flask --app financiera enviar-correos || true
           if [ "$$(date +%d)" = "01" ]; then flask --app financiera cobrar-comisiones || true; fi
           sleep 300

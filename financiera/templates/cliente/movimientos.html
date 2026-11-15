@@ -17,7 +17,7 @@
         <div class="item wrap">
           <div class="grow">
             <div class="t">{{ tipo_op(o) }} {{ estado(o) }}</div>
-            <div class="d">{{ o.creado|fecha }}{% if o.modelo and o.tipo == 'aporte' %} · cartera {{ modelos[o.modelo] }}{% endif %}{% if o.referencia %} · comprobante {{ o.referencia }}{% endif %}</div>
+            <div class="d">{{ o.creado|fecha }}{% if o.modelo and o.tipo == 'aporte' %} · cartera {{ modelos[o.modelo] }}{% endif %}{% if o.referencia %} · comprobante {{ o.referencia }}{% endif %}{% if o.monto_pyg %} · {{ o.monto_pyg|gs }} a {{ o.cambio_pyg|gs }} por dólar{% endif %}</div>
             {% if o.estado == 'rechazada' and o.motivo %}<div class="d down">Motivo: {{ o.motivo }}</div>{% endif %}
             {% for r in ordenes.get(o.id, []) %}<div class="d num">{{ "Compra" if r.lado == "compra" else "Venta" }} {{ r.cantidad|unidades(r.activo) }} · {{ r.precio|precio }}</div>{% endfor %}
           </div>

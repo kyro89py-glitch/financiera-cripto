@@ -10,6 +10,7 @@ from decimal import Decimal
 import click
 from flask import current_app
 
+from . import alertas, guarani, planes
 from . import comisiones, conciliacion, cuentas, db, documentos, operaciones, precios
 from .tiempo import ahora_dt, iso
 
@@ -194,6 +195,12 @@ def cmd_sembrar():
     for activo in ("BTC", "SOL", "LINK"):
         db.ejecutar("INSERT OR IGNORE INTO favoritos (usuario_id, activo, creado) VALUES (?, ?, ?)",
                     (usuario_de("lucia")["id"], activo, t(0, 9)))
+    # Paraguay: tipo de cambio de la casa, un depósito en guaraníes, una compra automática y una alerta de precio.
+    guarani.fijar(6350, 6250, equipo["admin"])
+    dep_gs = operaciones.solicitar_aporte(fila("lucia"), 0, "saldo", "TRF-552700", usuario_de("lucia"), ts=t(0, 2), monto_pyg=3_175_000)
+    operaciones.aprobar(dep_gs, op_u, ts=t(0, 1, 30), precios_usar=precios_en(t(0, 1, 30)))
+    planes.crear(fila("lucia"), "BTC", 5000, "semanal", usuario_de("lucia"), ts=t(0, 1))
+    alertas.crear(usuario_de("lucia"), "BTC", precios.vigentes()["BTC"]["precio"] * Decimal("1.05"), precios.vigentes()["BTC"]["precio"])
     try:  # comisión del mes anterior (proporcional para quien invirtió durante el mes)
         comisiones.cobrar(comisiones.periodo_anterior(), equipo["admin"], ts=t(0, 11))
     except comisiones.ErrorComision:

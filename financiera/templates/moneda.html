@@ -15,7 +15,7 @@
 <section class="hero3d">
   <div class="info">
     <div><span class="lab">Precio de {{ a.codigo }}</span>
-      <div class="big" data-px="{{ a.codigo }}">{% if vig %}{{ vig.precio|precio }}{% else %}Sin precio{% endif %}</div>
+      <div class="big" data-px="{{ a.codigo }}">{% if vig %}{{ vig.precio|precio }}{% else %}Sin precio{% endif %}</div>{% if vig and en_gs(100) %}<div class="num gs">≈ {{ en_gs((vig.precio * 100)|int) }}</div>{% endif %}
       {% if vig and vig.cambio is not none %}<div class="num {{ 'up' if vig.cambio >= 0 else 'down' }}" style="margin-top:4px"><span data-cambio="{{ a.codigo }}">{{ vig.cambio|pct }}</span> en 24 h</div>{% endif %}</div>
     <div class="stats">
       {% if stats %}
@@ -63,6 +63,35 @@
 </div>
 
 {% if cli %}
+<div class="g2">
+  <section class="card col" id="automatica">
+    <div class="ch" style="margin:0"><h3>Compra automática</h3><span class="meta">ahorro programado</span></div>
+    <p class="small muted">Compra {{ a.codigo }} por un monto fijo cada cierto tiempo, sin acordarte. Se descuenta de tu saldo en dólares; si ese día no alcanza, te avisamos y se intenta en la fecha siguiente.</p>
+    {% for p in planes %}
+    <div class="item" style="padding:10px 0"><div class="grow"><div class="t num">{{ p.monto_cent|usd }} · {{ frecuencias[p.frecuencia]|lower }}</div><div class="d">Próxima: {{ p.proxima|fecha }} · {{ p.ejecuciones }} compras hechas{% if p.ultima_nota and not p.ultima_nota.startswith('Compra') %} · último intento: {{ p.ultima_nota }}{% endif %}</div></div>
+      <form method="post" action="{{ url_for('cliente.plan_cancelar', pid=p.id) }}" data-confirmar="¿Cancelar esta compra automática?"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="volver" value="{{ request.path }}"><button class="btn sm" type="submit">Cancelar</button></form></div>
+    {% endfor %}
+    <form class="row" method="post" action="{{ url_for('cliente.plan_crear') }}" style="align-items:flex-end">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="activo" value="{{ a.codigo }}">
+      <label class="field" for="plan-monto" style="flex:1;min-width:120px">Monto en dólares<input id="plan-monto" name="monto" inputmode="decimal" autocomplete="off" placeholder="Desde 10" required></label>
+      <label class="field" for="plan-frec" style="flex:1;min-width:140px">Frecuencia<select id="plan-frec" name="frecuencia">{% for k, v in frecuencias.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></label>
+      <button class="btn primary" type="submit">Programar</button>
+    </form>
+  </section>
+  <section class="card col" id="alertas">
+    <div class="ch" style="margin:0"><h3>Alertas de precio</h3><span class="meta">te avisamos una vez</span></div>
+    <p class="small muted">Escribe un precio y te llega un aviso cuando {{ a.codigo }} lo alcance, ya sea subiendo o bajando.</p>
+    {% for x in alertas %}
+    <div class="item" style="padding:10px 0"><div class="grow"><div class="t num">{{ "Sube a" if x.sentido == 'sube' else "Baja a" }} {{ x.precio|precio }}</div><div class="d">Creada {{ x.creado|hace }}</div></div>
+      <form method="post" action="{{ url_for('cliente.alerta_borrar', aid=x.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="activo" value="{{ a.codigo }}"><button class="btn sm" type="submit">Quitar</button></form></div>
+    {% endfor %}
+    <form class="row" method="post" action="{{ url_for('cliente.alerta_crear') }}" style="align-items:flex-end">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="activo" value="{{ a.codigo }}">
+      <label class="field" for="alerta-precio" style="flex:1;min-width:140px">Avisarme cuando llegue a (US$)<input id="alerta-precio" name="precio" inputmode="decimal" autocomplete="off" required></label>
+      <button class="btn" type="submit">Crear alerta</button>
+    </form>
+  </section>
+</div>
 <section class="card flush">
   <div class="ch"><h3>Tus últimas órdenes de {{ a.codigo }}</h3><a class="small" href="{{ url_for('cliente.movimientos') }}">Todos los movimientos</a></div>
   {% if ordenes %}

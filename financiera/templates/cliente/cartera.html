@@ -10,7 +10,7 @@
 {% endcall %}
 <section class="hero3d">
   <div class="info">
-    <div><span class="lab">Valor actual</span><div class="big">{{ total|usd }}</div></div>
+    <div><span class="lab">Valor actual</span><div class="big">{{ total|usd }}</div>{% if en_gs(total) %}<div class="num gs">≈ {{ en_gs(total) }}</div>{% endif %}</div>
     <div class="stats">
       <div><span class="lab">Aportado neto</span><div class="num">{{ aportado|usd }}</div></div>
       <div><span class="lab">Resultado</span><div class="num {{ 'up' if total - aportado >= 0 else 'down' }}">{{ ("+" if total - aportado >= 0 else "") }}{{ (total - aportado)|usd }}</div></div>
@@ -47,4 +47,13 @@
     {% if desvio %}<p class="note">La marca vertical es el peso objetivo. Con el tiempo los precios mueven los pesos; tu próximo aporte se invierte con la composición objetivo.</p>{% endif %}
   </section>
 </div>
+{% if planes %}
+<section class="card flush">
+  <div class="ch"><h3>Compras automáticas</h3><span class="meta">{{ planes|length }} activas</span></div>
+  <div class="list">{% for p in planes %}
+    <div class="item"><div class="grow"><div class="t"><a class="fila" href="{{ url_for('auth.moneda', codigo=p.activo) }}#automatica">{{ p.activo }}</a> · <span class="num">{{ p.monto_cent|usd }}</span> {{ frecuencias[p.frecuencia]|lower }}</div><div class="d">Próxima: {{ p.proxima|fecha }} · {{ p.ejecuciones }} compras hechas</div></div>
+      <form method="post" action="{{ url_for('cliente.plan_cancelar', pid=p.id) }}" data-confirmar="¿Cancelar esta compra automática?"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="volver" value="{{ request.path }}"><button class="btn sm" type="submit">Cancelar</button></form></div>
+  {% endfor %}</div>
+</section>
+{% endif %}
 {% endblock %}

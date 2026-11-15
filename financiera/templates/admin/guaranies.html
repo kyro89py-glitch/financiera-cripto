@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph, vacio, tipo_op with context %}
+{% block titulo %}Guaraníes{% endblock %}
+{% block contenido %}
+{{ ph("Tipo de cambio en guaraníes", "Con estos valores los clientes depositan y retiran en guaraníes. Las carteras y las monedas se siguen valuando en dólares.") }}
+{% include "admin/_subnav.html" %}
+<div class="g2">
+  <form class="card col" method="post" action="{{ url_for('admin.guaranies') }}" style="align-self:start">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <h3>Guaraníes por cada dólar</h3>
+    <label class="field" for="deposito">Depósitos: el cliente paga<input id="deposito" name="deposito" inputmode="numeric" required value="{{ cambios.deposito or '' }}" placeholder="Ej.: 6.350"></label>
+    <label class="field" for="retiro">Retiros: el cliente recibe<input id="retiro" name="retiro" inputmode="numeric" required value="{{ cambios.retiro or '' }}" placeholder="Ej.: 6.250"></label>
+    <button class="btn primary" type="submit">Guardar tipo de cambio</button>
+    <p class="note">{% if cambios.ts %}Última actualización: {{ cambios.ts|fecha }} ({{ cambios.ts|hace }}). {% endif %}La diferencia entre ambos es el margen de cambio de la casa y no puede superar el {{ config.PYG_MARGEN_MAX_PCT }} %. Cada cambio queda en la bitácora, y cada operación guarda el tipo de cambio con el que se hizo.</p>
+  </form>
+  <section class="card flush">
+    <div class="ch"><h3>Últimas operaciones en guaraníes</h3></div>
+    <div class="list">
+    {% for o in recientes %}
+      <a class="item" href="{{ url_for('equipo.operacion', opid=o.id) }}"><div class="grow"><div class="t">{{ o.nombre }} · {{ tipo_op(o) }}</div><div class="d num">{{ o.monto_pyg|gs }} a {{ o.cambio_pyg|gs }} por dólar · {{ o.creado|fecha }}</div></div><div class="amt num">{{ o.monto_cent|usd }}</div></a>
+    {% else %}{{ vacio('billetera', 'Todavía no hubo depósitos ni retiros en guaraníes.') }}{% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}

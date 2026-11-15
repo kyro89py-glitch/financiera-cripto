@@ -67,7 +67,7 @@ ACTIVO = {  # qué rutas marcan cada pestaña como activa
     "equipo.operaciones": ("equipo.operaciones", "equipo.operacion"),
     "equipo.clientes": ("equipo.clientes", "equipo.cliente", "equipo.cliente_nuevo", "equipo.estado_mensual"),
     "equipo.cumplimiento": ("equipo.cumplimiento", "equipo.bitacora", "equipo.documentos", "equipo.conciliacion"),
-    "admin.precios": ("admin.precios", "admin.usuarios", "admin.comisiones", "admin.ejecucion"),
+    "admin.precios": ("admin.precios", "admin.usuarios", "admin.comisiones", "admin.ejecucion", "admin.guaranies"),
 }
 
 
@@ -165,6 +165,14 @@ def init_app(app):
         hace=f_hace,
     )
     app.jinja_env.filters["periodo"] = periodo_txt
+    from . import guarani
+    app.jinja_env.filters["gs"] = guarani.fmt
+
+    def en_gs(cent):
+        """Equivalente en guaraníes de un importe en dólares, o None si no hay tipo de cambio cargado."""
+        ref = guarani.referencia()
+        return guarani.fmt(guarani.de_usd_cent(cent or 0, ref)) if ref else None
+    app.jinja_env.globals.update(en_gs=en_gs, cambios_pyg=guarani.cambios)
     app.jinja_env.globals.update(ROLES=ROLES, ESTADOS=ESTADOS, KYC=KYC, PERFILES=PERFILES, TIPOS_OP=TIPOS_OP,
                                  iniciales=iniciales, icono=icono, navegacion=navegacion, avisos_no_leidos=avisos_no_leidos, cinta=cinta,
                                  VERSION=VERSION, ahora=tiempo.ahora)

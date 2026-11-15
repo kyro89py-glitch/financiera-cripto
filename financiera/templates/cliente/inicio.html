@@ -15,7 +15,7 @@
   <div class="info">
     <div>
       <span class="lab">Valor de tu cartera</span>
-      <div class="big">{{ total|usd }}</div>
+      <div class="big">{{ total|usd }}</div>{% if en_gs(total) %}<div class="num gs">≈ {{ en_gs(total) }}</div>{% endif %}
       {% if total %}
         <div class="num {{ 'up' if var7 >= 0 else 'down' }}" style="margin-top:4px">{{ ("+" if var7 >= 0 else "") }}{{ var7|usd }} ({{ (var7 / graf.inicio_valor * 100 if graf and graf.inicio_valor else 0)|pct }}) en 7 días</div>
       {% else %}

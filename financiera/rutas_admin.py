@@ -149,3 +149,18 @@ def ejecucion_ver():
                            controles=controles, saldos=saldos, libro=conciliacion.saldos_libro(), info=cartera.info_activos(),
                            incompletas=ejecucion.incompletas(), recientes=recientes, estados_tramo=ejecucion.ESTADOS_TRAMO,
                            fuente=precios.fuente())
+
+
+@bp.route("/guaranies", methods=["GET", "POST"], endpoint="guaranies")
+def guaranies():
+    from . import guarani
+    if request.method == "POST":
+        try:
+            guarani.fijar(guarani.leer(request.form.get("deposito")), guarani.leer(request.form.get("retiro")), g.usuario)
+            flash("Tipo de cambio actualizado.", "ok")
+            return redirect(url_for("admin.guaranies"))
+        except (ValueError, guarani.ErrorCambio) as e:
+            flash(str(e), "error")
+    recientes = db.todos("SELECT o.*, c.nombre FROM operaciones o JOIN clientes c ON c.id = o.cliente_id WHERE o.cambio_pyg IS NOT NULL"
+                         " ORDER BY o.id DESC LIMIT 15")
+    return render_template("admin/guaranies.html", cambios=guarani.cambios(), recientes=recientes)

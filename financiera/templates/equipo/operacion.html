@@ -16,6 +16,7 @@
       <div class="list">
         <a class="item" href="{{ url_for('equipo.cliente', cid=cli.id) }}"><span class="avatar" aria-hidden="true">{{ iniciales(cli.nombre) }}</span><div class="grow"><div class="t">{{ cli.nombre }}</div><div class="d">{{ cli.documento }} · perfil {{ PERFILES[cli.perfil_riesgo]|lower }} · valor actual {{ valor|usd }}</div></div>{{ kyc(cli) }}</a>
         {% if modelo %}<div class="item">{{ icono('cartera') }}<div class="grow"><div class="t">Cartera {{ modelo.nombre }}</div><div class="d">{{ modelo.descripcion }}</div></div>{{ riesgo(modelo.riesgo) }}</div>{% endif %}
+        {% if op.cambio_pyg %}<div class="item">{{ icono('billetera') }}<div class="grow"><div class="t">{{ "Depósito" if op.tipo == 'aporte' else "Pago" }} en guaraníes</div><div class="d num">{{ op.monto_pyg|gs }} a {{ op.cambio_pyg|gs }} por dólar{% if op.tipo == 'retiro' %} · se paga en guaraníes al tipo de cambio de la solicitud{% endif %}</div></div></div>{% endif %}
         {% if op.referencia %}<div class="item">{{ icono('documento') }}<div class="grow"><div class="t">Comprobante</div><div class="d num">{{ op.referencia }}</div></div><button class="btn sm" type="button" data-copiar="{{ op.referencia }}">Copiar</button></div>{% endif %}
         {% if op.motivo %}<div class="item">{{ icono('cumplimiento') }}<div class="grow"><div class="t">Motivo del rechazo</div><div class="d">{{ op.motivo }}</div></div></div>{% endif %}
       </div>

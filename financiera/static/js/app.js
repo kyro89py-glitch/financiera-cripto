@@ -108,7 +108,12 @@
   }
   var riesgo = document.getElementById("confirmar-riesgo");
   function render() {
-    var m = leer(monto.value), sel = document.querySelector("input[name=modelo]:checked");
+    var gs = document.querySelector("input[name=moneda][value=PYG]"), enGs = !!gs && gs.checked, cd = document.getElementById("cambio-dep");
+    var rot = document.getElementById("rotulo-monto");
+    if (rot) rot.textContent = enGs ? "Monto en guaraníes" : "Monto en dólares";
+    monto.setAttribute("inputmode", enGs ? "numeric" : "decimal");
+    var m = enGs ? Math.floor(parseInt(String(monto.value).replace(/[^0-9]/g, "") || "0", 10) * 100 / +cd.getAttribute("data-cambio")) : leer(monto.value);
+    var sel = document.querySelector("input[name=modelo]:checked");
     if (riesgo) {
       var fuera = !!sel && (d.fuera || []).indexOf(sel.value) >= 0;
       riesgo.hidden = !fuera;
@@ -118,6 +123,7 @@
     }
     document.querySelectorAll("[data-monto]").forEach(function (b) { b.setAttribute("aria-pressed", String(Math.round(+b.getAttribute("data-monto") * 100) === m)); });
     prev.textContent = "";
+    if (enGs && m > 0) { var pg = document.createElement("p"); pg.className = "small"; pg.textContent = "Se acreditan " + usd(m) + "."; prev.appendChild(pg); }
     if (!sel) return;
     if (sel.value === "saldo") {
       var ps = document.createElement("p"); ps.className = "small muted";
@@ -137,6 +143,7 @@
     caja.appendChild(lista); prev.appendChild(caja);
   }
   monto.addEventListener("input", render);
+  document.querySelectorAll("input[name=moneda]").forEach(function (r) { r.addEventListener("change", render); });
   document.querySelectorAll("input[name=modelo]").forEach(function (r) { r.addEventListener("change", render); });
   document.querySelectorAll("[data-monto]").forEach(function (b) { b.addEventListener("click", function () { monto.value = num(+b.getAttribute("data-monto"), 0); render(); }); });
   render();

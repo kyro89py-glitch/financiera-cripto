@@ -54,6 +54,7 @@ def actualizar_manual(activo, precio, usuario):
         auditoria.registrar("precio.manual", f"activo:{activo}",
                             {"texto": f"Cargó a mano el precio de {activo}: {fmt_precio(precio)}.", "precio": str(precio)},
                             usuario=usuario)
+    _alertas()
 
 
 def actualizar_coingecko(usuario=None):
@@ -85,6 +86,7 @@ def actualizar_coingecko(usuario=None):
             raise ErrorPrecio("CoinGecko no devolvió precios.")
         auditoria.registrar("precio.coingecko", "precios",
                             {"texto": f"Actualizó {n} precios desde CoinGecko.", "activos": n}, usuario=usuario, ts=ts)
+    _alertas()
     return n
 
 
@@ -104,6 +106,7 @@ def actualizar_binance(usuario=None):
             registrar(a, precio, cambio.quantize(Decimal("0.0001")), "Binance", ts)
         auditoria.registrar("precio.binance", "precios", {"texto": f"Actualizó {len(datos)} precios desde Binance.",
                                                            "activos": len(datos)}, usuario=usuario, ts=ts)
+    _alertas()
     return len(datos)
 
 
@@ -114,6 +117,14 @@ def fuente():
 def actualizar(usuario=None):
     """Actualiza desde la fuente configurada (FUENTE_PRECIOS)."""
     return actualizar_binance(usuario) if fuente() == "Binance" else actualizar_coingecko(usuario)
+
+
+def _alertas():
+    from . import alertas
+    try:
+        alertas.revisar(vigentes())
+    except Exception:  # una alerta rota no puede impedir que se actualicen los precios
+        current_app.logger.exception("No se pudieron revisar las alertas de precio")
 
 
 def antiguos(codigos=None):

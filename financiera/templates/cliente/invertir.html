@@ -37,7 +37,15 @@
 
   <section class="card col">
     <h3>2. Indica el monto del aporte</h3>
-    <label class="field" for="monto">Monto en dólares
+    {% set cg = cambios_pyg() %}
+    {% if cg.deposito %}
+    <div class="chips moneda-sel" role="radiogroup" aria-label="Moneda del depósito">
+      <label><input type="radio" name="moneda" value="USD" {{ 'checked' if request.form.get('moneda') != 'PYG' }}><span>Dólares</span></label>
+      <label><input type="radio" name="moneda" value="PYG" {{ 'checked' if request.form.get('moneda') == 'PYG' }}><span>Guaraníes</span></label>
+    </div>
+    <p class="small muted" id="cambio-dep" data-cambio="{{ cg.deposito }}">Si depositas en guaraníes, se acreditan en dólares a {{ cg.deposito|gs }} por dólar.</p>
+    {% endif %}
+    <label class="field" for="monto"><span id="rotulo-monto">Monto</span>
       <input id="monto" name="monto" inputmode="decimal" autocomplete="off" required value="{{ form.monto }}" placeholder="Mínimo {{ (config.APORTE_MINIMO_USD * 100)|usd(0) }}">
     </label>
     <div class="chips">{% for n in [100, 500, 1000, 5000] %}<button type="button" data-monto="{{ n }}" aria-pressed="false">{{ (n * 100)|usd(0) }}</button>{% endfor %}</div>
@@ -61,6 +69,7 @@
   <form class="row" method="post" action="{{ url_for('cliente.retiro') }}" data-confirmar="¿Enviar la solicitud de retiro?" style="align-items:flex-end">
     <input type="hidden" name="csrf" value="{{ csrf_token() }}">
     <label class="field" for="retiro" style="flex:1;min-width:200px">Monto a retirar en dólares<input id="retiro" name="monto" inputmode="decimal" autocomplete="off" required></label>
+    {% if cg.retiro %}<label class="field" for="moneda-retiro" style="min-width:170px">Cobrar en<select id="moneda-retiro" name="moneda"><option value="USD">Dólares</option><option value="PYG">Guaraníes ({{ cg.retiro|gs }} por dólar)</option></select></label>{% endif %}
     <button class="btn" type="submit">Solicitar retiro</button>
   </form>
 </section>

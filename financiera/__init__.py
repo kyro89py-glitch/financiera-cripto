@@ -35,6 +35,7 @@ def create_app(config=None):
         UMBRAL_ORIGEN_FONDOS_USD=int(_env("UMBRAL_ORIGEN_FONDOS_USD", "10000")),
         UMBRAL_DOBLE_FIRMA_USD=int(_env("UMBRAL_DOBLE_FIRMA_USD", "25000")),
         ORDEN_MAXIMA_USD=int(_env("ORDEN_MAXIMA_USD", "25000")),
+        PYG_MARGEN_MAX_PCT=int(_env("PYG_MARGEN_MAX_PCT", "5")),
         PRECIO_MAX_MINUTOS=int(_env("PRECIO_MAX_MINUTOS", "60" if prod else "1440")),
         COINGECKO_API_KEY=_env("COINGECKO_API_KEY", ""),
         INSTRUCCIONES_DEPOSITO=_env(
@@ -94,9 +95,9 @@ def create_app(config=None):
     for bp in (bp_auth, bp_cliente, bp_equipo, bp_admin, bp_documentos):
         app.register_blueprint(bp)
 
-    from . import comisiones, demo, notificaciones
+    from . import comisiones, demo, notificaciones, planes
     for cmd in (cuentas.cmd_crear_admin, precios.cmd_actualizar, auditoria.cmd_verificar, demo.cmd_sembrar,
-                comisiones.cmd_cobrar, notificaciones.cmd_enviar):
+                comisiones.cmd_cobrar, notificaciones.cmd_enviar, planes.cmd_ejecutar):
         app.cli.add_command(cmd)
 
     with app.app_context():

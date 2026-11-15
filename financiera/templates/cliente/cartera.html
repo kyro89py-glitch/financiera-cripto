@@ -5,6 +5,7 @@
 {% block contenido %}
 {% call ph("Billetera", "Tu saldo en dólares y cada moneda que tienes. Cada punto de la vista 3D es una porción igual de tu dinero.") %}
   <a class="btn primary" href="{{ url_for('cliente.invertir') }}">Depositar</a>
+  <a class="btn" href="{{ url_for('cliente.convertir') }}">Convertir</a>
   <a class="btn" href="{{ url_for('cliente.invertir') }}#retirar">Retirar</a>
   <a class="btn" href="{{ url_for('cliente.movimientos') }}">{{ icono('documento') }}Estados de cuenta</a>
 {% endcall %}

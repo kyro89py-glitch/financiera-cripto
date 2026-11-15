@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import escena3d, linea, ph, pill, vacio with context %}
+{% from "macros.html" import escena3d, linea, velas as velas_svg, ph, pill, vacio with context %}
 {% block titulo %}{{ a.nombre }} ({{ a.codigo }}){% endblock %}
 {% block cabeza %}<script src="{{ url_for('static', filename='js/escena3d.js') }}?v={{ VERSION }}" defer></script>{% endblock %}
 {% block contenido %}
@@ -25,7 +25,7 @@
       <div><span class="lab">{{ "Tienes" if cli else "Bajo gestión" }}</span><div class="num">{{ tengo_usd|usd }}</div><span class="xs" style="opacity:.7">{{ tengo_u|unidades(a.codigo) }}</span></div>
       {% if promedio %}<div><span class="lab">Tu precio promedio</span><div class="num">{{ promedio|precio }}</div>{% if vig %}{% set dif = (vig.precio / promedio - 1) * 100 %}<span class="xs {{ 'up' if dif >= 0 else 'down' }}">{{ dif|pct }} frente a hoy</span>{% endif %}</div>{% endif %}
     </div>
-    {% if cli %}<div class="row"><a class="btn primary" href="#operar">Comprar</a>{% if tengo_u %}<a class="btn" href="#operar" data-lado="venta">Vender</a>{% endif %}</div>{% endif %}
+    {% if cli %}<div class="row"><a class="btn primary" href="#operar">Comprar</a>{% if tengo_u %}<a class="btn" href="#operar" data-lado="venta">Vender</a><a class="btn" href="{{ url_for('cliente.convertir', de=a.codigo, a='USDT' if a.codigo != 'USDT' else 'BTC') }}">Convertir</a>{% endif %}</div>{% endif %}
   </div>
   {{ escena3d(datos3d, heroe=true) }}
 </section>
@@ -33,8 +33,11 @@
 <div class="g2 ancho-izq">
   <section class="card">
     <div class="ch"><h3>Precio · {{ rangos[rango][1] }}{% if stats and stats.var is not none %} <span class="num small {{ 'up' if stats.var >= 0 else 'down' }}">{{ stats.var|pct }}</span>{% endif %}</h3>
-      <div class="chips">{% for k, v in rangos.items() %}<a href="{{ url_for('auth.moneda', codigo=a.codigo, r=k) }}" aria-current="{{ 'true' if rango == k else 'false' }}">{{ v[1] }}</a>{% endfor %}</div></div>
-    {% if graf %}{{ linea(graf, "Precio de " ~ a.codigo ~ " en " ~ rangos[rango][1]) }}{% else %}{{ vacio('mercado', 'Todavía no hay historial de precios para este período.') }}{% endif %}
+      <div class="chips">{% for k, v in rangos.items() %}<a href="{{ url_for('auth.moneda', codigo=a.codigo, r=k, g='velas' if modo == 'velas' else none) }}" aria-current="{{ 'true' if rango == k else 'false' }}">{{ v[1] }}</a>{% endfor %}
+        <span class="sep" aria-hidden="true"></span>
+        <a href="{{ url_for('auth.moneda', codigo=a.codigo, r=rango) }}" aria-current="{{ 'true' if modo == 'linea' else 'false' }}">Línea</a>
+        <a href="{{ url_for('auth.moneda', codigo=a.codigo, r=rango, g='velas') }}" aria-current="{{ 'true' if modo == 'velas' else 'false' }}">Velas</a></div></div>
+    {% if modo == 'velas' and velas %}{{ velas_svg(velas, "Velas de " ~ a.codigo ~ " en " ~ rangos[rango][1]) }}{% elif graf %}{{ linea(graf, "Precio de " ~ a.codigo ~ " en " ~ rangos[rango][1]) }}{% else %}{{ vacio('mercado', 'Todavía no hay historial de precios para este período.') }}{% endif %}
   </section>
 
   {% if cli %}
@@ -63,6 +66,30 @@
 </div>
 
 {% if cli %}
+<section class="card col" id="programadas">
+  <div class="ch" style="margin:0"><h3>Órdenes por precio</h3><span class="meta">límite y stop</span></div>
+  <p class="small muted">Deja programada una compra o una venta para cuando {{ a.codigo }} llegue al precio que elijas. Sirve para comprar más barato, vender con ganancia o limitar una pérdida (stop). Se ejecuta sola, a precio de mercado, y te avisamos.</p>
+  <form class="form prog" method="post" action="{{ url_for('cliente.programada_crear') }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="activo" value="{{ a.codigo }}">
+    <label class="field" for="prog-lado">Qué hacer<select id="prog-lado" name="lado"><option value="compra">Comprar</option><option value="venta" {{ 'disabled' if not tengo_u }}>Vender</option></select></label>
+    <label class="field" for="prog-precio">Cuando el precio llegue a (US$)<input id="prog-precio" name="precio" inputmode="decimal" autocomplete="off" required placeholder="{{ vig.precio|precio|replace('US$ ', '') if vig }}"></label>
+    <label class="field" for="prog-monto">Monto en dólares<input id="prog-monto" name="monto" inputmode="decimal" autocomplete="off" placeholder="Desde 10"></label>
+    <label class="check" style="align-self:end"><input type="checkbox" name="todo" value="si"><span>Vender todo lo que tenga</span></label>
+    <button class="btn primary" type="submit" style="align-self:end">Programar orden</button>
+  </form>
+  {% if programadas %}
+  <div class="tablewrap"><table class="tabla resp">
+    <thead><tr><th>Orden</th><th class="r">Precio</th><th class="r">Monto</th><th>Estado</th><th></th></tr></thead>
+    <tbody>{% for o in programadas %}<tr>
+      <td>{{ nombre_prog(o) }}<span class="sec">{{ o.creado|fecha }}{% if o.nota %} · {{ o.nota }}{% endif %}</span></td>
+      <td class="r num">{{ o.precio|precio }}</td><td class="r num">{{ "Todo" if o.todo else o.monto_cent|usd }}</td>
+      <td class="full">{{ pill(estados_prog[o.estado][0], estados_prog[o.estado][1]) }}</td>
+      <td class="r full">{% if o.estado == 'abierta' %}<form method="post" action="{{ url_for('cliente.programada_cancelar', oid=o.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="activo" value="{{ a.codigo }}"><button class="btn sm" type="submit">Cancelar</button></form>{% endif %}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  {% endif %}
+  <p class="note">La orden no reserva saldo: si al llegar el precio no tienes fondos suficientes, no se ejecuta y te avisamos. En movimientos bruscos el precio final puede ser distinto del elegido.</p>
+</section>
 <div class="g2">
   <section class="card col" id="automatica">
     <div class="ch" style="margin:0"><h3>Compra automática</h3><span class="meta">ahorro programado</span></div>

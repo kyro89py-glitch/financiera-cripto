@@ -100,3 +100,12 @@
 {% if rend.btc is not none %}<div><span class="lab">Bitcoin, mismo período</span><div class="num {{ 'up' if rend.btc >= 0 else 'down' }}">{{ rend.btc|pct }}</div><span class="xs" style="opacity:.7">referencia</span></div>{% endif %}
 {% endif %}
 {%- endmacro %}
+
+
+{% macro velas(g, etiqueta="Gráfico de velas") -%}
+<svg class="chart" viewBox="0 0 {{ g.ancho }} {{ g.alto }}" role="img" aria-label="{{ etiqueta }}">
+  {% for m in g.marcas %}<line class="grid" x1="{{ g.izq }}" x2="{{ g.der }}" y1="{{ '%.1f'|format(m.y) }}" y2="{{ '%.1f'|format(m.y) }}"/><text class="eje" x="{{ g.izq - 8 }}" y="{{ '%.1f'|format(m.y + 3.5) }}" text-anchor="end">{{ m.texto }}</text>{% endfor %}
+  {% for v in g.velas %}<g fill="{{ 'var(--up)' if v.sube else 'var(--down)' }}" stroke="{{ 'var(--up)' if v.sube else 'var(--down)' }}"><line x1="{{ '%.1f'|format(v.cx) }}" x2="{{ '%.1f'|format(v.cx) }}" y1="{{ '%.1f'|format(v.y1) }}" y2="{{ '%.1f'|format(v.y2) }}" stroke-width="1.2"/><rect x="{{ '%.1f'|format(v.x) }}" y="{{ '%.1f'|format(v.y) }}" width="{{ '%.1f'|format(v.w) }}" height="{{ '%.1f'|format(v.h) }}" rx="1" stroke="none"/></g>{% endfor %}
+  {% for e in g.etiquetas %}<text class="eje" x="{{ '%.1f'|format(e.x) }}" y="{{ g.alto - 6 }}" text-anchor="{{ e.ancla }}">{{ e.texto }}</text>{% endfor %}
+</svg>
+{%- endmacro %}

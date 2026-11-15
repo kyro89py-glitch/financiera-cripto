@@ -120,9 +120,11 @@ def actualizar(usuario=None):
 
 
 def _alertas():
-    from . import alertas
+    from . import alertas, programadas
     try:
-        alertas.revisar(vigentes())
+        v = vigentes()
+        programadas.revisar(v)
+        alertas.revisar(v)
     except Exception:  # una alerta rota no puede impedir que se actualicen los precios
         current_app.logger.exception("No se pudieron revisar las alertas de precio")
 

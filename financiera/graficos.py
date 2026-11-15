@@ -114,3 +114,52 @@ def chispa(valores, ancho=120, alto=34):
     linea_ = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
     return {"ancho": ancho, "alto": alto, "puntos": linea_, "area": f"2,{alto} {linea_} {ancho - 2},{alto}",
             "sube": valores[-1] >= valores[0], "fin": pts[-1]}
+
+
+def velas(serie, ancho=760, alto=300, n=42, fmt=None):
+    """Gráfico de velas. serie: [(ts_iso, valor)] ordenada. Agrupa en n tramos iguales de tiempo y calcula apertura,
+    máximo, mínimo y cierre de cada uno. Devuelve None si no hay datos suficientes."""
+    from .tiempo import leer
+    if len(serie) < 4:
+        return None
+    t0, t1 = leer(serie[0][0]).timestamp(), leer(serie[-1][0]).timestamp()
+    if t1 <= t0:
+        return None
+    n = max(4, min(n, len(serie) // 2))
+    grupos = [[] for _ in range(n)]
+    for ts, v in serie:
+        k = min(n - 1, int((leer(ts).timestamp() - t0) / (t1 - t0) * n))
+        grupos[k].append(v)
+    ohlc, previo = [], None
+    for g_ in grupos:
+        if not g_:
+            ohlc.append(None)
+            continue
+        ap = previo if previo is not None else g_[0]
+        ohlc.append((ap, max(g_ + [ap]), min(g_ + [ap]), g_[-1]))
+        previo = g_[-1]
+    vals = [x for o in ohlc if o for x in (o[1], o[2])]
+    mn, mx = min(vals), max(vals)
+    paso = _paso_bonito(max(mx - mn, mx * 0.004) * 1.2, 4)
+    lo, hi = max(0, math.floor(mn / paso) * paso), math.ceil(mx / paso) * paso
+    izq, der, arr, aba = 56, 8, 10, 26
+    w, h = ancho - izq - der, alto - arr - aba
+    y = lambda v: arr + (1 - (v - lo) / (hi - lo)) * h  # noqa: E731
+    paso_x = w / n
+    cuerpo = max(2.0, paso_x * 0.62)
+    out = []
+    for i, o in enumerate(ohlc):
+        if not o:
+            continue
+        ap, ma, mi, ci = o
+        cx = izq + paso_x * (i + 0.5)
+        ya, yc = y(ap), y(ci)
+        out.append({"x": cx - cuerpo / 2, "w": cuerpo, "cx": cx, "y": min(ya, yc), "h": max(1.2, abs(ya - yc)), "y1": y(ma), "y2": y(mi),
+                    "sube": ci >= ap})
+    marcas, v = [], lo
+    while v <= hi + paso / 1000:
+        marcas.append({"y": y(v), "texto": fmt(v) if fmt else _corto(v, paso, hi)})
+        v += paso
+    etiquetas = [{"x": izq + w * f, "texto": f_fecha(serie[int(f * (len(serie) - 1))][0], False), "ancla": a}
+                 for f, a in ((0, "start"), (0.5, "middle"), (1, "end"))]
+    return {"ancho": ancho, "alto": alto, "velas": out, "marcas": marcas, "etiquetas": etiquetas, "izq": izq, "der": ancho - der}

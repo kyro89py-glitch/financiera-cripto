@@ -124,6 +124,28 @@ def operar(cliente, activo, lado, monto_cent, usuario, todo=False, ts=None, prec
     return op["id"], resultado
 
 
+def convertir(cliente, de, a, monto_cent, usuario, todo=False, ts=None, precios_usar=None):
+    """Convierte una moneda en otra en un paso: vende `de` y compra `a` con lo obtenido. Con USD de un lado es una compra
+    o una venta simple. Devuelve un texto con el resultado."""
+    if de == a:
+        raise ErrorNegocio("Elige dos monedas distintas.")
+    if de == "USD":
+        operar(cliente, a, "compra", monto_cent, usuario, ts=ts, precios_usar=precios_usar)
+        return f"Compraste {a} por {fmt_usd(monto_cent)}."
+    opid, r = operar(cliente, de, "venta", monto_cent, usuario, todo=todo, ts=ts, precios_usar=precios_usar)
+    if r != "liquidada":
+        raise ErrorNegocio(f"La venta de {de} quedó en proceso; la conversión continúa cuando el equipo la complete.")
+    obtenido = db.uno("SELECT liquidado_cent FROM operaciones WHERE id = ?", (opid,))["liquidado_cent"]
+    if a == "USD":
+        return f"Vendiste {de} y recibiste {fmt_usd(obtenido)} en tu saldo."
+    try:
+        operar(cliente, a, "compra", obtenido, usuario, ts=ts, precios_usar=precios_usar)
+    except ErrorNegocio as e:
+        raise ErrorNegocio(f"Se vendió {de} por {fmt_usd(obtenido)}, pero no se pudo comprar {a}: {e} "
+                           "El dinero quedó en tu saldo en dólares.") from None
+    return f"Convertiste {fmt_usd(obtenido)} de {de} a {a}."
+
+
 def _avisar_equipo(texto, opid, usuario, ts):
     notificaciones.notificar_rol(("operador", "admin"), texto, f"/equipo/operaciones/{opid}",
                                  excepto=usuario["id"] if usuario else None, ts=ts)

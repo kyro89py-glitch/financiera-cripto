@@ -278,7 +278,11 @@ def moneda(codigo):
     serie = [(ts, float(p)) for ts, p in hist]
     if vig:
         serie.append((ahora(), float(vig["precio"])))
-    graf = stats = None
+    graf = stats = velas = None
+    modo = "velas" if request.args.get("g") == "velas" else "linea"
+    fmt_eje = lambda v: (f"{v:,.0f}".replace(",", ".") if v >= 1000 else f_precio(Decimal(str(round(v, 6)))).replace("US$ ", ""))  # noqa: E731
+    if modo == "velas":
+        velas = graficos.velas(serie, 760, 300, fmt=fmt_eje)
     if len(serie) >= 2:
         vals = [v for _, v in serie]
         graf = graficos.linea(serie, 760, 300, fmt=lambda v: (f"{v:,.0f}".replace(",", ".") if v >= 1000
@@ -289,9 +293,12 @@ def moneda(codigo):
     cli_es = bool(cli)
     from . import alertas, planes
     ctx = {"tengo_u": 0, "tengo_usd": 0, "caja": 0, "promedio": None, "ordenes": [], "grupos": [],
-           "planes": [], "frecuencias": planes.FRECUENCIAS, "alertas": alertas.del_usuario(g.usuario["id"], codigo) if cli_es else []}
+           "planes": [], "programadas": [], "frecuencias": planes.FRECUENCIAS, "alertas": alertas.del_usuario(g.usuario["id"], codigo) if cli_es else []}
     if cli:
+        from . import programadas
         ctx["planes"] = planes.del_cliente(cli["id"], codigo)
+        ctx["programadas"] = programadas.del_cliente(cli["id"], codigo, solo_abiertas=False, limite=8)
+        ctx["nombre_prog"], ctx["estados_prog"] = programadas.nombre, programadas.ESTADOS
     if cli:
         ten = cartera.tenencias(cli["id"])
         filas, total = cartera.posiciones(cli["id"], None, ten)
@@ -315,7 +322,7 @@ def moneda(codigo):
                                        {"label": "Resto bajo gestión", "value": resto, "col": "#4A5878"}) if g_["value"] > 0]
     if not ctx["grupos"]:
         ctx["grupos"] = [{"label": codigo, "value": 100000, "col": a["color"]}]
-    return render_template("moneda.html", a=a, vig=vig, graf=graf, stats=stats, rango=rango, rangos=RANGOS, cli=cli,
+    return render_template("moneda.html", a=a, vig=vig, graf=graf, stats=stats, velas=velas, modo=modo, rango=rango, rangos=RANGOS, cli=cli,
                            favorito=codigo in _favoritos(), datos3d={"titulo": a["nombre"], "grupos": ctx["grupos"]},
                            maximo=current_app.config["ORDEN_MAXIMA_USD"], **ctx)
 

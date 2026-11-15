@@ -200,6 +200,10 @@ def cmd_sembrar():
     dep_gs = operaciones.solicitar_aporte(fila("lucia"), 0, "saldo", "TRF-552700", usuario_de("lucia"), ts=t(0, 2), monto_pyg=3_175_000)
     operaciones.aprobar(dep_gs, op_u, ts=t(0, 1, 30), precios_usar=precios_en(t(0, 1, 30)))
     planes.crear(fila("lucia"), "BTC", 5000, "semanal", usuario_de("lucia"), ts=t(0, 1))
+    from . import programadas
+    btc_hoy = precios.vigentes()["BTC"]["precio"]
+    programadas.crear(fila("lucia"), "BTC", "compra", (btc_hoy * Decimal("0.95")).quantize(Decimal("1")), 30000, usuario_de("lucia"), ts=t(0, 1))
+    programadas.crear(fila("lucia"), "BTC", "venta", (btc_hoy * Decimal("0.88")).quantize(Decimal("1")), 0, usuario_de("lucia"), todo=True, ts=t(0, 1))
     alertas.crear(usuario_de("lucia"), "BTC", precios.vigentes()["BTC"]["precio"] * Decimal("1.05"), precios.vigentes()["BTC"]["precio"])
     try:  # comisión del mes anterior (proporcional para quien invirtió durante el mes)
         comisiones.cobrar(comisiones.periodo_anterior(), equipo["admin"], ts=t(0, 11))

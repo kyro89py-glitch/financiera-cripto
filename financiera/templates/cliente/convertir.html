@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph with context %}
+{% block titulo %}Convertir{% endblock %}
+{% block contenido %}
+{{ ph("Convertir", "Cambia una moneda por otra en un solo paso, al precio de mercado.", volver=url_for('cliente.cartera'), volver_txt="Billetera") }}
+<form class="card col convertir" method="post" action="{{ url_for('cliente.convertir') }}" data-confirmar="¿Confirmar la conversión al precio de mercado?" style="max-width:560px">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="todo" value="">
+  <div class="caja-conv">
+    <div class="row spread small"><span class="muted">Entregas</span><span class="muted">Tienes <b class="num" data-tengo>—</b></span></div>
+    <div class="row" style="flex-wrap:nowrap">
+      <input name="monto" id="conv-monto" inputmode="decimal" autocomplete="off" placeholder="0,00" aria-label="Monto en dólares a convertir" required>
+      <select name="de" id="conv-de" aria-label="Moneda que entregas"><option value="USD" {{ 'selected' if de == 'USD' }}>USD · Dólares</option>{% for m in monedas %}<option value="{{ m.codigo }}" {{ 'selected' if de == m.codigo }}>{{ m.codigo }} · {{ m.nombre }}</option>{% endfor %}</select>
+    </div>
+    <div class="chips pcts">{% for p in (25, 50, 75, 100) %}<button type="button" data-pct="{{ p }}">{{ p }}%</button>{% endfor %}</div>
+  </div>
+  <div class="flecha-conv" aria-hidden="true">↓</div>
+  <div class="caja-conv">
+    <div class="row spread small"><span class="muted">Recibes aprox.</span></div>
+    <div class="row" style="flex-wrap:nowrap">
+      <output class="num" data-recibe>—</output>
+      <select name="a" id="conv-a" aria-label="Moneda que recibes"><option value="USD" {{ 'selected' if a == 'USD' }}>USD · Dólares</option>{% for m in monedas %}<option value="{{ m.codigo }}" {{ 'selected' if a == m.codigo }}>{{ m.codigo }} · {{ m.nombre }}</option>{% endfor %}</select>
+    </div>
+  </div>
+  <button class="btn primary block" type="submit">Convertir</button>
+  <p class="note">El monto se escribe en dólares. La conversión vende la primera moneda y compra la segunda en el momento; el resultado final puede variar levemente por el movimiento del precio.</p>
+</form>
+<script type="application/json" id="datos-convertir">{{ datos|tojson }}</script>
+{% endblock %}

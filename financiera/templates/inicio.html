@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% from "macros.html" import escena3d, chispa with context %}
+{% block titulo %}Compra, vende y ahorra en criptomonedas{% endblock %}
+{% block cabeza %}<script src="{{ url_for('static', filename='js/escena3d.js') }}?v={{ VERSION }}" defer></script>{% endblock %}
+{% block layout %}
+{% set cg = cambios_pyg() %}
+<div class="portada">
+  <section class="p-hero">
+    <div class="p-texto">
+      <span class="p-etiqueta">Hecho en Paraguay</span>
+      <h2>Compra, vende y ahorra en criptomonedas, en dólares o en guaraníes.</h2>
+      <p>Una plataforma pensada para Paraguay: opera las monedas principales, programa compras automáticas y sigue tu billetera en 3D. Cada movimiento queda registrado y lo puedes ver cuando quieras.</p>
+      <div class="row"><a class="btn primary g" href="{{ url_for('auth.ingresar') }}">Ingresar</a><a class="btn g" href="#como">Cómo abrir una cuenta</a></div>
+      <ul class="p-datos">
+        <li><b>{{ filas|length }}</b><span>monedas para operar</span></li>
+        <li><b>24/7</b><span>precios actualizados</span></li>
+        <li><b>₲ y US$</b><span>para depositar y retirar</span></li>
+      </ul>
+    </div>
+    <div class="p-escena">{{ escena3d(datos3d, decorativo=true, heroe=true, forma="orbitas") }}</div>
+  </section>
+
+  <section class="p-seccion">
+    <div class="p-cab"><h3>Mercado</h3><p>Precios de referencia de las monedas disponibles y su evolución en los últimos 7 días.</p></div>
+    <div class="p-mercado">
+      {% for m in filas %}
+      <div class="p-moneda"><div class="row" style="gap:10px;flex-wrap:nowrap"><span class="moneda-ico" style="--c:{{ m.color }}">{{ m.codigo[0] }}</span><span><b>{{ m.codigo }}</b><span class="sec">{{ m.nombre }}</span></span></div>
+        {{ chispa(m.chispa) }}
+        <div class="num"><b>{% if m.precio %}{{ m.precio|precio }}{% else %}—{% endif %}</b>{% if m.cambio is not none %}<span class="{{ 'up' if m.cambio >= 0 else 'down' }}">{{ m.cambio|pct }} 24 h</span>{% endif %}</div></div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="p-seccion">
+    <div class="p-cab"><h3>Todo lo que puedes hacer</h3><p>Las herramientas de un exchange, explicadas en simple.</p></div>
+    <div class="p-grid">
+      <article>{{ icono('mercado') }}<h4>Compra y venta al instante</h4><p>Opera cada moneda a precio de mercado desde tu saldo, con el cálculo de cuánto recibes antes de confirmar.</p></article>
+      <article>{{ icono('operaciones') }}<h4>Órdenes por precio</h4><p>Programa una compra más barata, una venta con ganancia o un stop para limitar pérdidas. Se ejecutan solas.</p></article>
+      <article>{{ icono('invertir') }}<h4>Ahorro automático</h4><p>Compra un monto fijo cada semana, cada 15 días o cada mes, sin tener que acordarte.</p></article>
+      <article>{{ icono('billetera') }}<h4>Guaraníes y dólares</h4><p>Deposita y cobra tus retiros en la moneda que prefieras{% if cg.deposito %}. Hoy: {{ cg.deposito|gs }} por dólar al depositar{% endif %}.</p></article>
+      <article>{{ icono('cartera') }}<h4>Carteras armadas</h4><p>Si no quieres elegir moneda por moneda, invierte en una cartera diversificada según tu perfil de riesgo.</p></article>
+      <article>{{ icono('campana') }}<h4>Alertas de precio</h4><p>Elige un precio y te avisamos cuando la moneda lo alcance.</p></article>
+      <article>{{ icono('resumen') }}<h4>Tu billetera en 3D</h4><p>Mira cómo se reparte tu dinero con una vista 3D que puedes girar, y tu rentabilidad real comparada con Bitcoin.</p></article>
+      <article>{{ icono('documento') }}<h4>Estados de cuenta</h4><p>Resumen mensual con cada compra, venta y comisión, listo para imprimir o guardar.</p></article>
+    </div>
+  </section>
+
+  <section class="p-seccion" id="como">
+    <div class="p-cab"><h3>Cómo abrir una cuenta</h3><p>La cuenta se abre con una persona del equipo, porque verificamos la identidad de cada cliente.</p></div>
+    <ol class="p-pasos">
+      <li><b>Nos contactas</b><span>Nos pasas tus datos y te creamos el acceso al portal con una contraseña temporal.</span></li>
+      <li><b>Verificas tu identidad</b><span>Subes tu cédula y un comprobante de domicilio desde tu perfil. Cumplimiento los revisa.</span></li>
+      <li><b>Depositas y operas</b><span>Transfieres en guaraníes o dólares y, cuando se acredita, compras, vendes o programas tu ahorro.</span></li>
+    </ol>
+  </section>
+
+  <section class="p-seccion">
+    <div class="p-cab"><h3>Controles que trae el sistema</h3></div>
+    <div class="p-grid tres">
+      <article>{{ icono('escudo') }}<h4>Acceso protegido</h4><p>Verificación en dos pasos, bloqueo ante intentos fallidos y cierre de sesión por inactividad.</p></article>
+      <article>{{ icono('cadena') }}<h4>Registro inalterable</h4><p>Cada acción queda en una bitácora encadenada que no se puede editar ni borrar.</p></article>
+      <article>{{ icono('custodia') }}<h4>Doble control y conciliación</h4><p>Los retiros altos necesitan dos firmas, y los saldos se concilian contra el banco y la custodia.</p></article>
+    </div>
+  </section>
+
+  <footer class="p-pie">
+    <p><b>Aviso de riesgo.</b> Las criptomonedas no son moneda de curso legal ni están garantizadas por el Banco Central del Paraguay. Su precio puede bajar con fuerza y puedes perder parte o todo lo invertido. Los resultados pasados no garantizan resultados futuros. Los precios mostrados son de referencia.</p>
+    <p class="small muted">{{ config.NOMBRE }} · v{{ VERSION }}</p>
+  </footer>
+</div>
+{% endblock %}

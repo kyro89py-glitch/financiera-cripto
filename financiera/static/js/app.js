@@ -41,6 +41,32 @@
   }
   if (vivos) setInterval(refrescar, 20000);
 
+  // ---- convertir ----
+  (function () {
+    var f = document.getElementById("datos-convertir"); if (!f) return;
+    var d = JSON.parse(f.textContent), form = document.querySelector("form.convertir"), monto = form.querySelector("[name=monto]");
+    var de = form.querySelector("[name=de]"), a = form.querySelector("[name=a]"), todo = form.querySelector("[name=todo]");
+    var tengo = form.querySelector("[data-tengo]"), recibe = form.querySelector("[data-recibe]");
+    function n2(n, dec) { var p = n.toFixed(dec).split("."); return p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".") + (p[1] ? "," + p[1] : ""); }
+    function leerUsd(t) { var x = String(t || "").replace(/[^0-9.,]/g, ""); if (x.indexOf(",") >= 0) x = x.replace(/\./g, "").replace(",", "."); return parseFloat(x); }
+    function tope() { return (d.tengo[de.value] || 0) / 100; }
+    function pintar() {
+      var m = leerUsd(monto.value), p = d.precios[a.value];
+      tengo.textContent = "US$ " + n2(tope(), 2);
+      if (de.value === a.value) { recibe.textContent = "Elige otra moneda"; monto.setCustomValidity("Elige dos monedas distintas."); return; }
+      monto.setCustomValidity(m > tope() + 0.005 ? "No tienes tanto " + de.value + "." : "");
+      if (!(m > 0)) recibe.textContent = "—";
+      else recibe.textContent = a.value === "USD" ? "US$ " + n2(m, 2) : (p ? n2(m / p, 8).replace(/,?0+$/, "") + " " + a.value : "—");
+    }
+    form.querySelectorAll("[data-pct]").forEach(function (b) {
+      b.addEventListener("click", function () { var pc = +b.getAttribute("data-pct"); monto.value = n2(Math.floor(tope() * pc) / 100, 2); todo.value = pc === 100 && de.value !== "USD" ? "si" : ""; pintar(); });
+    });
+    monto.addEventListener("input", function () { todo.value = ""; pintar(); });
+    de.addEventListener("change", function () { todo.value = ""; monto.value = ""; pintar(); });
+    a.addEventListener("change", pintar);
+    pintar();
+  })();
+
   // ---- panel de compra y venta ----
   (function () {
     var panel = document.getElementById("operar"); if (!panel) return;

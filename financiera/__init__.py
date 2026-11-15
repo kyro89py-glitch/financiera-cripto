@@ -107,7 +107,12 @@ def create_app(config=None):
     def inicio():
         u = g.get("usuario")
         if not u:
-            return redirect(url_for("auth.ingresar"))
+            from . import graficos
+            filas = precios.mercado()
+            for m in filas:
+                m["chispa"] = graficos.chispa(m["serie"], 150, 40)
+            grupos = [{"label": m["codigo"], "value": int(1000000 / (i + 1.4)), "col": m["color"]} for i, m in enumerate(filas)]
+            return render_template("inicio.html", filas=filas, datos3d={"titulo": "", "grupos": grupos})
         return redirect(url_for("cliente.inicio" if u["rol"] == "cliente" else "equipo.resumen"))
 
     @app.after_request

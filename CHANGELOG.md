@@ -2,6 +2,18 @@
 
 Este proyecto sigue [versionado semántico](https://semver.org/lang/es/). Las fechas son de Paraguay.
 
+## [0.7.0] - 2026-11-14
+
+### Nuevo
+- **Órdenes por precio:** compra límite, venta límite, stop (venta si baja) y compra si sube. Quedan abiertas y se ejecutan solas, a precio de mercado, cuando el precio llega al nivel elegido; no reservan saldo y avisan si no se pudieron ejecutar.
+- **Convertir:** cambio directo de una moneda por otra en un solo paso.
+- **Gráfico de velas** en la página de cada moneda, además del de línea.
+- **Portada pública** con escena 3D, mercado, funciones, pasos para abrir una cuenta y aviso de riesgo.
+- Migración 0005.
+
+### Pruebas
+- 96 pruebas automáticas.
+
 ## [0.6.0] - 2026-11-14
 
 ### Nuevo: pensado para Paraguay

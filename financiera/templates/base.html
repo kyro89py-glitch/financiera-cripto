@@ -37,6 +37,8 @@
         </form>
       </div>
     </details>
+    {% elif request.endpoint == 'inicio' %}
+    <a class="btn primary" href="{{ url_for('auth.ingresar') }}" style="margin-left:auto">Ingresar</a>
     {% endif %}
   </div>
 </header>

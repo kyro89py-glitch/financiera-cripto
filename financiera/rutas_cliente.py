@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from flask import Blueprint, Response, abort, current_app, flash, g, redirect, render_template, request, url_for
 
-from . import alertas, cartera, cuentas, db, documentos, graficos, guarani, operaciones, planes, precios, seguridad
+from . import alertas, cartera, programadas, cuentas, db, documentos, graficos, guarani, operaciones, planes, precios, seguridad
 from .dinero import fmt_num, leer_monto
 from .formato import f_fecha
 
@@ -88,6 +88,47 @@ def operar():
 
 def _volver(activo):
     return url_for("auth.moneda", codigo=activo) if activo.isalnum() else url_for("auth.mercado")
+
+
+@bp.post("/programadas")
+def programada_crear():
+    activo = (request.form.get("activo") or "").upper()
+    todo = request.form.get("todo") == "si"
+    try:
+        from .dinero import leer_precio
+        monto = 0 if todo else leer_monto(request.form.get("monto"))
+        programadas.crear(g.cliente, activo, request.form.get("lado"), leer_precio(request.form.get("precio")), monto, g.usuario, todo=todo)
+        flash("Orden programada. Se ejecuta sola cuando el precio llegue a ese nivel y te avisamos.", "ok")
+    except (ValueError, operaciones.ErrorNegocio) as e:
+        flash(str(e), "error")
+    return redirect(_volver(activo) + "#programadas")
+
+
+@bp.post("/programadas/<int:oid>/cancelar")
+def programada_cancelar(oid):
+    if programadas.cancelar(oid, g.cliente, g.usuario):
+        flash("Orden programada cancelada.", "ok")
+    return redirect(_volver((request.form.get("activo") or "").upper()) + "#programadas")
+
+
+@bp.route("/convertir", methods=["GET", "POST"])
+def convertir():
+    c = g.cliente
+    pr = precios.vigentes()
+    if request.method == "POST":
+        de, a = (request.form.get("de") or "").upper(), (request.form.get("a") or "").upper()
+        todo = request.form.get("todo") == "si" and de != "USD"
+        try:
+            monto = 0 if todo else leer_monto(request.form.get("monto"))
+            flash(operaciones.convertir(c, de, a, monto, g.usuario, todo=todo), "ok")
+            return redirect(url_for("cliente.cartera"))
+        except (ValueError, operaciones.ErrorNegocio) as e:
+            flash(str(e), "error")
+    filas, total = cartera.posiciones(c["id"], pr)
+    monedas = [{"codigo": x["codigo"], "nombre": x["nombre"], "color": x["color"]} for x in precios.activos()]
+    datos = {"precios": {k: float(v["precio"]) for k, v in pr.items()}, "tengo": {f["activo"]: f["valor"] for f in filas}}
+    return render_template("cliente/convertir.html", filas=filas, monedas=monedas, datos=datos,
+                           de=(request.values.get("de") or "USD").upper(), a=(request.values.get("a") or "BTC").upper())
 
 
 @bp.post("/planes")

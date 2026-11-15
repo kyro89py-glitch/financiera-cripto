@@ -18,6 +18,35 @@ def info_activos():
     return {a["codigo"]: a for a in db.todos("SELECT * FROM activos ORDER BY orden")}
 
 
+def bloqueado(cliente_id, excepto_programada=None, ten=None):
+    """Saldo reservado por órdenes programadas abiertas por un monto fijo: {activo: unidades}. Una compra reserva los
+    dólares; una venta, la cantidad equivalente al precio elegido. «Vender todo» no reserva: vende lo que haya."""
+    from .dinero import unidades_por
+    ten = ten if ten is not None else tenencias(cliente_id)
+    out = defaultdict(int)
+    for o in db.todos("SELECT * FROM programadas WHERE cliente_id = ? AND estado = 'abierta'", (cliente_id,)):
+        if o["id"] == excepto_programada or o["todo"]:
+            continue
+        if o["lado"] == "compra":
+            out["USD"] += o["monto_cent"]
+        else:
+            out[o["activo"]] += unidades_por(o["monto_cent"], Decimal(o["precio"]))
+    return {a: min(u, max(ten.get(a, 0), 0)) for a, u in out.items() if u}
+
+
+def disponible(cliente_id, excepto_programada=None, ten=None):
+    """Tenencias menos lo reservado: lo que se puede usar ya para comprar, vender, enviar o convertir."""
+    ten = ten if ten is not None else tenencias(cliente_id)
+    bloq = bloqueado(cliente_id, excepto_programada, ten)
+    return {a: u - bloq.get(a, 0) for a, u in ten.items()}
+
+
+def activos_en_custodia():
+    """Monedas que algún cliente tiene hoy."""
+    return [f["activo"] for f in db.todos("SELECT activo FROM libro WHERE activo != 'USD' GROUP BY activo"
+                                          " HAVING SUM(cantidad) > 0 ORDER BY activo")]
+
+
 def tenencias(cliente_id):
     filas = db.todos("SELECT activo, SUM(cantidad) AS u FROM libro WHERE cliente_id = ? GROUP BY activo", (cliente_id,))
     return {f["activo"]: f["u"] for f in filas if f["u"]}

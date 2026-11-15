@@ -2,7 +2,8 @@
 {% from "macros.html" import riesgo, ph with context %}
 {% block titulo %}Invertir{% endblock %}
 {% block contenido %}
-{{ ph("Depositar e invertir", "Elige una cartera armada por la casa o deposita en tu saldo para comprar monedas por tu cuenta. El dinero se acredita cuando el equipo confirma que lo recibió.") }}
+<a class="volver" href="{{ url_for('cliente.cartera') }}">← Billetera</a>
+{{ ph("Depositar", "Elige cómo depositar y a dónde va el dinero: una cartera armada por la casa o tu saldo para comprar monedas por tu cuenta. Se acredita cuando el equipo confirma que lo recibió.") }}
 {% if g.cliente.kyc_estado != 'verificado' %}
 <div class="flash warn">Tu identidad todavía no está verificada. Puedes enviar la solicitud, pero el equipo no podrá aprobarla hasta completar la verificación. <a href="{{ url_for('cliente.perfil') }}#legajo">Ver qué falta</a></div>
 {% endif %}
@@ -36,12 +37,23 @@
   </section>
 
   <section class="card col">
-    <h3>2. Indica el monto del aporte</h3>
+    <h3>2. Elige cómo depositar</h3>
+    <div class="metodos" role="radiogroup" aria-label="Método de depósito">
+      {% for k, t in metodos.items() %}<label class="model metodo"><input type="radio" name="metodo" value="{{ k }}"{% if form.metodo == k %} checked{% endif %}>
+        <b>{{ t }}</b><span class="small muted">{{ {'transferencia': 'En dólares o guaraníes, desde tu banco.', 'efectivo': 'En la oficina, con tu cédula.', 'usdt': 'Desde tu billetera cripto, solo por ' ~ config.DEPOSITO_USDT_RED ~ '.'}[k] }}</span></label>{% endfor %}
+    </div>
+    <div class="metodo-info" data-metodo-info="transferencia"><p class="small">{{ config.INSTRUCCIONES_DEPOSITO }}</p></div>
+    {% if 'efectivo' in metodos %}<div class="metodo-info" data-metodo-info="efectivo" hidden><p class="small">Acércate a {{ config.OFICINA_DIRECCION }} con tu cédula. Escribe el número del recibo que te entrega la caja, o déjalo vacío y lo carga el equipo.</p></div>{% endif %}
+    {% if 'usdt' in metodos %}<div class="metodo-info" data-metodo-info="usdt" hidden><p class="small">Envía solo USDT por la red {{ config.DEPOSITO_USDT_RED }} a esta dirección. Otra moneda u otra red se pierde.</p><code class="direccion">{{ config.DEPOSITO_USDT_DIRECCION }}</code></div>{% endif %}
+  </section>
+
+  <section class="card col">
+    <h3>3. Indica el monto</h3>
     {% set cg = cambios_pyg() %}
     {% if cg.deposito %}
     <div class="chips moneda-sel" role="radiogroup" aria-label="Moneda del depósito">
-      <label><input type="radio" name="moneda" value="USD" {{ 'checked' if request.form.get('moneda') != 'PYG' }}><span>Dólares</span></label>
-      <label><input type="radio" name="moneda" value="PYG" {{ 'checked' if request.form.get('moneda') == 'PYG' }}><span>Guaraníes</span></label>
+      <label><input type="radio" name="moneda" value="USD" {{ 'checked' if form.moneda != 'PYG' }}><span>Dólares</span></label>
+      <label><input type="radio" name="moneda" value="PYG" {{ 'checked' if form.moneda == 'PYG' }}><span>Guaraníes</span></label>
     </div>
     <p class="small muted" id="cambio-dep" data-cambio="{{ cg.deposito }}">Si depositas en guaraníes, se acreditan en dólares a {{ cg.deposito|gs }} por dólar.</p>
     {% endif %}
@@ -53,26 +65,25 @@
   </section>
 
   <section class="card col">
-    <h3>3. Transfiere y escribe el comprobante</h3>
-    <p class="small">{{ config.INSTRUCCIONES_DEPOSITO }}</p>
-    <label class="field" for="referencia">Número de comprobante
+    <h3>4. Comprobante</h3>
+    <label class="field" for="referencia"><span data-rotulo-ref>Número de comprobante o hash de la transacción</span>
       <input id="referencia" name="referencia" maxlength="80" autocomplete="off" value="{{ form.referencia }}" placeholder="Número de operación del banco">
     </label>
-    <button class="btn primary" type="submit">Enviar solicitud de aporte</button>
+    <button class="btn primary" type="submit" name="paso" value="revisar">Revisar depósito</button>
     <p class="note">El precio de compra es el del momento en que el equipo aprueba el aporte, que puede ser distinto del que ves ahora.</p>
   </section>
 </form>
 
-<section class="card col" id="retirar">
-  <h3>Retirar</h3>
-  <p class="small muted">Disponible: <span class="num">{{ disponible|usd }}</span>. El retiro usa primero tu saldo en dólares y luego vende una parte proporcional de cada moneda. El pago se acredita en tu cuenta bancaria registrada.</p>
-  <form class="row" method="post" action="{{ url_for('cliente.retiro') }}" data-confirmar="¿Enviar la solicitud de retiro?" style="align-items:flex-end">
-    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-    <label class="field" for="retiro" style="flex:1;min-width:200px">Monto a retirar en dólares<input id="retiro" name="monto" inputmode="decimal" autocomplete="off" required></label>
-    {% if cg.retiro %}<label class="field" for="moneda-retiro" style="min-width:170px">Cobrar en<select id="moneda-retiro" name="moneda"><option value="USD">Dólares</option><option value="PYG">Guaraníes ({{ cg.retiro|gs }} por dólar)</option></select></label>{% endif %}
-    <button class="btn" type="submit">Solicitar retiro</button>
-  </form>
-</section>
+<div class="g2">
+  <section class="card flush">
+    <div class="ch"><h3>Tus depósitos</h3><a class="small" href="{{ url_for('cliente.movimientos', ver='depositos') }}">Ver todos</a></div>
+    <div class="list">{% for o in recientes %}
+      <a class="item" href="{{ url_for('cliente.movimiento', opid=o.id) }}"><div class="grow"><div class="t">Depósito #{{ o.id }} <span class="pill {{ ESTADOS[o.estado][0] }}">{{ ESTADOS[o.estado][1] }}</span></div><div class="d">{{ o.creado|fecha }}</div></div><div class="amt num up">+{{ o.monto_cent|usd }}</div></a>
+    {% else %}<p class="small muted vacio-sm">Todavía no hiciste depósitos.</p>{% endfor %}</div>
+    <p class="small vacio-sm">¿Quieres sacar dinero? <a href="{{ url_for('cliente.retirar') }}">Ir a Retirar</a></p>
+  </section>
+  {% include "cliente/_comisiones.html" %}
+</div>
 <p class="note">Invertir en criptomonedas implica riesgo: su precio puede bajar con fuerza y puedes perder parte o todo lo invertido. El nivel de riesgo de cada cartera es una referencia, no una garantía.</p>
 <script type="application/json" id="datos-invertir">{{ datos|tojson }}</script>
 {% endblock %}

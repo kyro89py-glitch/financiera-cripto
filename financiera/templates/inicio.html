@@ -21,7 +21,7 @@
   </section>
 
   <section class="p-seccion">
-    <div class="p-cab"><h3>Mercado</h3><p>Precios de referencia de las monedas disponibles y su evolución en los últimos 7 días.</p></div>
+    <div class="p-cab"><h3>Mercado</h3><p>{{ total_monedas }} criptomonedas con precios que se actualizan cada pocos segundos. Estas son las más grandes y su evolución en los últimos 7 días.</p></div>
     <div class="p-mercado">
       {% for m in filas %}
       <div class="p-moneda"><div class="row" style="gap:10px;flex-wrap:nowrap"><span class="moneda-ico" style="--c:{{ m.color }}">{{ m.codigo[0] }}</span><span><b>{{ m.codigo }}</b><span class="sec">{{ m.nombre }}</span></span></div>
@@ -34,7 +34,8 @@
   <section class="p-seccion">
     <div class="p-cab"><h3>Todo lo que puedes hacer</h3><p>Las herramientas de un exchange, explicadas en simple.</p></div>
     <div class="p-grid">
-      <article>{{ icono('mercado') }}<h4>Compra y venta al instante</h4><p>Opera cada moneda a precio de mercado desde tu saldo, con el cálculo de cuánto recibes antes de confirmar.</p></article>
+      <article>{{ icono('trading') }}<h4>Trading en tiempo real</h4><p>Gráfico de velas de 1 minuto a 1 semana, libro de órdenes y órdenes de mercado, límite y stop, con un resumen antes de confirmar.</p></article>
+      <article>{{ icono('mercado') }}<h4>27 criptomonedas</h4><p>Bitcoin, Ethereum, dólares digitales y muchas más, con volumen, capitalización, buscador y mapa de calor del mercado.</p></article>
       <article>{{ icono('operaciones') }}<h4>Órdenes por precio</h4><p>Programa una compra más barata, una venta con ganancia o un stop para limitar pérdidas. Se ejecutan solas.</p></article>
       <article>{{ icono('invertir') }}<h4>Ahorro automático</h4><p>Compra un monto fijo cada semana, cada 15 días o cada mes, sin tener que acordarte.</p></article>
       <article>{{ icono('billetera') }}<h4>Guaraníes y dólares</h4><p>Deposita y cobra tus retiros en la moneda que prefieras{% if cg.deposito %}. Hoy: {{ cg.deposito|gs }} por dólar al depositar{% endif %}.</p></article>

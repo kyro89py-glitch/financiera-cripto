@@ -1,10 +1,7 @@
 """Envíos entre clientes, apertura de cuenta en línea, resultado por moneda y app instalable."""
-from datetime import timedelta
-
 import pytest
 
 from financiera import auditoria, cartera, cuentas, db, notificaciones, operaciones, seguridad, transferencias
-from financiera.tiempo import ahora_dt, iso
 
 from .conftest import CLAVE, cliente, legajo_completo, usuario
 

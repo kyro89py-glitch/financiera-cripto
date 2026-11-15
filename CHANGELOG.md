@@ -2,6 +2,29 @@
 
 Este proyecto sigue [versionado semántico](https://semver.org/lang/es/). Las fechas son de Paraguay.
 
+## [0.9.0] - 2026-11-15
+
+### Nuevo
+- **27 criptomonedas** (antes 7): se suman USDC, Dogecoin, Cardano, TRON, Avalanche, Shiba Inu, Polkadot, Bitcoin Cash, Litecoin, Sui, Stellar, NEAR, Aptos, Cosmos, Uniswap, Aave, Polygon, Arbitrum, Optimism y Pepe, con categorías (principales, estables, capa 1, capa 2, DeFi y memes). Administración puede suspender las compras de una moneda sin impedir que quien la tiene la venda.
+- **Precios en tiempo real:** nuevo servicio `flask precios-en-vivo` que actualiza cada `VIVO_SEGUNDOS` (3 por defecto) desde Binance o CoinGecko, y revisa en cada actualización las órdenes límite, los stops y las alertas. Las pantallas se refrescan cada 3 segundos con destello verde o rojo en cada cambio e indicador «En vivo». Para demostraciones, `FUENTE_PRECIOS=simulada` mueve los precios solos (no se permite en producción). El historial se guarda cada minuto y se poda solo (5 minutos después de un día, 1 hora después de tres, 1 día después de dos meses).
+- **Trading:** pantalla nueva con selector de pares con buscador, gráfico de velas interactivo en 1m, 15m, 1h, 4h, 1D y 1S (medias móviles de 7 y 25, volumen, cruz con apertura, máximo, mínimo y cierre), libro de órdenes con profundidad, operaciones del mercado, panel de compra y venta con órdenes de mercado, límite y stop, porcentajes del disponible y resumen antes de confirmar, y pestañas de órdenes abiertas e historial. Con Binance, velas, libro y operaciones son reales; si no, se arman con el historial propio o se simulan y la pantalla lo indica.
+- **Mercados:** volumen y capitalización de 24 h, máximo y mínimo, resumen del mercado (capitalización, volumen, dominancia de Bitcoin), monedas que más suben, bajan y se negocian, mapa de calor, buscador, categorías y orden por capitalización, volumen, variación o nombre.
+- **Saldo disponible y bloqueado:** las órdenes límite y stop por un monto fijo reservan el saldo mientras están abiertas; la billetera muestra disponible, en órdenes y en retiros.
+- **Depósitos y retiros:** método (transferencia; efectivo en la oficina y USDT solo si están configurados con `OFICINA_DIRECCION` y `DEPOSITO_USDT_DIRECCION`), tabla de comisiones, pantalla de revisión antes de confirmar y página de retiro propia.
+- **Movimientos:** una sola lista con operaciones y envíos, buscador, filtros por tipo y detalle de cada movimiento con línea de estado, órdenes ejecutadas y asientos.
+- **Seguridad del perfil:** dispositivos conectados, historial de sesiones, cerrar una sesión o todas las demás, aviso al ingresar desde un dispositivo nuevo y al cambiar la contraseña o activar dos pasos, y registro de eventos de seguridad.
+- **Privacidad:** ocultar saldos (también con el ojo de la barra superior), elegir si otros clientes pueden encontrarte para enviarte dinero y descargar una copia de tus datos.
+- **Inicio:** saldo disponible, accesos a comprar, vender, depositar, retirar y enviar, movimientos recientes, actividad del mes y mercados destacados.
+- **Navegación de cinco secciones:** Inicio, Mercados, Trading, Billetera y Perfil, abajo en el celular y al costado en la computadora.
+- Migraciones 0007 (monedas, categorías y datos de mercado) y 0008 (sesiones, privacidad y método).
+
+### Cambios
+- Los datos de demostración usan el corte de CoinGecko del 15 de noviembre de 2026 y un año de historia de precios.
+- `/mercado/precios.json` devuelve `{precios, vivo, seg, fuente}`.
+
+### Pruebas
+- 120 pruebas automáticas.
+
 ## [0.8.0] - 2026-11-15
 
 ### Nuevo

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph, estado with context %}
+{% block titulo %}Retirar{% endblock %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('cliente.cartera') }}">← Billetera</a>
+{{ ph("Retirar", "Pide el pago de una parte o de todo tu dinero. El equipo lo aprueba con dos firmas y te avisamos en cada paso.") }}
+{% if error %}<div class="flash error" role="alert">{{ error }}</div>{% endif %}
+<div class="g2">
+  <form class="card col" method="post" action="{{ url_for('cliente.retirar') }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <div class="privado"><span class="lab small muted">Disponible para retirar</span><div class="detalle-monto num">{{ disponible|usd }}</div>
+      <p class="xs muted">Valor de tu billetera {{ total|usd }}{% if pend %} · {{ pend|usd }} en retiros en curso{% endif %}{% if reservado %} · {{ reservado|usd }} reservado en órdenes{% endif %}.</p></div>
+    <fieldset class="pregunta"><legend>1. Cómo quieres cobrar</legend>
+      {% for k, t in metodos.items() %}<label class="check"><input type="radio" name="metodo" value="{{ k }}"{% if form.metodo == k %} checked{% endif %}>
+        <span><b>{{ t }}</b><br><span class="small muted">{{ "A la cuenta bancaria a tu nombre registrada en tu legajo. Suele acreditarse en 24 a 48 h hábiles." if k == 'transferencia' else "Retiras en la oficina con tu cédula: " ~ config.OFICINA_DIRECCION }}</span></span></label>{% endfor %}
+    </fieldset>
+    {% set cg = cambios_pyg() %}
+    <fieldset class="pregunta"><legend>2. Monto</legend>
+      {% if cg.retiro %}
+      <div class="chips moneda-sel" role="radiogroup" aria-label="Moneda del pago">
+        <label><input type="radio" name="moneda" value="USD"{% if form.moneda != 'PYG' %} checked{% endif %}><span>Cobrar en dólares</span></label>
+        <label><input type="radio" name="moneda" value="PYG"{% if form.moneda == 'PYG' %} checked{% endif %}><span>Cobrar en guaraníes</span></label>
+      </div>
+      <p class="small muted">En guaraníes se paga a {{ cg.retiro|gs }} por dólar.</p>
+      {% endif %}
+      <label class="field" for="monto">Monto a retirar en dólares
+        <input id="monto" name="monto" inputmode="decimal" autocomplete="off" required value="{{ form.monto }}" placeholder="0,00">
+      </label>
+    </fieldset>
+    <button class="btn primary" type="submit" name="paso" value="revisar">Revisar retiro</button>
+    <p class="note">El retiro usa primero tu saldo en dólares y luego vende una parte proporcional de cada moneda al precio del momento de la aprobación.</p>
+  </form>
+  <div class="col">
+    <section class="card flush">
+      <div class="ch"><h3>Tus retiros</h3><a class="small" href="{{ url_for('cliente.movimientos', ver='retiros') }}">Ver todos</a></div>
+      <div class="list">{% for o in recientes %}
+        <a class="item" href="{{ url_for('cliente.movimiento', opid=o.id) }}"><div class="grow"><div class="t">Retiro #{{ o.id }} {{ estado(o) }}</div><div class="d">{{ o.creado|fecha }}</div></div><div class="amt num down">−{{ o.monto_cent|usd }}</div></a>
+      {% else %}<p class="small muted vacio-sm">Todavía no pediste retiros.</p>{% endfor %}</div>
+    </section>
+    {% include "cliente/_comisiones.html" %}
+  </div>
+</div>
+{% endblock %}

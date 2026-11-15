@@ -1,0 +1,13 @@
+<section class="card">
+  <div class="ch"><h3>Comisiones</h3></div>
+  <dl class="detalle">
+    <div><dt>Depósitos</dt><dd>Sin comisión de la casa</dd></div>
+    <div><dt>Retiros</dt><dd>Sin comisión de la casa</dd></div>
+    {% if comisiones.cambios.deposito %}<div><dt>Guaraníes al depositar</dt><dd class="num">{{ comisiones.cambios.deposito|gs }} por dólar</dd></div>{% endif %}
+    {% if comisiones.cambios.retiro %}<div><dt>Guaraníes al retirar</dt><dd class="num">{{ comisiones.cambios.retiro|gs }} por dólar</dd></div>{% endif %}
+    <div><dt>Compra y venta</dt><dd>{% if comisiones.operacion %}{{ comisiones.operacion|pct(2, false) }} por orden{% else %}Sin comisión{% endif %}</dd></div>
+    <div><dt>Carteras armadas</dt><dd>{{ comisiones.gestion|pct(2, false) }} anual</dd></div>
+    <div><dt>Envíos entre clientes</dt><dd>Sin comisión</dd></div>
+  </dl>
+  <p class="xs muted" style="margin-top:8px">Tu banco puede cobrar sus propios cargos por la transferencia.</p>
+</section>

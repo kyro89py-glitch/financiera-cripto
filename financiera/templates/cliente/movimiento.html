@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% from "macros.html" import estado, ph, tipo_op, signo with context %}
+{% block titulo %}{{ tipo_op(o) }}{% endblock %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('cliente.movimientos') }}">← Movimientos</a>
+{% call ph(tipo_op(o), o.creado|fecha) %}{{ estado(o) }}{% endcall %}
+<div class="g2">
+  <section class="card col privado">
+    <div class="detalle-monto num {{ 'up' if o.tipo == 'aporte' else ('' if o.tipo in ('compra', 'venta') else 'down') }}">{{ signo(o) }}{{ (o.liquidado_cent if o.liquidado_cent is not none else o.monto_cent)|usd }}</div>
+    <dl class="detalle">
+      <div><dt>Número</dt><dd class="num">#{{ o.id }}</dd></div>
+      <div><dt>Tipo</dt><dd>{{ TIPOS_OP[o.tipo] }}{% if o.activo %} de {{ o.activo }}{% endif %}</dd></div>
+      {% if metodo %}<div><dt>Método</dt><dd>{{ metodo }}</dd></div>{% endif %}
+      <div><dt>Monto solicitado</dt><dd class="num">{{ o.monto_cent|usd }}</dd></div>
+      {% if o.liquidado_cent is not none and o.liquidado_cent != o.monto_cent %}<div><dt>Monto liquidado</dt><dd class="num">{{ o.liquidado_cent|usd }}</dd></div>{% endif %}
+      {% if o.monto_pyg %}<div><dt>En guaraníes</dt><dd class="num">{{ o.monto_pyg|gs }} a {{ o.cambio_pyg|gs }} por dólar</dd></div>{% endif %}
+      {% if o.tipo == 'aporte' %}<div><dt>Destino</dt><dd>{{ ("Cartera " ~ modelo.nombre) if modelo else "Saldo en dólares" }}</dd></div>{% endif %}
+      {% if o.referencia %}<div><dt>Comprobante</dt><dd>{{ o.referencia }}</dd></div>{% endif %}
+      {% if o.periodo %}<div><dt>Período</dt><dd>{{ o.periodo|periodo }}</dd></div>{% endif %}
+      {% if o.motivo %}<div><dt>Motivo</dt><dd class="down">{{ o.motivo }}</dd></div>{% endif %}
+    </dl>
+    {% if o.estado == 'pendiente' and o.tipo in ('aporte', 'retiro') %}
+    <form method="post" action="{{ url_for('cliente.cancelar', opid=o.id) }}" data-confirmar="¿Cancelar esta solicitud?">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn" type="submit">Cancelar solicitud</button>
+    </form>
+    {% endif %}
+  </section>
+  <section class="card">
+    <div class="ch"><h3>Estado</h3></div>
+    <ol class="linea-tiempo">
+      {% for texto, ts, hecho in pasos %}<li class="{{ 'hecho' if hecho else 'falta' }}{{ ' mal' if hecho and texto in ('Rechazada', 'Cancelada') }}"><b>{{ texto }}</b><span class="small muted">{{ ts|fecha if ts else "Pendiente" }}</span></li>{% endfor %}
+    </ol>
+    {% if o.tipo == 'aporte' and o.estado in ('pendiente', 'primera_firma') %}<p class="small muted">El equipo confirma que el dinero llegó a la cuenta de la casa y aprueba con dos firmas. Te avisamos al acreditarlo.</p>{% endif %}
+    {% if o.tipo == 'retiro' and o.estado in ('pendiente', 'primera_firma') %}<p class="small muted">El pago se hace a la cuenta registrada a tu nombre después de la segunda firma.</p>{% endif %}
+  </section>
+</div>
+{% if ordenes %}
+<section class="card flush privado">
+  <div class="ch"><h3>Órdenes ejecutadas</h3></div>
+  <div class="tablewrap"><table class="tabla resp">
+    <thead><tr><th>Fecha</th><th>Lado</th><th>Moneda</th><th class="r">Precio</th><th class="r">Cantidad</th><th class="r">Importe</th><th class="r">Comisión</th><th>Ejecutada en</th></tr></thead>
+    <tbody>{% for r in ordenes %}<tr><td>{{ r.ts|fecha }}</td><td class="{{ 'up' if r.lado == 'compra' else 'down' }}">{{ "Compra" if r.lado == 'compra' else "Venta" }}</td>
+      <td>{{ r.activo }}</td><td class="r num">{{ r.precio|precio }}</td><td class="r num">{{ r.cantidad|unidades(r.activo) }}</td><td class="r num">{{ r.importe_cent|usd }}</td>
+      <td class="r num">{{ (r.comision ~ " " ~ r.comision_activo) if r.comision_activo else "—" }}</td><td>{{ {'binance': 'Binance', 'simulado': 'Simulador', 'interno': 'Conversión interna'}.get(r.venue, r.venue or '—') }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+{% endif %}
+{% if libro %}
+<section class="card flush privado">
+  <div class="ch"><h3>Asientos en tu cuenta</h3><span class="meta">registro inmutable</span></div>
+  <div class="list">{% for l in libro %}<div class="item"><div class="grow"><div class="t">{{ {'deposito': 'Depósito', 'compra': 'Compra', 'venta': 'Venta', 'pago_retiro': 'Pago de retiro', 'comision': 'Comisión'}.get(l.concepto, l.concepto) }}</div><div class="d">{{ l.ts|fecha }}</div></div>
+    <div class="amt num {{ 'up' if l.cantidad > 0 else 'down' }}">{{ '+' if l.cantidad > 0 }}{{ l.cantidad|unidades(l.activo) }}</div></div>{% endfor %}</div>
+</section>
+{% endif %}
+{% endblock %}

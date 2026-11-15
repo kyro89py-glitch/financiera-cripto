@@ -37,6 +37,10 @@ def create_app(config=None):
         ORDEN_MAXIMA_USD=int(_env("ORDEN_MAXIMA_USD", "25000")),
         PYG_MARGEN_MAX_PCT=int(_env("PYG_MARGEN_MAX_PCT", "5")),
         ENVIO_MAX_DIA_USD=int(_env("ENVIO_MAX_DIA_USD", "5000")),
+        OFICINA_DIRECCION=_env("OFICINA_DIRECCION", ""),
+        DEPOSITO_USDT_DIRECCION=_env("DEPOSITO_USDT_DIRECCION", ""),
+        DEPOSITO_USDT_RED=_env("DEPOSITO_USDT_RED", "TRON (TRC-20)"),
+        COMISION_EXCHANGE_PCT=_env("COMISION_EXCHANGE_PCT", "0.1"),
         ENVIO_AVISO_USD=int(_env("ENVIO_AVISO_USD", "2000")),
         PRECIO_MAX_MINUTOS=int(_env("PRECIO_MAX_MINUTOS", "60" if prod else "1440")),
         COINGECKO_API_KEY=_env("COINGECKO_API_KEY", ""),
@@ -61,6 +65,7 @@ def create_app(config=None):
         BINANCE_URL=_env("BINANCE_URL", "https://testnet.binance.vision").rstrip("/"),
         BINANCE_RECV_WINDOW=int(_env("BINANCE_RECV_WINDOW", "5000")),
         FUENTE_PRECIOS=_env("FUENTE_PRECIOS", "").lower(),
+        VIVO_SEGUNDOS=float(_env("VIVO_SEGUNDOS", "3")),
         ORDEN_PREFIJO=_env("ORDEN_PREFIJO", "fc"),
         SCRYPT_N=2 ** 14,
     )
@@ -98,7 +103,7 @@ def create_app(config=None):
         app.register_blueprint(bp)
 
     from . import comisiones, demo, notificaciones, planes
-    for cmd in (cuentas.cmd_crear_admin, precios.cmd_actualizar, auditoria.cmd_verificar, demo.cmd_sembrar,
+    for cmd in (cuentas.cmd_crear_admin, precios.cmd_actualizar, precios.cmd_vivo, auditoria.cmd_verificar, demo.cmd_sembrar,
                 comisiones.cmd_cobrar, notificaciones.cmd_enviar, planes.cmd_ejecutar):
         app.cli.add_command(cmd)
 
@@ -110,11 +115,12 @@ def create_app(config=None):
         u = g.get("usuario")
         if not u:
             from . import graficos
-            filas = precios.mercado()
+            todas = [m for m in precios.mercado(dias=7) if m["habilitado"]]
+            filas = todas[:8]
             for m in filas:
                 m["chispa"] = graficos.chispa(m["serie"], 150, 40)
             grupos = [{"label": m["codigo"], "value": int(1000000 / (i + 1.4)), "col": m["color"]} for i, m in enumerate(filas)]
-            return render_template("inicio.html", filas=filas, datos3d={"titulo": "", "grupos": grupos})
+            return render_template("inicio.html", filas=filas, total_monedas=len(todas), datos3d={"titulo": "", "grupos": grupos})
         return redirect(url_for("cliente.inicio" if u["rol"] == "cliente" else "equipo.resumen"))
 
     @app.after_request

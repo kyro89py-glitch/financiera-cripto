@@ -53,7 +53,7 @@ def test_controles_de_las_ordenes(ctx):
     with pytest.raises(operaciones.ErrorNegocio, match="No tienes ETH"):
         operaciones.operar(laura, "ETH", "venta", 1000, u)
     with pytest.raises(operaciones.ErrorNegocio, match="no está disponible"):
-        operaciones.operar(laura, "DOGE", "compra", 1000, u)
+        operaciones.operar(laura, "XYZ", "compra", 1000, u)
     with pytest.raises(operaciones.ErrorNegocio, match="mayor que cero"):
         operaciones.operar(laura, "BTC", "compra", 0, u)
     ctx.config["ORDEN_MAXIMA_USD"] = 100
@@ -117,7 +117,7 @@ def test_pantallas_del_exchange(nav, ctx):
     assert not db.uno("SELECT 1 FROM favoritos")
     # precios en vivo, billetera, movimientos y estado de cuenta con compras y ventas
     j = laura.get("/mercado/precios.json").get_json()
-    assert j["BTC"]["precio"].startswith("US$") and "valor" in j["BTC"]
+    assert j["precios"]["BTC"]["precio"].startswith("US$") and "valor" in j["precios"]["BTC"] and "vivo" in j
     for url in ("/cliente/cartera", "/cliente/movimientos", "/cliente/", "/mercado?orden=suben"):
         assert laura.get(url).status_code == 200, url
     periodo = cartera.periodos_cliente(cliente("laura@x.com"))[0]

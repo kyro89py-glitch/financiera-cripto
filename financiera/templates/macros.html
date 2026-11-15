@@ -87,11 +87,11 @@
 {%- endmacro %}
 
 {% macro mercado_item(m) -%}
-<div class="item"><i class="dot" style="background:{{ m.color }}"></i>
-  <div class="grow"><div class="t">{{ m.codigo }}</div><div class="d">{{ m.nombre }}</div></div>
+<a class="item" href="{{ url_for('auth.trading', codigo=m.codigo) }}"><span class="moneda-ico sm" style="--c:{{ m.color }}">{{ m.codigo[0] }}</span>
+  <div class="grow"><div class="t">{{ m.codigo }}<span class="muted">/USD</span></div><div class="d">{{ m.nombre }}</div></div>
   {{ chispa(m.chispa) }}
-  <div class="amt num">{% if m.precio %}{{ m.precio|precio }}{% else %}—{% endif %}{% if m.cambio is not none %}<span class="{{ 'up' if m.cambio >= 0 else 'down' }}">{{ m.cambio|pct }} 24 h</span>{% endif %}</div>
-</div>
+  <div class="amt num"><span data-px="{{ m.codigo }}">{% if m.precio %}{{ m.precio|precio }}{% else %}—{% endif %}</span>{% if m.cambio is not none %}<span class="{{ 'up' if m.cambio >= 0 else 'down' }}" data-cambio="{{ m.codigo }}">{{ m.cambio|pct }}</span>{% endif %}</div>
+</a>
 {%- endmacro %}
 
 {% macro rendimiento(rend) -%}

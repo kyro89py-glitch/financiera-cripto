@@ -51,7 +51,7 @@ def leer_monto(texto):
 def leer_precio(texto):
     s = _normalizar(texto)
     try:
-        if not re.fullmatch(r"\d{1,12}(\.\d{1,8})?", s):
+        if not re.fullmatch(r"\d{1,12}(\.\d{1,12})?", s):
             raise InvalidOperation
         d = Decimal(s)
     except InvalidOperation:
@@ -71,9 +71,19 @@ def fmt_usd(cent, decimales=2):
     return ("−" if cent < 0 else "") + "US$ " + fmt_num(Decimal(abs(int(cent))) / 100, decimales)
 
 
-def fmt_precio(precio):
+def decimales_precio(p):
+    """Decimales para mostrar un precio: 2 desde un dólar, 4 desde un centavo y 4 cifras significativas debajo."""
+    p = abs(Decimal(p))
+    if p >= 1 or p == 0:
+        return 2
+    if p >= Decimal("0.01"):
+        return 4
+    return min(12, -p.adjusted() + 3)
+
+
+def fmt_precio(precio, simbolo=True):
     p = Decimal(precio)
-    return "US$ " + fmt_num(p, 2 if p >= 1 else 4)
+    return ("US$ " if simbolo else "") + fmt_num(p, decimales_precio(p))
 
 
 def fmt_unidades(unidades, activo):

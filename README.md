@@ -6,13 +6,15 @@ Plataforma de inversión en criptomonedas para operar con clientes reales, con d
 - **Compra y venta tipo exchange:** además de las carteras armadas por la casa, el cliente puede depositar en su saldo y comprar o vender cada moneda por su cuenta, con mercado en vivo, página por moneda, favoritas y billetera.
 - **Herramientas de exchange:** órdenes por precio (límite y stop), conversión directa entre monedas, gráfico de velas y portada pública.
 - **Red de clientes:** apertura de cuenta en línea, envíos instantáneos entre clientes por correo o cédula, resultado por moneda y app instalable en el celular.
+- **Trading en tiempo real:** 27 criptomonedas con precios que se actualizan cada pocos segundos, pantalla de trading con velas de 1 minuto a 1 semana, libro de órdenes, operaciones del mercado y órdenes de mercado, límite y stop con revisión antes de confirmar; mercados con volumen, capitalización, buscador, categorías y mapa de calor.
+- **Cuenta completa:** saldo disponible y bloqueado, movimientos con buscador y detalle, depósitos y retiros con método, comisiones y revisión, dispositivos y sesiones, avisos de seguridad y privacidad.
 - **Hecho para Paraguay:** depósitos y retiros en guaraníes con el tipo de cambio de la casa, compras automáticas para ahorrar de a poco, alertas de precio y un resumen anual de criptoactivos por cliente.
 - **Panel del equipo:** aprobación de operaciones con controles de cumplimiento y doble firma, fichas de clientes con legajo, revisión de documentos, conciliación de custodia, comisiones de gestión, bitácora inalterable, precios y usuarios.
 - **Ejecución en Binance:** al aprobar, las compras y ventas se envían como órdenes de mercado a Binance (o a su red de pruebas) y el libro se asienta con las cantidades, precios y comisiones reales. Sin Binance configurado, un simulador ejecuta al precio vigente.
 
 Es un sistema propio e independiente: corre en tu servidor y guarda todo en tu base de datos. Los únicos servicios externos son opcionales: Binance para ejecutar y cotizar, CoinGecko para los precios cuando no se usa Binance (también se cargan a mano) y un servidor de correo para los avisos por email.
 
-> **Estado:** versión 0.8, lista para pruebas internas con el equipo y para operar en la red de pruebas de Binance. Antes de recibir dinero de clientes lee [Antes de operar con dinero real](#antes-de-operar-con-dinero-real).
+> **Estado:** versión 0.9, lista para pruebas internas con el equipo y para operar en la red de pruebas de Binance. Antes de recibir dinero de clientes lee [Antes de operar con dinero real](#antes-de-operar-con-dinero-real).
 
 ---
 
@@ -135,7 +137,7 @@ financiera/
   rutas_*.py         pantallas de acceso, cliente, equipo, administración y documentos
   templates/         pantallas
   static/            estilos y JavaScript (sin recursos externos)
-tests/               103 pruebas automáticas (incluye una imitación completa de la API de Binance)
+tests/               120 pruebas automáticas (incluye una imitación completa de la API de Binance)
 ```
 
 ### Seguridad incluida
@@ -166,7 +168,8 @@ docker compose exec app flask --app financiera crear-admin
 Esto levanta tres servicios:
 
 - **La aplicación**, con 3 procesos.
-- **Las tareas de fondo:** actualiza precios y envía los correos pendientes cada 5 minutos, y el día 1 de cada mes cobra la comisión del mes anterior.
+- **Los precios en vivo:** `flask precios-en-vivo` actualiza los precios cada pocos segundos y revisa órdenes límite, stops y alertas.
+- **Las tareas de fondo:** envía los correos pendientes y ejecuta las compras automáticas cada 5 minutos (y actualiza precios como respaldo), y el día 1 de cada mes cobra la comisión del mes anterior.
 - **Caddy**, que obtiene y renueva el certificado HTTPS solo.
 
 El primer administrador crea al resto del equipo desde Ajustes → Usuarios del equipo.
@@ -185,7 +188,8 @@ Programa este comando todos los días y copia el archivo fuera del servidor (otr
 |---|---|
 | `flask --app financiera crear-admin` | Crea el primer usuario de Administración |
 | `flask --app financiera migrar` | Aplica las migraciones pendientes (también se hace al arrancar) |
-| `flask --app financiera actualizar-precios` | Trae los precios de CoinGecko |
+| `flask --app financiera precios-en-vivo` | Mantiene los precios al día cada `VIVO_SEGUNDOS` (servicio aparte) |
+| `flask --app financiera actualizar-precios` | Trae los precios una vez de la fuente configurada |
 | `flask --app financiera cobrar-comisiones [--periodo AAAA-MM]` | Cobra la comisión del mes (por defecto, el anterior) |
 | `flask --app financiera ejecutar-planes` | Ejecuta las compras automáticas cuya fecha llegó |
 | `flask --app financiera enviar-correos` | Envía los avisos por correo pendientes |
@@ -218,7 +222,11 @@ Todas las opciones están comentadas en `.env.example`. Las principales:
 | `ORDEN_MAXIMA_USD` | Monto máximo de cada compra o venta que hace el cliente por su cuenta. |
 | `EJECUCION` | `simulado` (por defecto) o `binance`. |
 | `BINANCE_API_KEY`, `BINANCE_API_SECRET`, `BINANCE_URL` | Clave de API y dirección (red de pruebas por defecto; `https://api.binance.com` para operar en real). |
-| `FUENTE_PRECIOS` | `binance` o `coingecko`. Por defecto, Binance si se ejecuta en Binance. |
+| `FUENTE_PRECIOS` | `binance`, `coingecko` o `simulada` (solo demostración). Por defecto, Binance si se ejecuta en Binance. |
+| `VIVO_SEGUNDOS` | Segundos entre actualizaciones de precios en vivo (3 por defecto; con CoinGecko, mínimo 20). |
+| `OFICINA_DIRECCION` | Si se carga, habilita depósitos y retiros en efectivo en esa dirección. |
+| `DEPOSITO_USDT_DIRECCION`, `DEPOSITO_USDT_RED` | Si se carga la dirección, habilita depósitos en USDT por esa red. |
+| `COMISION_EXCHANGE_PCT` | Comisión por orden que se muestra al operar con Binance (0,1 por defecto). |
 | `COMISION_ANUAL_PCT` | Comisión de gestión anual en porcentaje (0 la desactiva). |
 | `SMTP_HOST`, `SMTP_USUARIO`, `SMTP_CLAVE`, `SMTP_REMITENTE` | Servidor de correo para los avisos. Sin `SMTP_HOST` los avisos solo se ven en el portal. |
 | `URL_PUBLICA` | Dirección del sistema, para los enlaces de los correos y el pie de los estados de cuenta. |

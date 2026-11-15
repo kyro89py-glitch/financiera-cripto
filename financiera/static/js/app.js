@@ -19,27 +19,86 @@
   });
 
   // ---- precios en vivo: actualiza cada elemento con data-px / data-cambio ----
-  var vivos = document.querySelector("[data-px]");
+  var vivos = document.querySelector("[data-px], [data-vivo], [data-mapa]");
+  var anterior = {};
   function refrescar() {
     if (document.hidden) return;
     fetch("/mercado/precios.json", { credentials: "same-origin", headers: { Accept: "application/json" } })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (j) {
-        if (!j) return;
+        if (!j || !j.precios) return;
+        var P = j.precios;
         document.querySelectorAll("[data-px]").forEach(function (el) {
-          var x = j[el.getAttribute("data-px")]; if (!x || el.textContent === x.precio) return;
-          el.textContent = x.precio; el.classList.remove("pulso"); void el.offsetWidth; el.classList.add("pulso");
+          var c = el.getAttribute("data-px"), x = P[c]; if (!x || el.textContent === x.precio) return;
+          var prev = anterior[c];
+          el.textContent = x.precio;
+          el.classList.remove("tick-up", "tick-down", "pulso"); void el.offsetWidth;
+          el.classList.add(prev == null ? "pulso" : (x.valor >= prev ? "tick-up" : "tick-down"));
+          if (el.hasAttribute("data-tick")) { el.classList.toggle("up", x.sube); el.classList.toggle("down", !x.sube); }
         });
         document.querySelectorAll("[data-cambio]").forEach(function (el) {
-          var x = j[el.getAttribute("data-cambio")]; if (!x || !x.cambio) return;
+          var x = P[el.getAttribute("data-cambio")]; if (!x || !x.cambio) return;
           el.textContent = x.cambio; var t = el.classList.contains("up") || el.classList.contains("down") ? el : el.parentNode;
           t.classList.toggle("up", x.sube); t.classList.toggle("down", !x.sube);
         });
+        [["data-max", "max"], ["data-min", "min"], ["data-vol", "vol"]].forEach(function (k) {
+          document.querySelectorAll("[" + k[0] + "]").forEach(function (el) { var x = P[el.getAttribute(k[0])]; if (x && x[k[1]]) el.textContent = x[k[1]]; });
+        });
+        document.querySelectorAll("[data-mapa]").forEach(function (el) {
+          var x = P[el.getAttribute("data-mapa")]; if (!x) return;
+          el.classList.toggle("up", x.c >= 0); el.classList.toggle("down", x.c < 0);
+          el.style.setProperty("--a", Math.min(1, 0.25 + Math.abs(x.c) / 6).toFixed(2));
+          var t = el.querySelector(".pc"); if (t) t.textContent = x.cambio;
+        });
+        document.querySelectorAll("[data-vivo]").forEach(function (el) {
+          el.classList.toggle("on", !!j.vivo);
+          el.lastElementChild.textContent = j.vivo ? "En vivo · " + (j.fuente || "") : "Última actualización hace " + (j.seg >= 120 ? Math.round(j.seg / 60) + " min" : j.seg + " s");
+        });
+        for (var c in P) anterior[c] = P[c].valor;
         var panel = document.getElementById("operar");
-        if (panel && j[panel.getAttribute("data-activo")]) { panel.setAttribute("data-precio", j[panel.getAttribute("data-activo")].valor); panel.dispatchEvent(new Event("precio")); }
+        if (panel && panel.hasAttribute("data-activo") && P[panel.getAttribute("data-activo")]) { panel.setAttribute("data-precio", P[panel.getAttribute("data-activo")].valor); panel.dispatchEvent(new Event("precio")); }
+        try { document.dispatchEvent(new CustomEvent("precios", { detail: j })); } catch (e) { /* navegador antiguo */ }
       }).catch(function () { /* sin conexión: se reintenta en el próximo ciclo */ });
   }
-  if (vivos) setInterval(refrescar, 20000);
+  if (vivos) { refrescar(); setInterval(refrescar, 3000); }
+
+  // ---- buscador en vivo de tablas y selects que se envían solos ----
+  document.querySelectorAll("[data-filtro-tabla]").forEach(function (inp) {
+    var tabla = document.getElementById(inp.getAttribute("data-filtro-tabla")); if (!tabla) return;
+    var aviso = document.getElementById("sin-resultados");
+    inp.addEventListener("input", function () {
+      var q = inp.value.trim().toLowerCase(), n = 0;
+      tabla.querySelectorAll("tbody tr[data-buscar]").forEach(function (tr) {
+        var ok = !q || tr.getAttribute("data-buscar").indexOf(q) >= 0; tr.hidden = !ok; if (ok) n++;
+      });
+      if (aviso) aviso.hidden = n > 0;
+    });
+  });
+  document.querySelectorAll("select[data-autoenvio]").forEach(function (sel) {
+    sel.addEventListener("change", function () { sel.form.submit(); });
+  });
+
+  // ---- método de depósito: muestra las instrucciones del elegido ----
+  document.querySelectorAll("input[name=metodo]").forEach(function (r) {
+    function pintar() {
+      if (!r.checked) return;
+      document.querySelectorAll("[data-metodo-info]").forEach(function (b) { b.hidden = b.getAttribute("data-metodo-info") !== r.value; });
+      var pyg = document.querySelector("input[name=moneda][value=PYG]");
+      if (pyg) { pyg.disabled = r.value === "usdt"; if (pyg.disabled && pyg.checked) { document.querySelector("input[name=moneda][value=USD]").checked = true; } }
+    }
+    r.addEventListener("change", pintar); pintar();
+  });
+
+  // ---- pestañas simples (Inicio: mercados destacados) ----
+  document.querySelectorAll(".tabs-sec").forEach(function (barra) {
+    if (document.getElementById("datos-trading")) return;  // la pantalla de trading maneja las suyas
+    var tabs = barra.querySelectorAll("[role=tab]");
+    tabs.forEach(function (t) {
+      t.addEventListener("click", function () {
+        tabs.forEach(function (x) { var on = x === t; x.setAttribute("aria-selected", on ? "true" : "false"); document.getElementById(x.getAttribute("aria-controls")).hidden = !on; });
+      });
+    });
+  });
 
   // ---- app instalable ----
   if ("serviceWorker" in navigator && location.protocol === "https:") {
@@ -99,7 +158,7 @@
 
   // ---- panel de compra y venta ----
   (function () {
-    var panel = document.getElementById("operar"); if (!panel) return;
+    var panel = document.getElementById("operar"); if (!panel || !panel.hasAttribute("data-activo")) return;
     var form = panel.querySelector("form"), monto = form.querySelector("[name=monto]"), lado = form.querySelector("[name=lado]"), todo = form.querySelector("[name=todo]");
     var boton = form.querySelector("button[type=submit]"), est = form.querySelector("[data-estimado]"), disp = form.querySelector("[data-disponible]"), rot = form.querySelector("[data-rotulo]");
     var activo = panel.getAttribute("data-activo"), bloqueado = boton.disabled;

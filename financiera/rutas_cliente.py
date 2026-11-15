@@ -55,9 +55,36 @@ def inicio():
     modelo = db.uno("SELECT * FROM modelos WHERE codigo = ?", (c["modelo"],))
     faltan = documentos.faltantes(c) if c["kyc_estado"] != "verificado" else []
     desv, mayor = cartera.desvio(filas, total, c["modelo"]) if total else ([], 0)
+    bloq = cartera.bloqueado(c["id"], ten=ten)
+    mercado = [m for m in _mercado() if m["habilitado"]]
+    movibles = [m for m in mercado if m["cambio"] is not None and not m["estable"]]
+    destacados = {"suben": sorted(movibles, key=lambda m: -m["cambio"])[:4], "bajan": sorted(movibles, key=lambda m: m["cambio"])[:4],
+                  "principales": mercado[:4]}
     return render_template("cliente/inicio.html", filas=filas, total=total, graf=graf, var7=var7, aportado=aportado,
                            modelo=modelo, abiertas=_abiertas(c["id"]), faltan=faltan, rend=cartera.rendimiento(c["id"], total),
-                           datos3d=datos3d(filas, ""), mercado=_mercado()[:5], mayor_desvio=mayor)
+                           datos3d=datos3d(filas, ""), destacados=destacados, mayor_desvio=mayor,
+                           disp_usd=ten.get("USD", 0) - bloq.get("USD", 0), ultimos=_movimientos(c)[:6],
+                           actividad=_actividad_mes(c["id"]))
+
+
+def _actividad_mes(cliente_id):
+    """Resumen del mes en curso: cantidad e importe de cada tipo de movimiento."""
+    from datetime import datetime
+
+    from .formato import zona
+    from .tiempo import iso
+    hoy = datetime.now(zona())
+    desde = iso(hoy.replace(day=1, hour=0, minute=0, second=0, microsecond=0))
+    out = {}
+    for tipo, n, s in [(f["tipo"], f["n"], f["s"]) for f in db.todos(
+            "SELECT tipo, COUNT(*) AS n, COALESCE(SUM(COALESCE(liquidado_cent, monto_cent)), 0) AS s FROM operaciones"
+            " WHERE cliente_id = ? AND creado >= ? AND estado NOT IN ('rechazada', 'cancelada') GROUP BY tipo", (cliente_id, desde))]:
+        out[tipo] = (n, s)
+    e = db.uno("SELECT COUNT(*) AS n, COALESCE(SUM(valor_cent), 0) AS s FROM transferencias WHERE (de_cliente = ? OR a_cliente = ?)"
+               " AND ts >= ?", (cliente_id, cliente_id, desde))
+    out["envios"] = (e["n"], e["s"])
+    out["mes"] = hoy
+    return out
 
 
 @bp.post("/operar")
@@ -65,7 +92,7 @@ def operar():
     activo = (request.form.get("activo") or "").upper()
     lado = request.form.get("lado")
     todo = request.form.get("todo") == "si"
-    destino = url_for("auth.moneda", codigo=activo) if activo.isalnum() else url_for("auth.mercado")
+    destino = _volver(activo)
     try:
         monto = 0 if (todo and lado == "venta") else leer_monto(request.form.get("monto"))
     except ValueError:
@@ -87,7 +114,19 @@ def operar():
 
 
 def _volver(activo):
+    """Página a la que se vuelve después de operar: la que mandó el formulario (si es de la casa) o la de la moneda."""
+    v = request.form.get("volver") or ""
+    if v.startswith(("/trading", "/mercado", "/cliente")) and "//" not in v and "\\" not in v:
+        return v
     return url_for("auth.moneda", codigo=activo) if activo.isalnum() else url_for("auth.mercado")
+
+
+TIPOS_ORDEN = {  # tipo elegido en Trading -> (lado, condición que tiene que cumplir el precio respecto del actual)
+    ("limite", "compra"): ("menor", "Una compra límite se activa cuando el precio baja: elige un precio menor al actual."),
+    ("stop", "compra"): ("mayor", "Una compra stop se activa cuando el precio sube: elige un precio mayor al actual."),
+    ("limite", "venta"): ("mayor", "Una venta límite se activa cuando el precio sube: elige un precio mayor al actual."),
+    ("stop", "venta"): ("menor", "Un stop de venta se activa cuando el precio baja: elige un precio menor al actual."),
+}
 
 
 @bp.post("/programadas")
@@ -97,18 +136,23 @@ def programada_crear():
     try:
         from .dinero import leer_precio
         monto = 0 if todo else leer_monto(request.form.get("monto"))
-        programadas.crear(g.cliente, activo, request.form.get("lado"), leer_precio(request.form.get("precio")), monto, g.usuario, todo=todo)
+        precio = leer_precio(request.form.get("precio"))
+        regla = TIPOS_ORDEN.get((request.form.get("tipo"), request.form.get("lado")))
+        vig = precios.vigentes().get(activo)
+        if regla and vig and ((regla[0] == "menor" and precio >= vig["precio"]) or (regla[0] == "mayor" and precio <= vig["precio"])):
+            raise operaciones.ErrorNegocio(regla[1])
+        programadas.crear(g.cliente, activo, request.form.get("lado"), precio, monto, g.usuario, todo=todo)
         flash("Orden programada. Se ejecuta sola cuando el precio llegue a ese nivel y te avisamos.", "ok")
     except (ValueError, operaciones.ErrorNegocio) as e:
         flash(str(e), "error")
-    return redirect(_volver(activo) + "#programadas")
+    return redirect(_volver(activo) + ("" if request.form.get("volver") else "#programadas"))
 
 
 @bp.post("/programadas/<int:oid>/cancelar")
 def programada_cancelar(oid):
     if programadas.cancelar(oid, g.cliente, g.usuario):
         flash("Orden programada cancelada.", "ok")
-    return redirect(_volver((request.form.get("activo") or "").upper()) + "#programadas")
+    return redirect(_volver((request.form.get("activo") or "").upper()) + ("" if request.form.get("volver") else "#programadas"))
 
 
 @bp.route("/convertir", methods=["GET", "POST"])
@@ -215,10 +259,15 @@ def ver_cartera():
     desv, mayor = cartera.desvio(filas, total, c["modelo"]) if total else ([], 0)
     modelo = db.uno("SELECT * FROM modelos WHERE codigo = ?", (c["modelo"],))
     costos = cartera.costos(c["id"])
+    ten = cartera.tenencias(c["id"])
+    bloq = cartera.bloqueado(c["id"], ten=ten)
+    pend_retiro = sum(o["monto_cent"] for o in _abiertas(c["id"]) if o["tipo"] == "retiro")
     realizado = sum(x["realizado"] for x in costos.values())
     no_realizado = sum(f["valor"] - costos[f["activo"]]["costo"] for f in filas if f["activo"] in costos and costos[f["activo"]]["cantidad"])
     return render_template("cliente/cartera.html", filas=filas, total=total, desvio=desv, mayor_desvio=mayor, modelo=modelo,
-                           costos=costos, realizado=realizado, no_realizado=no_realizado,
+                           costos=costos, realizado=realizado, no_realizado=no_realizado, bloq=bloq,
+                           disp_usd=ten.get("USD", 0) - bloq.get("USD", 0), reservado=operaciones.reservado_cent(c["id"]),
+                           pend_retiro=pend_retiro, ultimos=_movimientos(c)[:5],
                            planes=planes.del_cliente(c["id"]), frecuencias=planes.FRECUENCIAS,
                            rend=cartera.rendimiento(c["id"], total), aportado=cartera.aportado_neto(c["id"]),
                            datos3d=datos3d(filas, f"Cartera de {c['nombre'].split()[0]}"))
@@ -228,18 +277,25 @@ def ver_cartera():
 def invertir():
     c = g.cliente
     error = None
-    form = {"monto": "", "modelo": c["modelo"], "referencia": "", "acepta_riesgo": ""}
+    form = {"monto": "", "modelo": c["modelo"], "referencia": "", "acepta_riesgo": "", "metodo": "transferencia", "moneda": "USD"}
     if request.method == "POST":
         form = {k: (request.form.get(k) or "").strip() for k in form}
+        form["metodo"] = form["metodo"] or "transferencia"
+        paso = request.form.get("paso", "")
         try:
-            en_gs = request.form.get("moneda") == "PYG"
+            en_gs = form["moneda"] == "PYG"
             monto = 0 if en_gs else leer_monto(form["monto"])
-            opid = operaciones.solicitar_aporte(c, monto, form["modelo"], form["referencia"], g.usuario,
-                                                acepta_riesgo=form["acepta_riesgo"] == "si",
-                                                monto_pyg=guarani.leer(form["monto"]) if en_gs else None)
-            flash(f"Solicitud de aporte #{opid} enviada. El equipo confirma la recepción del dinero y, al aprobarla, "
-                  "se compra al precio de ese momento.", "ok")
-            return redirect(url_for("cliente.movimientos"))
+            args = dict(acepta_riesgo=form["acepta_riesgo"] == "si", monto_pyg=guarani.leer(form["monto"]) if en_gs else None,
+                        metodo=form["metodo"])
+            if paso == "revisar":
+                v = operaciones.solicitar_aporte(c, monto, form["modelo"], form["referencia"], g.usuario, solo_validar=True, **args)
+                return render_template("cliente/revisar.html", tipo="aporte", form=form, v=v,
+                                       metodo=operaciones.METODOS[form["metodo"]], comisiones=_comisiones())
+            if paso != "editar":
+                opid = operaciones.solicitar_aporte(c, monto, form["modelo"], form["referencia"], g.usuario, **args)
+                flash(f"Solicitud de depósito #{opid} enviada. El equipo confirma la recepción del dinero y te avisa al "
+                      "acreditarlo. Aquí ves en qué paso está.", "ok")
+                return redirect(url_for("cliente.movimiento", opid=opid))
         except (ValueError, operaciones.ErrorNegocio) as e:
             error = str(e)
     pr = precios.vigentes()
@@ -257,7 +313,49 @@ def invertir():
         "fuera": [m["codigo"] for m in modelos if m["fuera"]],
     }
     return render_template("cliente/invertir.html", error=error, form=form, modelos=modelos, info=info,
-                           datos=datos, disponible=max(total - pend_retiro, 0))
+                           datos=datos, disponible=max(total - pend_retiro, 0), metodos=operaciones.metodos("aporte"),
+                           comisiones=_comisiones(), recientes=_solicitudes(c["id"], "aporte"))
+
+
+def _comisiones():
+    """Comisiones vigentes para mostrar antes de confirmar (todas salen de la configuración real)."""
+    cfg = current_app.config
+    return {"cambios": guarani.cambios(), "gestion": cfg["COMISION_ANUAL_PCT"],
+            "operacion": operaciones.comision_operacion_pct(), "envios_max": cfg["ENVIO_MAX_DIA_USD"]}
+
+
+def _solicitudes(cliente_id, tipo, n=5):
+    return db.todos("SELECT * FROM operaciones WHERE cliente_id = ? AND tipo = ? ORDER BY id DESC LIMIT ?", (cliente_id, tipo, n))
+
+
+@bp.route("/retirar", methods=["GET", "POST"])
+def retirar():
+    c = g.cliente
+    error = None
+    form = {"monto": "", "moneda": "USD", "metodo": "transferencia"}
+    if request.method == "POST":
+        form = {k: (request.form.get(k) or "").strip() for k in form}
+        form["metodo"] = form["metodo"] or "transferencia"
+        paso = request.form.get("paso", "")
+        try:
+            monto = leer_monto(form["monto"])
+            args = dict(en_guaranies=form["moneda"] == "PYG", metodo=form["metodo"])
+            if paso == "revisar":
+                v = operaciones.solicitar_retiro(c, monto, g.usuario, solo_validar=True, **args)
+                return render_template("cliente/revisar.html", tipo="retiro", form=form, v=v,
+                                       metodo=operaciones.METODOS[form["metodo"]], comisiones=_comisiones())
+            if paso != "editar":
+                opid = operaciones.solicitar_retiro(c, monto, g.usuario, **args)
+                flash(f"Solicitud de retiro #{opid} enviada. Te avisamos cuando el equipo la apruebe y haga el pago.", "ok")
+                return redirect(url_for("cliente.movimiento", opid=opid))
+        except (ValueError, operaciones.ErrorNegocio) as e:
+            error = str(e)
+    _, total = cartera.posiciones(c["id"])
+    pend = sum(o["monto_cent"] for o in _abiertas(c["id"]) if o["tipo"] == "retiro")
+    disponible = max(total - pend - operaciones.reservado_cent(c["id"]), 0)
+    return render_template("cliente/retirar.html", error=error, form=form, disponible=disponible, total=total, pend=pend,
+                           reservado=operaciones.reservado_cent(c["id"]), metodos=operaciones.metodos("retiro"),
+                           comisiones=_comisiones(), recientes=_solicitudes(c["id"], "retiro"))
 
 
 @bp.post("/retiro")
@@ -267,27 +365,103 @@ def retiro():
         monto = leer_monto(request.form.get("monto"))
         opid = operaciones.solicitar_retiro(c, monto, g.usuario, en_guaranies=request.form.get("moneda") == "PYG")
         flash(f"Solicitud de retiro #{opid} enviada. Te avisamos cuando el equipo la apruebe.", "ok")
-        return redirect(url_for("cliente.movimientos"))
+        return redirect(url_for("cliente.movimiento", opid=opid))
     except (ValueError, operaciones.ErrorNegocio) as e:
         flash(str(e), "error")
-        return redirect(url_for("cliente.invertir") + "#retirar")
+        return redirect(url_for("cliente.retirar"))
+
+
+FILTROS_MOV = {"todos": "Todos", "depositos": "Depósitos", "retiros": "Retiros", "operaciones": "Compras y ventas",
+               "envios": "Envíos", "abiertos": "En curso"}
+
+
+def _movimientos(c, filtro="todos", q=""):
+    """Movimientos del cliente en una sola lista (operaciones y envíos), del más nuevo al más viejo."""
+    from .formato import TIPOS_OP
+    from .transferencias import del_cliente as envios
+    ops = db.todos("SELECT * FROM operaciones WHERE cliente_id = ? ORDER BY creado DESC, id DESC LIMIT 400", (c["id"],))
+    ordenes = {}
+    for o in db.todos("SELECT * FROM ordenes WHERE cliente_id = ? ORDER BY id", (c["id"],)):
+        ordenes.setdefault(o["operacion_id"], []).append(o)
+    out = []
+    for o in ops:
+        grupo = {"aporte": "depositos", "retiro": "retiros", "compra": "operaciones", "venta": "operaciones"}.get(o["tipo"], "otros")
+        monto = o["liquidado_cent"] if o["liquidado_cent"] is not None else o["monto_cent"]
+        texto = " ".join(str(x) for x in (o["id"], TIPOS_OP[o["tipo"]], o["activo"] or "", o["referencia"] or "",
+                                           o["estado"], monto / 100)).lower()
+        out.append({"clase": "op", "o": o, "ts": o["creado"], "grupo": grupo, "abierto": o["estado"] in ("pendiente", "primera_firma", "ejecutando"),
+                    "ordenes": ordenes.get(o["id"], []), "monto": monto, "buscar": texto,
+                    "url": url_for("cliente.movimiento", opid=o["id"])})
+    for t in envios(c["id"], 200):
+        sale = t["de_cliente"] == c["id"]
+        otro = t["a_nombre"] if sale else t["de_nombre"]
+        out.append({"clase": "envio", "t": t, "ts": t["ts"], "grupo": "envios", "abierto": False, "sale": sale,
+                    "otro": otro, "monto": t["valor_cent"], "url": url_for("cliente.envio", tid=t["id"]),
+                    "buscar": f"e{t['id']} envío {'enviaste' if sale else 'recibiste'} {otro} {t['activo']} {t['nota'] or ''} {t['valor_cent'] / 100}".lower()})
+    out.sort(key=lambda m: m["ts"], reverse=True)
+    if filtro == "abiertos":
+        out = [m for m in out if m["abierto"]]
+    elif filtro in FILTROS_MOV and filtro != "todos":
+        out = [m for m in out if m["grupo"] == filtro]
+    if q:
+        qq = q.lower().replace("#", "").strip()
+        out = [m for m in out if qq in m["buscar"]]
+    return out
 
 
 @bp.get("/movimientos")
 def movimientos():
     c = g.cliente
     filtro = request.args.get("ver", "todos")
-    sql = "SELECT * FROM operaciones WHERE cliente_id = ?"
-    if filtro == "abiertos":
-        sql += " AND estado IN ('pendiente', 'primera_firma', 'ejecutando')"
-    ops = db.todos(sql + " ORDER BY creado DESC, id DESC LIMIT 200", (c["id"],))
-    ordenes = {}
-    for o in db.todos("SELECT * FROM ordenes WHERE cliente_id = ? ORDER BY id", (c["id"],)):
-        ordenes.setdefault(o["operacion_id"], []).append(o)
+    if filtro not in FILTROS_MOV:
+        filtro = "todos"
+    q = (request.args.get("q") or "").strip()[:40]
+    movs = _movimientos(c, filtro, q)
     modelos = {m["codigo"]: m["nombre"] for m in db.todos("SELECT codigo, nombre FROM modelos")}
-    from .transferencias import del_cliente as envios
-    return render_template("cliente/movimientos.html", ops=ops, ordenes=ordenes, filtro=filtro, modelos=modelos,
-                           periodos=cartera.periodos_cliente(c), envios=envios(c["id"], 50))
+    return render_template("cliente/movimientos.html", movs=movs[:150], filtro=filtro, filtros=FILTROS_MOV, q=q,
+                           modelos=modelos, periodos=cartera.periodos_cliente(c), total=len(movs))
+
+
+@bp.get("/movimientos/<int:opid>")
+def movimiento(opid):
+    from flask import abort
+
+    from .operaciones import METODOS
+    c = g.cliente
+    o = db.uno("SELECT * FROM operaciones WHERE id = ? AND cliente_id = ?", (opid, c["id"]))
+    if not o:
+        abort(404)
+    ordenes = db.todos("SELECT * FROM ordenes WHERE operacion_id = ? ORDER BY id", (opid,))
+    libro = db.todos("SELECT * FROM libro WHERE operacion_id = ? AND cliente_id = ? ORDER BY id", (opid, c["id"]))
+    pasos = [("Solicitada" if o["tipo"] in ("aporte", "retiro") else "Orden recibida", o["creado"], True)]
+    if o["tipo"] in ("aporte", "retiro"):
+        doble = bool(o["firma2_ts"]) or o["estado"] == "primera_firma"
+        pasos.append(("Revisada por el equipo (primera firma)" if doble else "Aprobada por el equipo", o["firma1_ts"], bool(o["firma1_ts"])))
+        if doble:
+            pasos.append(("Aprobada (segunda firma)", o["firma2_ts"], bool(o["firma2_ts"])))
+    if o["ejecucion_inicio"]:
+        pasos.append(("Enviada al mercado", o["ejecucion_inicio"], True))
+    if o["estado"] == "liquidada":
+        pasos.append(("Acreditada" if o["tipo"] == "aporte" else ("Pagada" if o["tipo"] == "retiro" else "Liquidada"),
+                      o["resuelto_ts"] or o["firma2_ts"] or o["creado"], True))
+    elif o["estado"] in ("rechazada", "cancelada"):
+        pasos.append(("Rechazada" if o["estado"] == "rechazada" else "Cancelada", o["resuelto_ts"], True))
+    else:
+        pasos.append(("Acreditación" if o["tipo"] == "aporte" else "Liquidación", None, False))
+    modelo = db.uno("SELECT nombre FROM modelos WHERE codigo = ?", (o["modelo"],)) if o["modelo"] else None
+    return render_template("cliente/movimiento.html", o=o, ordenes=ordenes, libro=libro, pasos=pasos, modelo=modelo,
+                           metodo=METODOS.get(o["metodo"] or "transferencia") if o["tipo"] in ("aporte", "retiro") else None)
+
+
+@bp.get("/envios/<int:tid>")
+def envio(tid):
+    from flask import abort
+    c = g.cliente
+    t = db.uno("SELECT t.*, d.nombre AS de_nombre, a.nombre AS a_nombre FROM transferencias t JOIN clientes d ON d.id = t.de_cliente"
+               " JOIN clientes a ON a.id = t.a_cliente WHERE t.id = ? AND (t.de_cliente = ? OR t.a_cliente = ?)", (tid, c["id"], c["id"]))
+    if not t:
+        abort(404)
+    return render_template("cliente/envio.html", t=t, sale=t["de_cliente"] == c["id"])
 
 
 @bp.post("/operaciones/<int:opid>/cancelar")

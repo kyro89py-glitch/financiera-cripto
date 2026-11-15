@@ -38,6 +38,7 @@ class BinanceFalso:
         self.restricciones = {"enableWithdrawals": False, "ipRestrict": True, "enableSpotAndMarginTrading": True}
         self.parcial = {}         # símbolo -> fracción ejecutada
         self._id = 1000
+        self.estricto = False     # como Binance real: -1121 si se pide un símbolo que no existe
 
     # ---- utilidades ----
     def _paso(self, sim):
@@ -72,9 +73,25 @@ class BinanceFalso:
                 {"filterType": "NOTIONAL", "minNotional": str(self.minimo.get(sim, "5")), "applyMinToMarket": True,
                  "maxNotional": "9000000", "applyMaxToMarket": False, "avgPriceMins": 5}]}]})
         if ruta == "/api/v3/ticker/24hr":
-            sims = json.loads(p["symbols"])
-            return Respuesta(200, [{"symbol": s, "lastPrice": str(self.precios[s[:-4]]), "priceChangePercent": "-1.250"}
-                                   for s in sims if s[:-4] in self.precios])
+            sims = json.loads(p["symbols"]) if "symbols" in p else [p["symbol"]]
+            if self.estricto and any(x[:-4] not in self.precios for x in sims):
+                return self._error(-1121, "Invalid symbol.")
+            filas = [{"symbol": x, "lastPrice": str(self.precios[x[:-4]]), "priceChangePercent": "-1.250",
+                      "highPrice": str(self.precios[x[:-4]] * Decimal("1.02")), "lowPrice": str(self.precios[x[:-4]] * Decimal("0.97")),
+                      "quoteVolume": "123456789.5"} for x in sims if x[:-4] in self.precios]
+            return Respuesta(200, filas if "symbols" in p else filas[0])
+        if ruta == "/api/v3/klines":
+            precio, n = self.precios[p["symbol"][:-4]], int(p.get("limit", 10))
+            return Respuesta(200, [[1_700_000_000_000 + i * 60_000, str(precio), str(precio * Decimal("1.01")), str(precio * Decimal("0.99")),
+                                    str(precio), "1.5", 0, "1000.0"] for i in range(n)])
+        if ruta == "/api/v3/depth":
+            precio = self.precios[p["symbol"][:-4]]
+            return Respuesta(200, {"bids": [[str(precio - i - 1), "0.5"] for i in range(5)],
+                                   "asks": [[str(precio + i + 1), "0.4"] for i in range(5)]})
+        if ruta == "/api/v3/trades":
+            precio = self.precios[p["symbol"][:-4]]
+            return Respuesta(200, [{"time": 1_700_000_000_000 + i, "price": str(precio), "qty": "0.01", "isBuyerMaker": i % 2 == 0}
+                                   for i in range(3)])
         if ruta == "/api/v3/account":
             return Respuesta(200, {"canTrade": True, "balances": [
                 {"asset": a, "free": str(v), "locked": "0.00000000"} for a, v in self.saldos.items() if v]})

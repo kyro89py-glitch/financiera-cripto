@@ -41,11 +41,14 @@ def test_orden_limite_y_stop(ctx):
     assert programadas.nombre(db.uno("SELECT * FROM programadas WHERE id = ?", (stop,))) == "Stop (venta si baja)"
     precios.actualizar_manual("BTC", Decimal("59000"), adm)
     assert db.uno("SELECT estado FROM programadas WHERE id = ?", (stop,))["estado"] == "ejecutada"
-    assert cartera.tenencias(laura["id"]) == {"USD": 74000 + 23600}
-    # La venta límite sigue abierta; si llega el precio y ya no hay BTC, falla y avisa (no reserva saldo).
+    # La venta límite por US$ 100 a 90.000 reservó 0,00111111 BTC: el stop «vender todo» vende solo el resto.
+    assert cartera.tenencias(laura["id"]) == {"USD": 74000 + 17044, "BTC": 111111}
+    assert cartera.bloqueado(laura["id"]) == {"BTC": 111111}
+    with pytest.raises(operaciones.ErrorNegocio, match="reservado"):
+        operaciones.operar(laura, "BTC", "venta", 1000, u)
     precios.actualizar_manual("BTC", Decimal("91000"), adm)
     o = db.uno("SELECT * FROM programadas WHERE id = ?", (lim,))
-    assert o["estado"] == "fallida" and "No tienes BTC" in o["nota"]
+    assert o["estado"] == "ejecutada" and cartera.tenencias(laura["id"])["USD"] == 74000 + 17044 + 10000
     assert programadas.revisar(precios.vigentes()) == (0, 0)                # nada se repite
 
 

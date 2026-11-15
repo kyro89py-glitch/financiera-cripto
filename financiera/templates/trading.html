@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block titulo %}{{ a.codigo }}/USD · Trading{% endblock %}
+{% block clase_app %} ancha{% endblock %}
+{% block cabeza %}<script src="{{ url_for('static', filename='js/trading.js') }}?v={{ VERSION }}" defer></script>{% endblock %}
+{% block contenido %}
+{% if simulador or precios_sim %}
+<div class="aviso-demo" role="note">
+  <b>Modo demostración.</b>
+  {% if precios_sim %}Los precios, el libro de órdenes y las operaciones del mercado son simulados.{% else %}Los precios y el libro son reales de Binance.{% endif %}
+  {% if simulador %}Las órdenes se ejecutan en el simulador, al precio de referencia, sin enviarse a un exchange.{% endif %}
+</div>
+{% endif %}
+
+<header class="tr-par">
+  <div class="par-sel">
+    <button class="par-btn" type="button" aria-expanded="false" aria-controls="lista-pares">
+      <span class="moneda-ico" style="--c:{{ a.color }}">{{ a.codigo[0] }}</span>
+      <span><b>{{ a.codigo }}<span class="muted">/USD</span></b><span class="sec">{{ a.nombre }}</span></span>
+      <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    <div class="par-lista" id="lista-pares" hidden>
+      <label class="buscador">{{ icono('buscar') }}<input type="search" placeholder="Buscar moneda o par" aria-label="Buscar par" autocomplete="off"></label>
+      <ul role="listbox" aria-label="Pares disponibles">
+        {% for p in pares %}
+        <li><a href="{{ url_for('auth.trading', codigo=p.codigo, i=intervalo) }}" data-buscar="{{ p.codigo|lower }} {{ p.nombre|lower }}"{% if p.codigo == a.codigo %} aria-current="true"{% endif %}>
+          <span class="moneda-ico sm" style="--c:{{ p.color }}">{{ p.codigo[0] }}</span>
+          <span class="grow"><b>{{ p.codigo }}</b><span class="muted">/USD</span></span>
+          <span class="num" data-px="{{ p.codigo }}">{{ p.precio|precio if p.precio else "—" }}</span>
+          <span class="num pc {{ 'up' if (p.cambio or 0) >= 0 else 'down' }}" data-cambio="{{ p.codigo }}">{{ p.cambio|pct if p.cambio is not none else "—" }}</span>
+        </a></li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+  <div class="par-px">
+    <span class="px-grande num {{ 'up' if (vig.cambio or 0) >= 0 else 'down' }}" data-px="{{ a.codigo }}" data-tick>{{ vig.precio|precio if vig else "—" }}</span>
+    {% if vig and en_gs((vig.precio * 100)|int) %}<span class="small muted num">≈ {{ en_gs((vig.precio * 100)|int) }}</span>{% endif %}
+  </div>
+  <dl class="par-stats">
+    <div><dt>Cambio 24 h</dt><dd class="num {{ 'up' if (vig.cambio or 0) >= 0 else 'down' }}" data-cambio="{{ a.codigo }}">{{ vig.cambio|pct if vig and vig.cambio is not none else "—" }}</dd></div>
+    <div><dt>Máximo 24 h</dt><dd class="num" data-max="{{ a.codigo }}">{{ vig.max|precio if vig and vig.max else "—" }}</dd></div>
+    <div><dt>Mínimo 24 h</dt><dd class="num" data-min="{{ a.codigo }}">{{ vig.min|precio if vig and vig.min else "—" }}</dd></div>
+    <div><dt>Volumen 24 h</dt><dd class="num" data-vol="{{ a.codigo }}">{{ vig.volumen|compacto if vig and vig.volumen else "—" }}</dd></div>
+    <div class="oc"><dt>Capitalización</dt><dd class="num">{{ vig.cap|compacto if vig and vig.cap else "—" }}</dd></div>
+  </dl>
+  <div class="par-acc">
+    <span class="vivo" data-vivo title="Estado de la actualización de precios"><i></i><span>Conectando…</span></span>
+    <form method="post" action="{{ url_for('auth.favorito', codigo=a.codigo) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="volver" value="{{ request.full_path.rstrip('?') }}">
+      <button class="estrella{{ ' on' if favorito }}" type="submit" aria-label="{{ 'Quitar de' if favorito else 'Agregar a' }} favoritas" aria-pressed="{{ 'true' if favorito else 'false' }}">{{ icono('estrella') }}</button></form>
+    <a class="btn sm ghost" href="{{ url_for('auth.moneda', codigo=a.codigo) }}">Info</a>
+  </div>
+</header>
+
+<div class="tr-grid">
+  <section class="card tr-graf" aria-label="Gráfico de velas">
+    <div class="graf-barra">
+      <div class="chips intervalos" role="group" aria-label="Temporalidad">
+        {% for k, (seg, et, n) in intervalos.items() %}<button type="button" data-i="{{ k }}" aria-pressed="{{ 'true' if k == intervalo else 'false' }}">{{ et }}</button>{% endfor %}
+      </div>
+      <div class="leyenda num" id="leyenda" aria-live="off"></div>
+    </div>
+    <div class="lienzo" id="lienzo">
+      <canvas id="velas" role="img" aria-label="Gráfico de velas de {{ a.codigo }}/USD"></canvas>
+      <div class="cargando" id="graf-estado">Cargando velas…</div>
+    </div>
+    <div class="graf-pie small muted"><span><i class="ma ma7"></i>Media 7</span><span><i class="ma ma25"></i>Media 25</span><span id="graf-fuente"></span></div>
+  </section>
+
+  <section class="card tr-libro" aria-label="Libro de órdenes">
+    <div class="ch"><h3>Libro de órdenes</h3><span class="pill warn" id="libro-sim" hidden>Simulado</span></div>
+    <div class="libro-cab"><span>Precio (USD)</span><span>Cantidad ({{ a.codigo }})</span><span>Total (USD)</span></div>
+    <div class="libro-lado ventas" id="ventas"></div>
+    <div class="libro-medio"><span class="num px-medio" data-px="{{ a.codigo }}" data-tick>{{ vig.precio|precio if vig else "—" }}</span><span class="small muted num" id="spread"></span></div>
+    <div class="libro-lado compras" id="compras"></div>
+    <p class="xs muted libro-nota">Toca un precio para usarlo en una orden límite.</p>
+  </section>
+
+  <section class="card tr-orden" id="operar" aria-label="Comprar o vender">
+    {% if cli and cli.kyc_estado == 'verificado' %}
+    <div class="lado-tabs" role="tablist" aria-label="Lado">
+      <button type="button" role="tab" data-lado="compra" aria-selected="true">Comprar</button>
+      <button type="button" role="tab" data-lado="venta" aria-selected="false">Vender</button>
+    </div>
+    <div class="chips tipos" role="group" aria-label="Tipo de orden">
+      <button type="button" data-tipo="mercado" aria-pressed="true">Mercado</button>
+      <button type="button" data-tipo="limite" aria-pressed="false">Límite</button>
+      <button type="button" data-tipo="stop" aria-pressed="false">Stop</button>
+    </div>
+    <form id="f-orden" method="post" action="{{ url_for('cliente.operar') }}" data-mercado="{{ url_for('cliente.operar') }}" data-prog="{{ url_for('cliente.programada_crear') }}" novalidate>
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <input type="hidden" name="activo" value="{{ a.codigo }}">
+      <input type="hidden" name="lado" value="compra">
+      <input type="hidden" name="tipo" value="mercado">
+      <input type="hidden" name="todo" value="">
+      <input type="hidden" name="volver" value="{{ url_for('auth.trading', codigo=a.codigo, i=intervalo) }}">
+      <p class="small muted" id="tipo-ayuda">Se ejecuta ahora, al mejor precio disponible.</p>
+      <label class="field" id="campo-precio" hidden>Precio de activación (USD)
+        <input name="precio" inputmode="decimal" autocomplete="off" placeholder="0,00">
+      </label>
+      <label class="field">Monto en dólares
+        <input name="monto" inputmode="decimal" autocomplete="off" placeholder="0,00" required>
+      </label>
+      <div class="pcts" role="group" aria-label="Porcentaje del disponible">{% for n in [25, 50, 75, 100] %}<button type="button" data-pct="{{ n }}">{{ n }} %</button>{% endfor %}</div>
+      <dl class="estim">
+        <div><dt>Disponible</dt><dd class="num" id="o-disp">{{ disp_usd|usd }}</dd></div>
+        <div><dt>Cantidad estimada</dt><dd class="num" id="o-cant">—</dd></div>
+        <div><dt>Comisión{% if comision %} ({{ comision|pct(2, false) }}){% endif %}</dt><dd class="num" id="o-com">{{ "—" if comision else "Sin comisión" }}</dd></div>
+      </dl>
+      <p class="small error-txt" id="o-error" role="alert" hidden></p>
+      <button class="btn block lado-btn compra" type="submit" id="o-enviar">Comprar {{ a.codigo }}</button>
+      {% if bloq_usd or bloq_u %}<p class="xs muted">Reservado en órdenes abiertas: {% if bloq_usd %}{{ bloq_usd|usd }}{% endif %}{% if bloq_usd and bloq_u %} y {% endif %}{% if bloq_u %}{{ bloq_u|unidades(a.codigo) }}{% endif %}.</p>{% endif %}
+    </form>
+    <dialog class="confirmar" id="d-orden" aria-labelledby="d-titulo">
+      <h3 id="d-titulo">Revisa tu orden</h3>
+      <dl class="resumen-orden" id="d-resumen"></dl>
+      <p class="xs muted" id="d-nota"></p>
+      <div class="row"><button class="btn" type="button" data-cerrar>Volver</button><button class="btn primary" type="button" id="d-ok">Confirmar</button></div>
+    </dialog>
+    {% elif cli %}
+    <h3>Comprar y vender</h3>
+    <p class="small muted">Para operar primero tenemos que verificar tu identidad.</p>
+    <a class="btn primary" href="{{ url_for('cliente.perfil') }}#legajo">Completar verificación</a>
+    {% else %}
+    <h3>Comprar y vender</h3>
+    <p class="small muted">Solo los clientes operan desde esta pantalla. Como equipo ves el mismo mercado, el libro y las velas.</p>
+    {% endif %}
+  </section>
+
+  <section class="card tr-ops" aria-label="Operaciones del mercado">
+    <div class="ch"><h3>Operaciones del mercado</h3><span class="pill warn" id="ops-sim" hidden>Simulado</span></div>
+    <div class="libro-cab"><span>Precio (USD)</span><span>Cantidad</span><span>Hora</span></div>
+    <div class="ops-lista" id="ops"></div>
+  </section>
+</div>
+
+{% if cli %}
+<section class="card flush tr-mias">
+  <div class="tabs-sec" role="tablist" aria-label="Mis órdenes">
+    <button type="button" role="tab" aria-selected="true" aria-controls="t-abiertas" id="tab-abiertas">Órdenes abiertas ({{ abiertas|length }})</button>
+    <button type="button" role="tab" aria-selected="false" aria-controls="t-historial" id="tab-historial">Historial de operaciones</button>
+  </div>
+  <div id="t-abiertas" role="tabpanel" aria-labelledby="tab-abiertas">
+    {% if abiertas %}
+    <div class="tablewrap"><table class="tabla resp">
+      <thead><tr><th>Creada</th><th>Par</th><th>Tipo</th><th class="r">Precio de activación</th><th class="r">Monto</th><th></th></tr></thead>
+      <tbody>{% for o in abiertas %}
+      <tr><td>{{ o.creado|fecha }}</td><td><a href="{{ url_for('auth.trading', codigo=o.activo) }}">{{ o.activo }}/USD</a></td>
+        <td class="{{ 'up' if o.lado == 'compra' else 'down' }}">{{ nombre_prog(o) }}</td>
+        <td class="r num">{{ Decimal(o.precio)|precio }}</td><td class="r num">{{ "Todo" if o.todo else o.monto_cent|usd }}</td>
+        <td class="r"><form method="post" action="{{ url_for('cliente.programada_cancelar', oid=o.id) }}" data-confirmar="¿Cancelar esta orden?">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="volver" value="{{ request.full_path.rstrip('?') }}">
+          <button class="btn sm" type="submit">Cancelar</button></form></td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% else %}<p class="small muted vacio-sm">No tienes órdenes límite ni stop abiertas.</p>{% endif %}
+  </div>
+  <div id="t-historial" role="tabpanel" aria-labelledby="tab-historial" hidden>
+    {% if historial %}
+    <div class="tablewrap"><table class="tabla resp">
+      <thead><tr><th>Fecha</th><th>Par</th><th>Lado</th><th class="r">Precio</th><th class="r">Cantidad</th><th class="r">Importe</th><th class="r">Comisión</th></tr></thead>
+      <tbody>{% for o in historial %}
+      <tr><td><a href="{{ url_for('cliente.movimiento', opid=o.operacion_id) }}">{{ o.ts|fecha }}</a></td><td>{{ o.activo }}/USD</td>
+        <td class="{{ 'up' if o.lado == 'compra' else 'down' }}">{{ "Compra" if o.lado == 'compra' else "Venta" }}</td>
+        <td class="r num">{{ Decimal(o.precio)|precio }}</td><td class="r num">{{ o.cantidad|unidades(o.activo) }}</td>
+        <td class="r num">{{ o.importe_cent|usd }}</td><td class="r num">{{ (o.comision ~ " " ~ o.comision_activo) if o.comision_activo else "—" }}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% else %}<p class="small muted vacio-sm">Todavía no compraste ni vendiste.</p>{% endif %}
+  </div>
+</section>
+{% endif %}
+<p class="note">Las criptomonedas son inversiones de alto riesgo: su precio puede bajar con fuerza y puedes perder parte o todo lo invertido. El precio de cada orden es el que se obtiene al ejecutarla.</p>
+<script type="application/json" id="datos-trading">{{ datos|tojson }}</script>
+{% endblock %}

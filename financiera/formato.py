@@ -51,20 +51,29 @@ ICONOS = {
     "ajustes": '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/>',
 }
 
+ICONOS["trading"] = ('<path d="M7 3v4M7 17v4M17 3v7M17 18v3"/><rect x="5" y="7" width="4" height="10" rx="1"/>'
+                     '<rect x="15" y="10" width="4" height="8" rx="1"/>')
+ICONOS["retiro"] = '<circle cx="12" cy="12" r="8.5"/><path d="M12 8v8M8.5 12.5L12 16l3.5-3.5"/>'
+ICONOS["ojo"] = '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'
+ICONOS["dispositivo"] = '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>'
+ICONOS["buscar"] = '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>'
+
 NAV = {
-    "cliente": [("cliente.inicio", "Inicio", "inicio", None), ("cliente.cartera", "Billetera", "billetera", None),
-                ("auth.mercado", "Mercado", "mercado", None), ("cliente.movimientos", "Movimientos", "movimientos", None),
+    "cliente": [("cliente.inicio", "Inicio", "inicio", None), ("auth.mercado", "Mercados", "mercado", None),
+                ("auth.trading", "Trading", "trading", None), ("cliente.cartera", "Billetera", "billetera", None),
                 ("cliente.perfil", "Perfil", "perfil", None)],
-    "equipo": [("equipo.resumen", "Resumen", "resumen", None), ("auth.mercado", "Mercado", "mercado", None),
+    "equipo": [("equipo.resumen", "Resumen", "resumen", None), ("auth.mercado", "Mercados", "mercado", None),
+               ("auth.trading", "Trading", "trading", None),
                ("equipo.operaciones", "Operaciones", "operaciones", None),
                ("equipo.clientes", "Clientes", "clientes", None),
                ("equipo.cumplimiento", "Cumplimiento", "cumplimiento", "cumplimiento.ver"),
                ("admin.precios", "Ajustes", "ajustes", "precios.editar")],
 }
 ACTIVO = {  # qué rutas marcan cada pestaña como activa
-    "cliente.movimientos": ("cliente.movimientos", "cliente.estado_mensual"),
     "auth.mercado": ("auth.mercado", "auth.moneda"),
-    "cliente.cartera": ("cliente.cartera", "cliente.invertir", "cliente.convertir", "cliente.enviar"),
+    "cliente.cartera": ("cliente.cartera", "cliente.invertir", "cliente.convertir", "cliente.enviar", "cliente.movimientos",
+                        "cliente.estado_mensual", "cliente.movimiento", "cliente.envio", "cliente.retirar"),
+    "cliente.perfil": ("cliente.perfil", "auth.seguridad", "auth.clave", "auth.sesiones"),
     "equipo.operaciones": ("equipo.operaciones", "equipo.operacion"),
     "equipo.clientes": ("equipo.clientes", "equipo.cliente", "equipo.cliente_nuevo", "equipo.estado_mensual"),
     "equipo.cumplimiento": ("equipo.cumplimiento", "equipo.bitacora", "equipo.documentos", "equipo.conciliacion"),
@@ -105,6 +114,20 @@ def f_pct(valor, decimales=2, signo=True):
     return ("+" + s) if signo and d > 0 else s
 
 
+def compacto(valor, moneda=True):
+    """Montos grandes abreviados: US$ 1,30 B (billones), US$ 49,17 mil M, US$ 345,7 M."""
+    if valor is None:
+        return "—"
+    v = float(valor)
+    for limite, sufijo, dec in ((1e12, " B", 2), (1e9, " mil M", 2), (1e6, " M", 1), (1e3, " mil", 1)):
+        if abs(v) >= limite:
+            texto = dinero.fmt_num(Decimal(str(round(v / limite, dec))), dec) + sufijo
+            break
+    else:
+        texto = dinero.fmt_num(Decimal(str(round(v, 2))), 2)
+    return ("US$ " if moneda else "") + texto
+
+
 def iniciales(nombre):
     partes = [p for p in (nombre or "").split() if p[:1].isalpha()]
     return ("".join(p[0] for p in partes[:2]) or "?").upper()
@@ -137,9 +160,10 @@ def cinta():
     from . import precios
     try:
         vig = precios.vigentes()
+        orden = [a["codigo"] for a in precios.activos(solo_habilitados=True)]
     except Exception:
         return []
-    return [{"codigo": a, "precio": p["precio"], "cambio": p["cambio"]} for a, p in vig.items()]
+    return [{"codigo": a, "precio": vig[a]["precio"], "cambio": vig[a]["cambio"]} for a in orden if a in vig]
 
 
 def avisos_no_leidos():
@@ -168,6 +192,7 @@ def init_app(app):
     app.jinja_env.filters["periodo"] = periodo_txt
     from . import guarani
     app.jinja_env.filters["gs"] = guarani.fmt
+    app.jinja_env.filters["compacto"] = compacto
 
     def en_gs(cent):
         """Equivalente en guaraníes de un importe en dólares, o None si no hay tipo de cambio cargado."""

@@ -44,6 +44,8 @@ echo.
 echo   Para apagarla, cierra esta ventana.
 echo  ==========================================================
 echo.
+set "FUENTE_PRECIOS=simulada"
+start "" /b ".venv\Scripts\python.exe" -m flask --app financiera precios-en-vivo >nul 2>&1
 start "" "http://127.0.0.1:5000"
 ".venv\Scripts\python.exe" -m flask --app financiera run --port 5000
 goto fin

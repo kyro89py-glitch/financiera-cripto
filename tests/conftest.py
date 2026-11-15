@@ -19,8 +19,10 @@ def app(tmp_path):
         "PRECIO_MAX_MINUTOS": 60,
     })
     with app.app_context():
-        for a, p in {"BTC": "70000", "ETH": "2000", "USDT": "1", "SOL": "100", "BNB": "600", "XRP": "1", "LINK": "10"}.items():
-            precios.registrar(a, Decimal(p), Decimal("0"), "pruebas")
+        base = {"BTC": "70000", "ETH": "2000", "USDT": "1", "SOL": "100", "BNB": "600", "XRP": "1", "LINK": "10",
+                "USDC": "1", "SHIB": "0.0000039", "PEPE": "0.00000389"}
+        for a in precios.activos():
+            precios.registrar(a["codigo"], Decimal(base.get(a["codigo"], "5")), Decimal("0"), "pruebas")
         for email, nombre, rol in [("admin@x.com", "Ana Admin", "admin"), ("op@x.com", "Oscar Operador", "operador"),
                                    ("op2@x.com", "Olga Operadora", "operador"), ("cum@x.com", "Carla Cumplimiento", "cumplimiento")]:
             cuentas.crear_usuario(email, nombre, rol, CLAVE, debe_cambiar=False)

@@ -2,57 +2,60 @@
 {% from "macros.html" import estado, ph, tipo_op, signo, vacio with context %}
 {% block titulo %}Movimientos{% endblock %}
 {% block contenido %}
-{% call ph("Movimientos", "Tus aportes, retiros y comisiones, con el detalle de cada compra y venta.") %}
+<a class="volver" href="{{ url_for('cliente.cartera') }}">← Billetera</a>
+{% call ph("Movimientos", "Depósitos, retiros, compras, ventas, envíos y comisiones. Toca uno para ver el detalle y su estado.") %}
   <a class="btn" href="{{ url_for('cliente.estado_cuenta') }}">{{ icono('descargar') }}CSV completo</a>
 {% endcall %}
-<div class="g2">
+<div class="g2 mov-g">
   <div class="col">
-    <div class="chips">
-      <a href="{{ url_for('cliente.movimientos') }}" aria-current="{{ 'true' if filtro != 'abiertos' else 'false' }}">Todos</a>
-      <a href="{{ url_for('cliente.movimientos', ver='abiertos') }}" aria-current="{{ 'true' if filtro == 'abiertos' else 'false' }}">En curso</a>
+    <form class="filtros-mercado" method="get" action="{{ url_for('cliente.movimientos') }}" role="search">
+      <label class="buscador">{{ icono('buscar') }}<input type="search" name="q" value="{{ q }}" placeholder="Buscar por número, moneda, comprobante, persona o monto" aria-label="Buscar movimientos" autocomplete="off"></label>
+      <input type="hidden" name="ver" value="{{ filtro }}">
+      <button class="btn" type="submit">Buscar</button>
+    </form>
+    <div class="chips" aria-label="Tipo de movimiento">
+      {% for k, t in filtros.items() %}<a href="{{ url_for('cliente.movimientos', ver=k if k != 'todos' else none, q=q or none) }}" aria-current="{{ 'true' if filtro == k else 'false' }}">{{ t }}</a>{% endfor %}
     </div>
-    <section class="card flush">
+    <section class="card flush privado">
+      {% if q or filtro != 'todos' %}<div class="ch"><span class="meta">{{ total }} resultado{{ 's' if total != 1 }}{% if q %} para «{{ q }}»{% endif %}</span>{% if q %}<a class="small" href="{{ url_for('cliente.movimientos', ver=filtro if filtro != 'todos' else none) }}">Limpiar búsqueda</a>{% endif %}</div>{% endif %}
       <div class="list">
-      {% for o in ops %}
-        <div class="item wrap">
+      {% for m in movs %}
+        {% if m.clase == 'op' %}{% set o = m.o %}
+        <a class="item mov" href="{{ m.url }}">
+          <span class="mov-ico {{ o.tipo }}">{{ icono({'aporte': 'invertir', 'retiro': 'retiro', 'compra': 'mercado', 'venta': 'mercado', 'comision': 'documento'}.get(o.tipo, 'movimientos')) }}</span>
           <div class="grow">
             <div class="t">{{ tipo_op(o) }} {{ estado(o) }}</div>
-            <div class="d">{{ o.creado|fecha }}{% if o.modelo and o.tipo == 'aporte' %} · cartera {{ modelos[o.modelo] }}{% endif %}{% if o.referencia %} · comprobante {{ o.referencia }}{% endif %}{% if o.monto_pyg %} · {{ o.monto_pyg|gs }} a {{ o.cambio_pyg|gs }} por dólar{% endif %}</div>
-            {% if o.estado == 'rechazada' and o.motivo %}<div class="d down">Motivo: {{ o.motivo }}</div>{% endif %}
-            {% for r in ordenes.get(o.id, []) %}<div class="d num">{{ "Compra" if r.lado == "compra" else "Venta" }} {{ r.cantidad|unidades(r.activo) }} · {{ r.precio|precio }}</div>{% endfor %}
+            <div class="d">{{ o.creado|fecha }}{% if o.referencia %} · comprobante {{ o.referencia }}{% endif %}{% if o.monto_pyg %} · {{ o.monto_pyg|gs }}{% endif %}</div>
+            {% for r in m.ordenes[:2] %}<div class="d num">{{ "Compra" if r.lado == "compra" else "Venta" }} {{ r.cantidad|unidades(r.activo) }} · {{ r.precio|precio }}</div>{% endfor %}
+            {% if m.ordenes|length > 2 %}<div class="d">y {{ m.ordenes|length - 2 }} órdenes más</div>{% endif %}
           </div>
-          <div class="amt num {{ 'up' if o.tipo == 'aporte' else ('' if o.tipo in ('compra', 'venta') else 'down') }}">{{ signo(o) }}{{ (o.liquidado_cent if o.liquidado_cent is not none else o.monto_cent)|usd }}</div>
-          {% if o.estado == 'pendiente' %}
-          <form class="acts" method="post" action="{{ url_for('cliente.cancelar', opid=o.id) }}" data-confirmar="¿Cancelar esta solicitud?">
-            <input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn sm" type="submit">Cancelar solicitud</button>
-          </form>
-          {% endif %}
-        </div>
+          <div class="amt num {{ 'up' if o.tipo == 'aporte' else ('' if o.tipo in ('compra', 'venta') else 'down') }}">{{ signo(o) }}{{ m.monto|usd }}</div>
+        </a>
+        {% else %}{% set t = m.t %}
+        <a class="item mov" href="{{ m.url }}">
+          <span class="mov-ico envio">{{ icono('enviar') }}</span>
+          <div class="grow"><div class="t">{{ ("Enviaste a " if m.sale else "Recibiste de ") ~ ocultar(m.otro) }} <span class="pill ok">Completado</span></div>
+            <div class="d">{{ t.ts|fecha }}{% if t.activo != 'USD' %} · {{ t.cantidad|unidades(t.activo) }}{% endif %}{% if t.nota %} · «{{ t.nota }}»{% endif %}</div></div>
+          <div class="amt num {{ 'down' if m.sale else 'up' }}">{{ '−' if m.sale else '+' }}{{ t.valor_cent|usd }}</div>
+        </a>
+        {% endif %}
       {% else %}
-        {{ vacio('movimientos', 'No hay movimientos para mostrar.') }}
+        {{ vacio('movimientos', 'No hay movimientos que coincidan.' if q or filtro != 'todos' else 'Todavía no tienes movimientos.') }}
       {% endfor %}
       </div>
+      {% if total > movs|length %}<p class="small muted vacio-sm">Se muestran los {{ movs|length }} más recientes. Usa el buscador o descarga el CSV para ver todos.</p>{% endif %}
     </section>
   </div>
   <div class="col">
-  {% if envios %}
-  <section class="card flush">
-    <div class="ch"><h3>Envíos entre clientes</h3><a class="small" href="{{ url_for('cliente.enviar') }}">Enviar</a></div>
-    <div class="list">{% for t in envios[:10] %}{% set sale = t.de_cliente == g.cliente.id %}
-      <div class="item"><div class="grow"><div class="t">{{ "Enviaste a " ~ ocultar(t.a_nombre) if sale else "Recibiste de " ~ ocultar(t.de_nombre) }}</div><div class="d">{{ t.ts|fecha }}{% if t.activo != 'USD' %} · {{ t.cantidad|unidades(t.activo) }}{% endif %}{% if t.nota %} · «{{ t.nota }}»{% endif %}</div></div>
-        <div class="amt num {{ 'down' if sale else 'up' }}">{{ '−' if sale else '+' }}{{ t.valor_cent|usd }}</div></div>
-    {% endfor %}</div>
-  </section>
-  {% endif %}
-  <section class="card">
-    <div class="ch"><h3>Estados de cuenta</h3></div>
-    <p class="small muted">Resumen mensual con el valor inicial y final, tus movimientos y el resultado. Puedes imprimirlo o guardarlo como PDF.</p>
-    <div class="list" style="margin-top:6px">
-    {% for p in periodos %}
-      <a class="item" href="{{ url_for('cliente.estado_mensual', periodo=p) }}">{{ icono('documento') }}<div class="grow t">{{ p|periodo|capitalize }}</div>{% if loop.first %}<span class="pill info plain">En curso</span>{% endif %}</a>
-    {% endfor %}
-    </div>
-  </section>
+    <section class="card">
+      <div class="ch"><h3>Estados de cuenta</h3></div>
+      <p class="small muted">Resumen mensual con el valor inicial y final, tus movimientos y el resultado. Puedes imprimirlo o guardarlo como PDF.</p>
+      <div class="list" style="margin-top:6px">
+      {% for p in periodos %}
+        <a class="item" href="{{ url_for('cliente.estado_mensual', periodo=p) }}">{{ icono('documento') }}<div class="grow t">{{ p|periodo|capitalize }}</div>{% if loop.first %}<span class="pill info plain">En curso</span>{% endif %}</a>
+      {% endfor %}
+      </div>
+    </section>
   </div>
 </div>
 {% endblock %}

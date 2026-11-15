@@ -28,10 +28,27 @@
         {% if g.usuario.terminos_ts %}{{ check(true, "Condiciones aceptadas el " ~ (g.usuario.terminos_ts|dia)) }}{% endif %}
       </ul>
       <div class="row">
+        <a class="btn" href="{{ url_for('auth.sesiones') }}">{{ icono('dispositivo') }}Dispositivos y sesiones</a>
         <a class="btn" href="{{ url_for('auth.seguridad') }}">{{ icono('escudo') }}Verificación en dos pasos</a>
         <a class="btn" href="{{ url_for('auth.clave') }}">{{ icono('llave') }}Cambiar clave</a>
         <a class="btn" href="{{ url_for('cliente.condiciones') }}">{{ icono('documento') }}Condiciones</a>
       </div>
+    </section>
+
+    <section class="card col" id="privacidad">
+      <div class="ch" style="margin:0"><h3>Privacidad</h3></div>
+      <form class="pref" method="post" action="{{ url_for('auth.privacidad') }}">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="saldos"><input type="hidden" name="volver" value="{{ url_for('cliente.perfil') }}#privacidad">
+        <div class="grow"><b>Ocultar saldos</b><span class="small muted">Esconde los montos de tu billetera en pantalla, por ejemplo en lugares públicos. También con el ojo de arriba.</span></div>
+        <button class="interruptor" type="submit" role="switch" aria-checked="{{ 'true' if g.usuario.ocultar_saldos else 'false' }}" aria-label="Ocultar saldos"><i></i></button>
+      </form>
+      <form class="pref" method="post" action="{{ url_for('auth.privacidad') }}">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="envios"><input type="hidden" name="volver" value="{{ url_for('cliente.perfil') }}#privacidad">
+        <div class="grow"><b>Recibir envíos de otros clientes</b><span class="small muted">Permite que otros clientes te encuentren por tu correo o cédula para enviarte dinero. Solo ven tu nombre abreviado.</span></div>
+        <button class="interruptor" type="submit" role="switch" aria-checked="{{ 'true' if cli.recibir_envios else 'false' }}" aria-label="Recibir envíos"><i></i></button>
+      </form>
+      <div class="pref"><div class="grow"><b>Copia de tus datos</b><span class="small muted">Descarga tus datos personales, sesiones, movimientos y documentos registrados.</span></div>
+        <a class="btn sm" href="{{ url_for('auth.mis_datos') }}">{{ icono('descargar') }}Descargar</a></div>
     </section>
   </div>
 

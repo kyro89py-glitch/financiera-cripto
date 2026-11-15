@@ -40,7 +40,32 @@ def _en_guaranies(monto_pyg, tipo):
     return guarani.a_usd_cent(monto_pyg, cambio), cambio
 
 
-def solicitar_aporte(cliente, monto, modelo, referencia, usuario, ts=None, acepta_riesgo=False, monto_pyg=None):
+METODOS = {
+    "transferencia": "Transferencia bancaria",
+    "efectivo": "Efectivo en la oficina",
+    "usdt": "USDT por red cripto",
+}
+
+
+def metodos(tipo="aporte"):
+    """Métodos habilitados en la configuración. La transferencia siempre está; efectivo y USDT solo si hay datos
+    cargados (dirección de la oficina o de la billetera), así nunca se ofrece un camino que no existe."""
+    cfg = current_app.config
+    out = {"transferencia": METODOS["transferencia"]}
+    if cfg.get("OFICINA_DIRECCION"):
+        out["efectivo"] = METODOS["efectivo"]
+    if tipo == "aporte" and cfg.get("DEPOSITO_USDT_DIRECCION"):
+        out["usdt"] = METODOS["usdt"]
+    return out
+
+
+def solicitar_aporte(cliente, monto, modelo, referencia, usuario, ts=None, acepta_riesgo=False, monto_pyg=None,
+                     metodo="transferencia", solo_validar=False):
+    """solo_validar=True hace todos los controles sin registrar nada (para la pantalla de revisión)."""
+    if metodo not in metodos("aporte"):
+        raise ErrorNegocio("Elige cómo vas a depositar.")
+    if metodo == "usdt" and monto_pyg:
+        raise ErrorNegocio("Los depósitos en USDT se acreditan en dólares.")
     cambio_pyg = None
     if monto_pyg:
         monto, cambio_pyg = _en_guaranies(monto_pyg, "deposito")
@@ -56,13 +81,15 @@ def solicitar_aporte(cliente, monto, modelo, referencia, usuario, ts=None, acept
     if fuera and not acepta_riesgo:
         raise ErrorNegocio(f"La cartera {m['nombre']} tiene más riesgo que tu perfil {cliente['perfil_riesgo']}. "
                            "Para continuar, confirma que entiendes y aceptas ese riesgo.")
+    if solo_validar:
+        return {"monto": monto, "cambio_pyg": cambio_pyg, "modelo": m, "fuera": fuera}
     ts = ts or ahora()
     with db.transaccion() as c:
         cur = c.execute(
             "INSERT INTO operaciones (cliente_id, tipo, monto_cent, modelo, referencia, estado, creado, creado_por, fuera_perfil,"
-            " monto_pyg, cambio_pyg) VALUES (?, 'aporte', ?, ?, ?, 'pendiente', ?, ?, ?, ?, ?)",
+            " monto_pyg, cambio_pyg, metodo) VALUES (?, 'aporte', ?, ?, ?, 'pendiente', ?, ?, ?, ?, ?, ?)",
             (cliente["id"], monto, modelo, (referencia or "").strip()[:80] or None, ts, usuario["id"] if usuario else None,
-             1 if fuera else 0, monto_pyg or None, cambio_pyg),
+             1 if fuera else 0, monto_pyg or None, cambio_pyg, metodo),
         )
         opid = cur.lastrowid
         extra = " Confirmó que acepta un riesgo mayor al de su perfil." if fuera else ""
@@ -74,18 +101,20 @@ def solicitar_aporte(cliente, monto, modelo, referencia, usuario, ts=None, acept
     return opid
 
 
-def operar(cliente, activo, lado, monto_cent, usuario, todo=False, ts=None, precios_usar=None):
+def operar(cliente, activo, lado, monto_cent, usuario, todo=False, ts=None, precios_usar=None, excepto_programada=None):
     """Compra o venta de una moneda por cuenta del cliente, contra su saldo en dólares. Se ejecuta en el momento, sin
     aprobación del equipo, porque no entra ni sale dinero de la casa. Devuelve (id, 'liquidada' | 'incompleta')."""
     ts = ts or ahora()
     if lado not in ("compra", "venta"):
         raise ErrorNegocio("Elige comprar o vender.")
     a = db.uno("SELECT * FROM activos WHERE codigo = ?", (activo,))
-    if not a:
+    if not a or (lado == "compra" and not a["habilitado"]):
         raise ErrorNegocio("Esa moneda no está disponible.")
     if cliente["kyc_estado"] != "verificado":
         raise ErrorNegocio("Para comprar y vender primero tenemos que verificar tu identidad. Revisa tu perfil.")
     maximo = _umbral("ORDEN_MAXIMA_USD")
+    ten = cartera.tenencias(cliente["id"])
+    bloq = cartera.bloqueado(cliente["id"], excepto_programada, ten)
     if precios_usar is None:
         try:
             precios.exigir_frescura([activo])
@@ -94,13 +123,22 @@ def operar(cliente, activo, lado, monto_cent, usuario, todo=False, ts=None, prec
     pr = precios_usar if precios_usar is not None else precios.vigentes()
     cantidad = None
     if lado == "venta":
-        tengo = cartera.tenencias(cliente["id"]).get(activo, 0)
+        tengo = ten.get(activo, 0) - bloq.get(activo, 0)
         if tengo <= 0:
+            if bloq.get(activo):
+                raise ErrorNegocio(f"Todo tu {activo} está reservado en órdenes programadas. Cancela alguna para vender.")
             raise ErrorNegocio(f"No tienes {activo} para vender.")
         cantidad = tengo if todo else min(tengo, unidades_por(monto_cent, pr[activo]["precio"]))
         if not todo and monto_cent > valor_cent(activo, tengo, pr[activo]["precio"]):
-            raise ErrorNegocio(f"Tienes {fmt_usd(valor_cent(activo, tengo, pr[activo]['precio']))} en {activo}; no puedes vender más que eso.")
+            raise ErrorNegocio(f"Tienes {fmt_usd(valor_cent(activo, tengo, pr[activo]['precio']))} en {activo}"
+                               + (" disponibles (el resto está reservado en órdenes)" if bloq.get(activo) else "")
+                               + "; no puedes vender más que eso.")
         monto_cent = max(1, valor_cent(activo, cantidad, pr[activo]["precio"]))
+    elif bloq.get("USD") and monto_cent > ten.get("USD", 0) - bloq["USD"]:
+        raise ErrorNegocio(f"Tienes {fmt_usd(max(ten.get('USD', 0) - bloq['USD'], 0))} disponibles: el resto de tu saldo está "
+                           "reservado en órdenes programadas.")
+    elif monto_cent > 0 and ten.get(activo, 0) + unidades_por(monto_cent, pr[activo]["precio"]) > 9 * 10 ** 18:
+        raise ErrorNegocio("Esa cantidad supera el máximo que podemos registrar para una moneda.")
     if monto_cent <= 0:
         raise ErrorNegocio("Escribe un monto mayor que cero.")
     if monto_cent > maximo:
@@ -151,7 +189,25 @@ def _avisar_equipo(texto, opid, usuario, ts):
                                  excepto=usuario["id"] if usuario else None, ts=ts)
 
 
-def solicitar_retiro(cliente, monto, usuario, ts=None, en_guaranies=False):
+def reservado_cent(cliente_id, pr=None):
+    """Valor en dólares de lo reservado por órdenes programadas."""
+    pr = pr or precios.vigentes()
+    return sum(u if a == "USD" else (valor_cent(a, u, pr[a]["precio"]) if a in pr else 0)
+               for a, u in cartera.bloqueado(cliente_id).items())
+
+
+def comision_operacion_pct():
+    """Comisión por compra o venta que se descuenta en la ejecución (la cobra el exchange o el simulador)."""
+    from decimal import Decimal
+    from . import exchange
+    if exchange.modo() == "binance":
+        return Decimal(str(current_app.config.get("COMISION_EXCHANGE_PCT", "0.1")))
+    return Decimal(str(current_app.config.get("SIMULADOR_COMISION_PCT", 0)))
+
+
+def solicitar_retiro(cliente, monto, usuario, ts=None, en_guaranies=False, metodo="transferencia", solo_validar=False):
+    if metodo not in metodos("retiro"):
+        raise ErrorNegocio("Elige cómo quieres cobrar.")
     if monto <= 0:
         raise ErrorNegocio("Escribe el monto que quieres retirar.")
     cambio_pyg = monto_pyg = None
@@ -167,13 +223,15 @@ def solicitar_retiro(cliente, monto, usuario, ts=None, en_guaranies=False):
         pendiente = c.execute(
             "SELECT COALESCE(SUM(monto_cent), 0) AS s FROM operaciones WHERE cliente_id = ? AND tipo = 'retiro'"
             " AND estado IN ('pendiente', 'primera_firma', 'ejecutando')", (cliente["id"],)).fetchone()["s"]
-        disponible = total - pendiente
+        disponible = total - pendiente - reservado_cent(cliente["id"])
         if monto > disponible:
             raise ErrorNegocio(f"El retiro supera lo disponible en tu cartera ({fmt_usd(max(disponible, 0))}).")
+        if solo_validar:
+            return {"monto": monto, "monto_pyg": monto_pyg, "cambio_pyg": cambio_pyg, "disponible": disponible}
         cur = c.execute(
-            "INSERT INTO operaciones (cliente_id, tipo, monto_cent, estado, creado, creado_por, monto_pyg, cambio_pyg)"
-            " VALUES (?, 'retiro', ?, 'pendiente', ?, ?, ?, ?)",
-            (cliente["id"], monto, ts, usuario["id"] if usuario else None, monto_pyg, cambio_pyg))
+            "INSERT INTO operaciones (cliente_id, tipo, monto_cent, estado, creado, creado_por, monto_pyg, cambio_pyg, metodo)"
+            " VALUES (?, 'retiro', ?, 'pendiente', ?, ?, ?, ?, ?)",
+            (cliente["id"], monto, ts, usuario["id"] if usuario else None, monto_pyg, cambio_pyg, metodo))
         opid = cur.lastrowid
         auditoria.registrar("operacion.solicitada", f"operacion:{opid}",
                             {"texto": f"{cliente['nombre']} solicitó un retiro de {fmt_usd(monto)}.",

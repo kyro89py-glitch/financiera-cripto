@@ -106,6 +106,8 @@ def salir():
     u = g.get("usuario")
     if u:
         auditoria.registrar("salida", f"usuario:{u['id']}", {"texto": f"Cerró sesión {u['email']}."}, usuario=u)
+        if session.get("sid"):
+            db.ejecutar("UPDATE sesiones SET cerrada = ?, cierre = 'salida' WHERE id = ? AND cerrada IS NULL", (ahora(), session["sid"]))
     session.clear()
     flash("Cerraste sesión.", "info")
     return redirect(url_for("auth.ingresar"))
@@ -134,7 +136,10 @@ def clave():
                         (seguridad.hash_clave(nueva), u["id"]))
             auditoria.registrar("clave.cambiada", f"usuario:{u['id']}", {"texto": f"{u['email']} cambió su contraseña."}, usuario=u)
             u = db.uno("SELECT * FROM usuarios WHERE id = ?", (u["id"],))
-            seguridad.iniciar_sesion(u)
+            seguridad.cerrar_sesiones(u["id"], "clave", excepto=session.get("sid"))
+            seguridad.iniciar_sesion(u, motivo="clave")
+            from . import notificaciones
+            notificaciones.notificar(u["id"], "Cambiaste tu contraseña. Si no fuiste tú, contáctanos de inmediato.", "/cuenta/sesiones")
             flash("Contraseña actualizada. Se cerraron tus otras sesiones.", "ok")
             return redirect(_destino(u))
     return render_template("auth/clave.html", error=error, forzado=bool(u["debe_cambiar_clave"]))
@@ -159,7 +164,10 @@ def seguridad_cuenta():
                             " sesion_ver = sesion_ver + 1 WHERE id = ?", (contador, u["id"]))
                 auditoria.registrar("2fa.activada", f"usuario:{u['id']}",
                                     {"texto": f"{u['email']} activó la verificación en dos pasos."}, usuario=u)
-                seguridad.iniciar_sesion(db.uno("SELECT * FROM usuarios WHERE id = ?", (u["id"],)))
+                seguridad.cerrar_sesiones(u["id"], "clave", excepto=session.get("sid"))
+                seguridad.iniciar_sesion(db.uno("SELECT * FROM usuarios WHERE id = ?", (u["id"],)), motivo="2fa")
+                from . import notificaciones
+                notificaciones.notificar(u["id"], "Activaste la verificación en dos pasos. Se cerraron tus otras sesiones.", "/cuenta/sesiones")
                 flash("Verificación en dos pasos activada.", "ok")
                 return redirect(url_for("auth.seguridad"))
         elif accion == "desactivar" and u["totp_secreto"]:
@@ -239,15 +247,114 @@ def service_worker():
     return resp
 
 
+EVENTOS_SEGURIDAD = {"ingreso.ok": "Ingreso correcto", "ingreso.fallido": "Intento de ingreso fallido", "salida": "Cierre de sesión",
+                     "clave.cambiada": "Cambio de contraseña", "2fa.activada": "Verificación en dos pasos activada",
+                     "2fa.desactivada": "Verificación en dos pasos desactivada", "sesion.cerrada": "Sesión cerrada a distancia",
+                     "privacidad.cambiada": "Cambio de privacidad"}
+
+
+@bp.get("/cuenta/sesiones")
+def sesiones():
+    r = seguridad.exigir_sesion()
+    if r:
+        return r
+    u = g.usuario
+    limite = iso(ahora_dt() - timedelta(minutes=current_app.config["INACTIVIDAD_MIN"]))
+    todas = db.todos("SELECT * FROM sesiones WHERE usuario_id = ? ORDER BY creada DESC LIMIT 40", (u["id"],))
+    activas = [s for s in todas if not s["cerrada"] and s["ultima"] >= limite]
+    marcas = ",".join("?" * len(EVENTOS_SEGURIDAD))
+    eventos = db.todos(f"SELECT ts, accion, ip FROM bitacora WHERE objeto = ? AND accion IN ({marcas}) ORDER BY id DESC LIMIT 25",
+                       (f"usuario:{u['id']}", *EVENTOS_SEGURIDAD))
+    cli = _cliente_actual()
+    return render_template("auth/sesiones.html", activas=activas, historial=todas, actual=session.get("sid"),
+                           eventos=eventos, nombres=EVENTOS_SEGURIDAD, cli=cli, limite=limite)
+
+
+@bp.post("/cuenta/sesiones/<sid>/cerrar")
+def sesion_cerrar(sid):
+    r = seguridad.exigir_sesion()
+    if r:
+        return r
+    u = g.usuario
+    if sid == session.get("sid"):
+        return redirect(url_for("auth.salir"))
+    n = db.ejecutar("UPDATE sesiones SET cerrada = ?, cierre = 'usuario' WHERE id = ? AND usuario_id = ? AND cerrada IS NULL",
+                    (ahora(), sid, u["id"])).rowcount
+    if n:
+        auditoria.registrar("sesion.cerrada", f"usuario:{u['id']}", {"texto": f"{u['email']} cerró una sesión desde otro dispositivo."}, usuario=u)
+        flash("Sesión cerrada. Ese dispositivo tiene que volver a ingresar.", "ok")
+    return redirect(url_for("auth.sesiones"))
+
+
+@bp.post("/cuenta/sesiones/cerrar-otras")
+def sesiones_cerrar_otras():
+    r = seguridad.exigir_sesion()
+    if r:
+        return r
+    u = g.usuario
+    n = seguridad.cerrar_sesiones(u["id"], "usuario", excepto=session.get("sid"))
+    if n:
+        auditoria.registrar("sesion.cerrada", f"usuario:{u['id']}", {"texto": f"{u['email']} cerró {n} sesiones en otros dispositivos."}, usuario=u)
+    flash("Cerraste todas tus otras sesiones." if n else "No había otras sesiones abiertas.", "ok")
+    return redirect(url_for("auth.sesiones"))
+
+
+@bp.post("/cuenta/privacidad")
+def privacidad():
+    r = seguridad.exigir_sesion()
+    if r:
+        return r
+    u = g.usuario
+    accion = request.form.get("accion")
+    destino = _seguro(request.form.get("volver")) or url_for("auth.sesiones")
+    if accion == "saldos":
+        db.ejecutar("UPDATE usuarios SET ocultar_saldos = 1 - ocultar_saldos WHERE id = ?", (u["id"],))
+        return redirect(destino)
+    cli = _cliente_actual()
+    if accion == "envios" and cli:
+        nuevo = 0 if cli["recibir_envios"] else 1
+        db.ejecutar("UPDATE clientes SET recibir_envios = ? WHERE id = ?", (nuevo, cli["id"]))
+        auditoria.registrar("privacidad.cambiada", f"usuario:{u['id']}",
+                            {"texto": f"{cli['nombre']} {'permitió' if nuevo else 'dejó de permitir'} que otros clientes lo encuentren para enviarle."}, usuario=u)
+        flash("Listo: otros clientes " + ("ya pueden" if nuevo else "ya no pueden") + " encontrarte para enviarte dinero.", "ok")
+    return redirect(destino)
+
+
+@bp.get("/cuenta/mis-datos.json")
+def mis_datos():
+    """Copia de los datos personales y de la actividad de la cuenta, para el titular."""
+    r = seguridad.exigir_sesion()
+    if r:
+        return r
+    u = g.usuario
+    cli = _cliente_actual()
+    datos = {"generado": ahora(), "usuario": {k: u[k] for k in ("email", "nombre", "rol", "creado", "ultimo_ingreso", "terminos_version")
+                                             if k in u.keys()},
+             "sesiones": [{k: s[k] for k in ("creada", "ultima", "ip", "dispositivo", "cerrada", "cierre")}
+                          for s in db.todos("SELECT * FROM sesiones WHERE usuario_id = ? ORDER BY creada DESC", (u["id"],))]}
+    if cli:
+        datos["cliente"] = {k: cli[k] for k in ("nombre", "documento", "tipo", "telefono", "perfil_riesgo", "modelo", "kyc_estado",
+                                                "creado", "origen", "recibir_envios") if k in cli.keys()}
+        datos["operaciones"] = [dict(o) for o in db.todos(
+            "SELECT id, tipo, monto_cent, activo, estado, creado, referencia, metodo, monto_pyg FROM operaciones WHERE cliente_id = ? ORDER BY id", (cli["id"],))]
+        datos["libro"] = [dict(x) for x in db.todos("SELECT ts, activo, cantidad, concepto, operacion_id, transferencia_id FROM libro"
+                                                    " WHERE cliente_id = ? ORDER BY id", (cli["id"],))]
+        datos["documentos"] = [dict(x) for x in db.todos("SELECT tipo, nombre_original, subido_ts, estado FROM documentos WHERE cliente_id = ?",
+                                                         (cli["id"],))]
+    auditoria.registrar("datos.descargados", f"usuario:{u['id']}", {"texto": f"{u['email']} descargó una copia de sus datos."}, usuario=u)
+    resp = current_app.json.response(datos)
+    resp.headers["Content-Disposition"] = 'attachment; filename="mis-datos.json"'
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
 @bp.get("/mercado")
 def mercado():
     r = seguridad.exigir_sesion()
     if r:
         return r
     from . import cartera, graficos, precios
-    filas = precios.mercado()
-    for m in filas:
-        m["chispa"] = graficos.chispa(m["serie"], 160, 40)
+    todas = precios.mercado()
     cli = _cliente_actual()
     if g.usuario["rol"] == "cliente":
         pos, _ = cartera.posiciones(cli["id"]) if cli else ([], 0)
@@ -255,25 +362,51 @@ def mercado():
     else:
         pos, titulo = cartera.resumen_casa()["activos"], "Activos bajo gestión"
     tengo = {p["activo"]: p["valor"] for p in pos}
+    todas = [m for m in todas if m["habilitado"] or tengo.get(m["codigo"])]
+    for m in todas:
+        m["chispa"] = graficos.chispa(m["serie"], 160, 40)
     favs = _favoritos()
     ver = request.args.get("ver", "todos")
     orden = request.args.get("orden", "")
+    cat = request.args.get("cat", "")
+    q = (request.args.get("q") or "").strip()[:30]
+    filas = todas
     if ver == "favoritos":
         filas = [m for m in filas if m["codigo"] in favs]
     elif ver == "cartera":
         filas = [m for m in filas if tengo.get(m["codigo"])]
     else:
         ver = "todos"
-    if orden == "suben":
-        filas.sort(key=lambda m: -(m["cambio"] or 0))
-    elif orden == "bajan":
-        filas.sort(key=lambda m: (m["cambio"] or 0))
+    if cat in precios.CATEGORIAS:
+        filas = [m for m in filas if m["categoria"] == cat]
+    else:
+        cat = ""
+    if q:
+        qq = q.lower()
+        filas = [m for m in filas if qq in m["codigo"].lower() or qq in m["nombre"].lower()]
+    claves = {"suben": lambda m: -(m["cambio"] or 0), "bajan": lambda m: (m["cambio"] or 0),
+              "volumen": lambda m: -(m["volumen"] or 0), "nombre": lambda m: m["nombre"].lower()}
+    if orden in claves:
+        filas = sorted(filas, key=claves[orden])
     else:
         orden = ""
+    con_px = [m for m in todas if m["cambio"] is not None and not m["estable"]]
+    destacados = {
+        "suben": sorted(con_px, key=lambda m: -m["cambio"])[:3],
+        "bajan": sorted(con_px, key=lambda m: m["cambio"])[:3],
+        "volumen": sorted([m for m in todas if m["volumen"]], key=lambda m: -m["volumen"])[:3],
+    }
+    cap_total = sum(m["cap"] or 0 for m in todas)
+    resumen = {"cap": cap_total, "volumen": sum(m["volumen"] or 0 for m in todas),
+               "dominancia": (next((m["cap"] for m in todas if m["codigo"] == "BTC"), 0) or 0) / cap_total * 100 if cap_total else None,
+               "suben": sum(1 for m in con_px if m["cambio"] > 0), "bajan": sum(1 for m in con_px if m["cambio"] < 0)}
+    peso = lambda m: (m["cap"] or m["volumen"] or 1e8) ** 0.5  # noqa: E731  escala comprimida para que se lean las chicas
+    mapa = graficos.mapa([(peso(m), m) for m in todas if not m["estable"]], 100, 56)
     datos = {"titulo": titulo, "grupos": [{"label": p["activo"] if p["activo"] != "USD" else "Saldo USD", "value": p["valor"],
                                            "col": p["color"]} for p in pos if p["valor"] > 0]}
     return render_template("mercado.html", filas=filas, tengo=tengo, datos3d=datos, fuente=precios.fuente(), favs=favs,
-                           ver=ver, orden=orden)
+                           ver=ver, orden=orden, cat=cat, q=q, categorias=precios.CATEGORIAS, destacados=destacados,
+                           resumen=resumen, mapa=mapa, total=len(todas), vivo=precios.vivo())
 
 
 @bp.get("/mercado/precios.json")
@@ -282,12 +415,111 @@ def mercado_json():
     if r:
         return {"error": "sesion"}, 401
     from . import precios
+    from .dinero import decimales_precio
     from .dinero import fmt_precio as f_precio
-    from .formato import f_pct
-    out = {a: {"precio": f_precio(p["precio"]), "valor": float(p["precio"]), "cambio": f_pct(p["cambio"]) if p["cambio"] is not None else "",
-               "sube": (p["cambio"] or 0) >= 0} for a, p in precios.vigentes().items()}
-    resp = current_app.json.response(out)
+    from .formato import compacto, f_pct
+    out = {}
+    for a, p in precios.vigentes().items():
+        out[a] = {"precio": f_precio(p["precio"]), "valor": float(p["precio"]),
+                  "cambio": f_pct(p["cambio"]) if p["cambio"] is not None else "", "c": float(p["cambio"] or 0),
+                  "sube": (p["cambio"] or 0) >= 0, "dec": decimales_precio(p["precio"]),
+                  "max": f_precio(p["max"]) if p["max"] else "", "min": f_precio(p["min"]) if p["min"] else "",
+                  "vol": compacto(p["volumen"]) if p["volumen"] else ""}
+    en_vivo, seg, fuente = precios.vivo()
+    resp = current_app.json.response({"precios": out, "vivo": en_vivo, "seg": round(seg or 0), "fuente": fuente})
     resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
+@bp.get("/mercado/<codigo>/velas.json")
+def velas_json(codigo):
+    r = seguridad.exigir_sesion()
+    if r:
+        return {"error": "sesion"}, 401
+    from . import precios, velas
+    from .dinero import decimales_precio
+    a = db.uno("SELECT codigo FROM activos WHERE codigo = ?", (codigo.upper(),))
+    i = request.args.get("i", "15m")
+    if not a or i not in velas.INTERVALOS:
+        return {"error": "parametros"}, 404
+    filas, con_volumen = velas.velas(a["codigo"], i)
+    vig = precios.vigentes().get(a["codigo"])
+    resp = current_app.json.response({"i": i, "v": filas, "vol": con_volumen, "seg": velas.INTERVALOS[i][0],
+                                      "dec": decimales_precio(vig["precio"]) if vig else 2,
+                                      "simulado": precios.fuente() != "Binance"})
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
+@bp.get("/mercado/<codigo>/libro.json")
+def libro_json(codigo):
+    r = seguridad.exigir_sesion()
+    if r:
+        return {"error": "sesion"}, 401
+    from . import velas
+    a = db.uno("SELECT codigo FROM activos WHERE codigo = ?", (codigo.upper(),))
+    if not a:
+        return {"error": "moneda"}, 404
+    compras, ventas, sim1 = velas.libro(a["codigo"])
+    ops, sim2 = velas.operaciones_mercado(a["codigo"])
+    resp = current_app.json.response({
+        "compras": [[float(p), float(q)] for p, q in compras], "ventas": [[float(p), float(q)] for p, q in ventas],
+        "ops": [[t, float(p), float(q), c] for t, p, q, c in ops], "simulado": sim1 or sim2})
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
+@bp.get("/trading", defaults={"codigo": None})
+@bp.get("/trading/<codigo>")
+def trading(codigo):
+    r = seguridad.exigir_sesion()
+    if r:
+        return r
+    from decimal import Decimal
+
+    from flask import abort
+
+    from . import cartera, exchange, operaciones, precios, programadas, velas
+    from .dinero import decimales_precio, valor_cent
+    if codigo is None:  # /trading: el último par usado (o BTC)
+        ult = (request.cookies.get("par") or "BTC").upper()
+        if not db.uno("SELECT 1 FROM activos WHERE codigo = ?", (ult,)):
+            ult = "BTC"
+        return redirect(url_for("auth.trading", codigo=ult, **({"i": request.args["i"]} if "i" in request.args else {})))
+    codigo = codigo.upper()
+    a = db.uno("SELECT * FROM activos WHERE codigo = ?", (codigo,))
+    if not a:
+        abort(404)
+    vig = precios.vigentes()
+    p = vig.get(codigo)
+    intervalo = request.args.get("i", "15m")
+    if intervalo not in velas.INTERVALOS:
+        intervalo = "15m"
+    pares = [{"codigo": x["codigo"], "nombre": x["nombre"], "color": x["color"], "categoria": x["categoria"],
+              "precio": vig[x["codigo"]]["precio"] if x["codigo"] in vig else None,
+              "cambio": vig[x["codigo"]]["cambio"] if x["codigo"] in vig else None}
+             for x in precios.activos(solo_habilitados=True)]
+    cli = _cliente_actual()
+    ctx = {"disp_usd": 0, "disp_u": 0, "bloq_usd": 0, "bloq_u": 0, "abiertas": [], "historial": [], "tengo_usd": 0}
+    if cli:
+        ten = cartera.tenencias(cli["id"])
+        bloq = cartera.bloqueado(cli["id"], ten=ten)
+        ctx.update(disp_usd=ten.get("USD", 0) - bloq.get("USD", 0), disp_u=ten.get(codigo, 0) - bloq.get(codigo, 0),
+                   bloq_usd=bloq.get("USD", 0), bloq_u=bloq.get(codigo, 0),
+                   abiertas=programadas.del_cliente(cli["id"], solo_abiertas=True, limite=20),
+                   historial=db.todos("SELECT * FROM ordenes WHERE cliente_id = ? ORDER BY id DESC LIMIT 20", (cli["id"],)))
+        if p:
+            ctx["tengo_usd"] = valor_cent(codigo, ctx["disp_u"], p["precio"])
+    datos = {"activo": codigo, "intervalo": intervalo, "dec": decimales_precio(p["precio"]) if p else 2,
+             "precio": float(p["precio"]) if p else None, "disp_usd": ctx["disp_usd"], "disp_u": ctx["disp_u"],
+             "comision": float(operaciones.comision_operacion_pct()), "maximo": current_app.config["ORDEN_MAXIMA_USD"] * 100,
+             "cliente": bool(cli) and cli["kyc_estado"] == "verificado"}
+    resp = current_app.make_response(render_template(
+        "trading.html", a=a, vig=p, pares=pares, intervalo=intervalo, intervalos=velas.INTERVALOS, cli=cli, datos=datos,
+        favorito=codigo in _favoritos(), nombre_prog=programadas.nombre, simulador=exchange.modo() != "binance",
+        precios_sim=precios.fuente() != "Binance" or (p and p["fuente"] in ("Simulado", "Datos de ejemplo")),
+        comision=operaciones.comision_operacion_pct(), Decimal=Decimal, **ctx))
+    resp.set_cookie("par", codigo, max_age=60 * 60 * 24 * 180, samesite="Lax", secure=current_app.config["SESSION_COOKIE_SECURE"])
     return resp
 
 

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es" data-tema="{{ 'claro' if request.cookies.get('tema') == 'claro' else 'oscuro' }}">
+<html lang="es" data-tema="{{ 'claro' if request.cookies.get('tema') == 'claro' else 'oscuro' }}"{% if usuario and usuario.ocultar_saldos %} data-ocultar{% endif %}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -23,6 +23,9 @@
     <a class="brand" href="{{ url_for('inicio') }}"><span class="logo" aria-hidden="true"></span><h1>{{ config.NOMBRE }}</h1></a>
     {% if usuario %}
     <span class="rolchip">{{ ROLES[usuario.rol] }}</span>
+    {% if usuario.rol == 'cliente' %}<form method="post" action="{{ url_for('auth.privacidad') }}" class="ojo-form">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="saldos"><input type="hidden" name="volver" value="{{ request.full_path.rstrip('?') }}">
+      <button class="ojo" type="submit" aria-pressed="{{ 'true' if usuario.ocultar_saldos else 'false' }}" aria-label="{{ 'Mostrar' if usuario.ocultar_saldos else 'Ocultar' }} saldos" title="{{ 'Mostrar' if usuario.ocultar_saldos else 'Ocultar' }} saldos">{{ icono('ojo') }}</button></form>{% endif %}
     {% set n_avisos = avisos_no_leidos() %}
     <a class="iconbtn" href="{{ url_for('auth.avisos') }}" aria-label="Avisos{% if n_avisos %}: {{ n_avisos }} sin leer{% endif %}">{{ icono('campana') }}{% if n_avisos %}<span class="badge">{{ n_avisos if n_avisos < 100 else '99+' }}</span>{% endif %}</a>
     <details class="cuenta">
@@ -30,6 +33,7 @@
       <div class="menu">
         <div class="who"><b>{{ usuario.nombre }}</b><span class="small muted">{{ usuario.email }}</span><span class="xs muted">{{ ROLES[usuario.rol] }}</span></div>
         {% if usuario.rol == 'cliente' %}<a href="{{ url_for('cliente.perfil') }}">{{ icono('perfil') }}Mi perfil y documentos</a>{% endif %}
+        <a href="{{ url_for('auth.sesiones') }}">{{ icono('dispositivo') }}Dispositivos y seguridad</a>
         <a href="{{ url_for('auth.seguridad') }}">{{ icono('escudo') }}Verificación en dos pasos</a>
         <a href="{{ url_for('auth.clave') }}">{{ icono('llave') }}Cambiar contraseña</a>
         <form method="post" action="{{ url_for('auth.tema') }}">
@@ -52,7 +56,7 @@
 {% if nav %}{% set px = cinta() %}{% if px %}
 <div class="cinta" aria-label="Precios"><div class="cinta-in">{% for vuelta in (1, 2) %}{% for p in px %}<a href="{{ url_for('auth.moneda', codigo=p.codigo) }}"{% if vuelta == 2 %} aria-hidden="true" tabindex="-1"{% endif %}><b>{{ p.codigo }}</b><span class="num" data-px="{{ p.codigo }}">{{ p.precio|precio }}</span>{% if p.cambio is not none %}<span class="num {{ 'up' if p.cambio >= 0 else 'down' }}" data-cambio="{{ p.codigo }}">{{ p.cambio|pct }}</span>{% endif %}</a>{% endfor %}{% endfor %}</div></div>
 {% endif %}{% endif %}
-<div class="app{% if not nav %} sola{% endif %}">
+<div class="app{% if not nav %} sola{% endif %}{% block clase_app %}{% endblock %}">
   {% if nav %}
   <nav class="tabs" aria-label="Secciones">
     {% for item in nav %}<a href="{{ item.url }}"{% if item.activo %} aria-current="page"{% endif %}>{{ icono(item.icono) }}<span>{{ item.texto }}</span>{% if item.cuenta %}<span class="badge" aria-label="{{ item.cuenta }} pendientes">{{ item.cuenta }}</span>{% endif %}</a>{% endfor %}

@@ -61,7 +61,7 @@ def cobrar(periodo, usuario=None, ts=None, precios_usar=None):
     pr = precios_usar
     if pr is None:
         try:
-            precios.exigir_frescura([a["codigo"] for a in precios.activos()])
+            precios.exigir_frescura(cartera.activos_en_custodia())
         except precios.ErrorPrecio as e:
             raise ErrorComision(str(e)) from None
         pr = precios.vigentes()

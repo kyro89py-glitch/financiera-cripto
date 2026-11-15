@@ -3,7 +3,6 @@
 Se generan con las mismas funciones que usa el sistema, así que la bitácora y el libro quedan
 coherentes. No se puede ejecutar en producción.
 """
-import math
 from datetime import timedelta
 from decimal import Decimal
 
@@ -16,16 +15,7 @@ from .tiempo import ahora_dt, iso
 
 CLAVE_DEMO = "Demo-2026!"
 
-# Precios de referencia de los últimos 7 días (corte de CoinGecko del 11 de noviembre de 2026), 17 puntos por activo.
-SERIES = {
-    "BTC": ([76199, 78288, 80443, 80222, 75773, 75538, 75724, 75962, 75689, 75695, 75850, 74740, 74094, 74945, 74775, 73416, 73761], "-1.26"),
-    "ETH": ([2245.3, 2317.3, 2423.1, 2416.5, 2227.8, 2226.7, 2229.0, 2246.8, 2235.1, 2232.9, 2234.2, 2124.4, 2106.4, 2127.4, 2114.4, 2042.3, 2064.41], "-2.55"),
-    "USDT": ([0.9989, 0.9990, 0.9992, 0.9993, 0.9991, 0.9990, 0.9991, 0.9992, 0.9992, 0.9991, 0.9990, 0.9991, 0.9992, 0.9991, 0.9991, 0.9992, 0.999127], "0.01"),
-    "SOL": ([90.96, 92.86, 95.51, 96.51, 89.85, 89.59, 90.17, 90.20, 89.46, 89.00, 89.15, 86.41, 85.87, 86.38, 86.01, 82.90, 83.59], "-2.86"),
-    "BNB": ([685.8, 700.1, 719.4, 715.8, 687.7, 689.5, 694.1, 694.6, 693.3, 694.3, 696.2, 683.9, 680.7, 689.7, 690.4, 674.7, 683.43], "-0.68"),
-    "XRP": ([1.2501, 1.2812, 1.3043, 1.3179, 1.2214, 1.1851, 1.1851, 1.1611, 1.1575, 1.1576, 1.1595, 1.1125, 1.0843, 1.0948, 1.0954, 1.0707, 1.063], "-2.76"),
-    "LINK": ([10.732, 11.148, 11.441, 11.536, 10.691, 10.736, 10.869, 10.862, 10.840, 10.765, 10.706, 10.400, 10.409, 10.662, 10.632, 10.282, 10.42], "-1.47"),
-}
+from .mercado_demo import MERCADO, SERIES, VOLATILIDAD  # noqa: E402  corte de CoinGecko del 15/11/2026
 
 EQUIPO = [("admin@demo.local", "Valeria Ortiz", "admin"),
           ("operaciones@demo.local", "Natalia Giménez", "operador"),
@@ -76,23 +66,50 @@ def cmd_sembrar():
 
     def precio_en(activo, momento):
         f = max(0.0, min(1.0, (momento - ini).total_seconds() / (fin - ini).total_seconds()))
-        return _interp(SERIES[activo][0], f)
+        return _interp(SERIES[activo], f)
 
     def precios_en(ts_txt):
         from .tiempo import leer
         m = leer(ts_txt)
-        return {a: {"precio": Decimal(str(round(precio_en(a, m), 6)))} for a in SERIES}
+        return {a: {"precio": precios.redondear(precio_en(a, m))} for a in SERIES}
 
-    # Historial de precios cada 3 horas, con una oscilación pequeña entre los puntos de referencia.
+    # Historial de precios: un año diario (recorrido aleatorio hacia atrás desde el primer precio real), los 7 días del
+    # corte cada hora con una oscilación pequeña, los últimos 2 días cada 5 minutos y las últimas 3 horas cada minuto.
+    import random
     c = db.conexion()
     with db.transaccion():
-        for a, (serie, cambio) in SERIES.items():
-            for k in range(56):
-                m = ini + timedelta(hours=3 * k)
-                ruido = 0 if a == "USDT" else 0.0035 * math.sin(k * 1.7 + len(a))
-                p = precio_en(a, m) * (1 + ruido)
-                c.execute("INSERT INTO precios_historial (activo, precio, ts) VALUES (?, ?, ?)", (a, str(round(p, 6)), iso(m)))
-            precios.registrar(a, Decimal(str(serie[-1])), Decimal(cambio), "Datos de ejemplo", iso(fin))
+        for a, serie in SERIES.items():
+            azar = random.Random(a)
+            vol = VOLATILIDAD.get(a, 0.035)
+            estable = a in ("USDT", "USDC")
+            filas, p = [], serie[0]
+            for d in range(1, 366):
+                p = 1 + azar.gauss(0, 0.0003) if estable else p * (1 + azar.gauss(0, vol))
+                filas.append((ini - timedelta(days=d), p))
+            filas.reverse()
+
+            def punto(m, escala):
+                if estable:
+                    return precio_en(a, m) * (1 + azar.gauss(0, 0.00005))
+                return precio_en(a, m) * (1 + azar.gauss(0, vol * escala))
+
+            for k in range(7 * 24):
+                m = ini + timedelta(hours=k)
+                if m < fin - timedelta(days=2):
+                    filas.append((m, punto(m, 0.08)))
+            for k in range(2 * 24 * 12):
+                m = fin - timedelta(days=2) + timedelta(minutes=5 * k)
+                if m < fin - timedelta(hours=3):
+                    filas.append((m, punto(m, 0.03)))
+            for k in range(180):
+                filas.append((fin - timedelta(minutes=180 - k), punto(fin - timedelta(minutes=180 - k), 0.012)))
+            c.executemany("INSERT INTO precios_historial (activo, precio, ts) VALUES (?, ?, ?)",
+                          [(a, precios._txt(precios.redondear(x)), iso(m)) for m, x in filas])
+            ult = [x for m, x in filas if m >= fin - timedelta(days=1)] + [serie[-1]]
+            cap, volumen, cambio = MERCADO[a]
+            precios.registrar(a, precios.redondear(serie[-1]), Decimal(cambio), "Datos de ejemplo", iso(fin),
+                              extra={"volumen": volumen, "cap": cap, "max": precios.redondear(max(ult)),
+                                     "min": precios.redondear(min(ult))})
 
     equipo = {}
     for email, nombre, rol in EQUIPO:

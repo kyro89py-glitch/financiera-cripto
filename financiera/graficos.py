@@ -163,3 +163,45 @@ def velas(serie, ancho=760, alto=300, n=42, fmt=None):
     etiquetas = [{"x": izq + w * f, "texto": f_fecha(serie[int(f * (len(serie) - 1))][0], False), "ancla": a}
                  for f, a in ((0, "start"), (0.5, "middle"), (1, "end"))]
     return {"ancho": ancho, "alto": alto, "velas": out, "marcas": marcas, "etiquetas": etiquetas, "izq": izq, "der": ancho - der}
+
+
+def mapa(items, ancho=100.0, alto=60.0):
+    """Mapa de calor (treemap «squarified»): items = [(peso, dato)] -> [(x, y, w, h, dato)] en las mismas unidades que
+    ancho y alto. Los rectángulos quedan lo más cuadrados posible y ordenados de mayor a menor."""
+    items = [(float(p), d) for p, d in items if p and p > 0]
+    items.sort(key=lambda t: -t[0])
+    total = sum(p for p, _ in items)
+    if not total:
+        return []
+    escala = ancho * alto / total
+    pendientes = [(p * escala, d) for p, d in items]
+    out = []
+    x, y, w, h = 0.0, 0.0, float(ancho), float(alto)
+
+    def peor(fila, lado):
+        s = sum(a for a, _ in fila)
+        return max(max(lado * lado * a / (s * s), (s * s) / (lado * lado * a)) for a, _ in fila)
+
+    while pendientes:
+        lado = min(w, h)
+        fila = [pendientes.pop(0)]
+        while pendientes and peor(fila + [pendientes[0]], lado) <= peor(fila, lado):
+            fila.append(pendientes.pop(0))
+        s = sum(a for a, _ in fila)
+        if w >= h:  # columna a la izquierda
+            ancho_col = s / h
+            yy = y
+            for a, d in fila:
+                alto_r = a / ancho_col
+                out.append((x, yy, ancho_col, alto_r, d))
+                yy += alto_r
+            x, w = x + ancho_col, w - ancho_col
+        else:  # fila arriba
+            alto_fila = s / w
+            xx = x
+            for a, d in fila:
+                ancho_r = a / alto_fila
+                out.append((xx, y, ancho_r, alto_fila, d))
+                xx += ancho_r
+            y, h = y + alto_fila, h - alto_fila
+    return out

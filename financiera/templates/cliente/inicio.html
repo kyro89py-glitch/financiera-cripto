@@ -12,9 +12,9 @@
 {% endif %}
 
 <section class="hero3d">
-  <div class="info">
+  <div class="info privado">
     <div>
-      <span class="lab">Valor de tu cartera</span>
+      <span class="lab">Saldo total</span>
       <div class="big">{{ total|usd }}</div>{% if en_gs(total) %}<div class="num gs">≈ {{ en_gs(total) }}</div>{% endif %}
       {% if total %}
         <div class="num {{ 'up' if var7 >= 0 else 'down' }}" style="margin-top:4px">{{ ("+" if var7 >= 0 else "") }}{{ var7|usd }} ({{ (var7 / graf.inicio_valor * 100 if graf and graf.inicio_valor else 0)|pct }}) en 7 días</div>
@@ -23,15 +23,17 @@
       {% endif %}
     </div>
     <div class="stats">
+      <div><span class="lab">Disponible</span><div class="num">{{ disp_usd|usd }}</div></div>
       <div><span class="lab">Aportado neto</span><div class="num">{{ aportado|usd }}</div></div>
       <div><span class="lab">Resultado</span><div class="num {{ 'up' if total - aportado >= 0 else 'down' }}">{{ ("+" if total - aportado >= 0 else "") }}{{ (total - aportado)|usd }}</div></div>
       {{ rendimiento(rend) }}
     </div>
     <div class="row">
       <a class="btn primary" href="{{ url_for('cliente.invertir') }}">Depositar</a>
-      <a class="btn" href="{{ url_for('auth.mercado') }}">Comprar y vender</a>
+      <a class="btn" href="{{ url_for('auth.trading') }}">Comprar</a>
+      <a class="btn" href="{{ url_for('auth.trading') }}">Vender</a>
+      <a class="btn" href="{{ url_for('cliente.retirar') }}">Retirar</a>
       <a class="btn" href="{{ url_for('cliente.enviar') }}">Enviar</a>
-      <a class="btn" href="{{ url_for('cliente.invertir') }}#retirar">Retirar</a>
     </div>
     <span class="xs" style="opacity:.6">Arrastra la figura para girarla y toca un color para ver cuánto vale.</span>
   </div>
@@ -72,9 +74,31 @@
 {% else %}
 <section class="card">{{ vacio('invertir', 'Cuando hagas tu primer aporte vas a ver aquí la evolución y la distribución de tu cartera.') }}</section>
 {% endif %}
+<div class="g2">
+  <section class="card flush privado">
+    <div class="ch"><h3>Movimientos recientes</h3><a class="small" href="{{ url_for('cliente.movimientos') }}">Ver todos</a></div>
+    <div class="list">{% for m in ultimos %}
+      {% if m.clase == 'op' %}<a class="item" href="{{ m.url }}"><span class="mov-ico {{ m.o.tipo }}">{{ icono({'aporte': 'invertir', 'retiro': 'retiro', 'compra': 'mercado', 'venta': 'mercado'}.get(m.o.tipo, 'documento')) }}</span><div class="grow"><div class="t">{{ tipo_op(m.o) }} {{ estado(m.o) }}</div><div class="d">{{ m.ts|fecha }}</div></div><div class="amt num {{ 'up' if m.o.tipo == 'aporte' else ('' if m.o.tipo in ('compra', 'venta') else 'down') }}">{{ signo(m.o) }}{{ m.monto|usd }}</div></a>
+      {% else %}<a class="item" href="{{ m.url }}"><span class="mov-ico envio">{{ icono('enviar') }}</span><div class="grow"><div class="t">{{ ("Enviaste a " if m.sale else "Recibiste de ") ~ ocultar(m.otro) }}</div><div class="d">{{ m.ts|fecha }}</div></div><div class="amt num {{ 'down' if m.sale else 'up' }}">{{ '−' if m.sale else '+' }}{{ m.monto|usd }}</div></a>{% endif %}
+    {% else %}<p class="small muted vacio-sm">Todavía no tienes movimientos.</p>{% endfor %}</div>
+  </section>
+  <section class="card privado">
+    <div class="ch"><h3>Actividad de {{ ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'][actividad.mes.month - 1] }}</h3></div>
+    <dl class="actividad">
+      {% for k, t in [('aporte', 'Depósitos'), ('retiro', 'Retiros'), ('compra', 'Compras'), ('venta', 'Ventas'), ('envios', 'Envíos'), ('comision', 'Comisiones')] %}{% set x = actividad.get(k, (0, 0)) %}
+      <div><dt>{{ t }}</dt><dd><span class="num">{{ x[1]|usd }}</span><span class="xs muted">{{ x[0] }} movimiento{{ 's' if x[0] != 1 }}</span></dd></div>
+      {% endfor %}
+    </dl>
+  </section>
+</div>
 <section class="card flush">
-  <div class="ch"><h3>Mercado</h3><a class="small" href="{{ url_for('auth.mercado') }}">Ver todo</a></div>
-  <div class="list">{% for m in mercado %}{{ mercado_item(m) }}{% endfor %}</div>
+  <div class="ch"><h3>Mercados destacados</h3><a class="small" href="{{ url_for('auth.mercado') }}">Ver todos</a></div>
+  <div class="tabs-sec" role="tablist" aria-label="Mercados destacados">
+    {% for k, t in [('principales', 'Principales'), ('suben', 'Más suben'), ('bajan', 'Más bajan')] %}<button type="button" role="tab" aria-selected="{{ 'true' if loop.first else 'false' }}" aria-controls="dest-{{ k }}" id="tab-dest-{{ k }}">{{ t }}</button>{% endfor %}
+  </div>
+  {% for k in ['principales', 'suben', 'bajan'] %}
+  <div class="list" id="dest-{{ k }}" role="tabpanel" aria-labelledby="tab-dest-{{ k }}"{% if not loop.first %} hidden{% endif %}>{% for m in destacados[k] %}{{ mercado_item(m) }}{% endfor %}</div>
+  {% endfor %}
 </section>
 <p class="note">Invertir en criptomonedas implica riesgo: su precio puede bajar con fuerza y puedes perder parte o todo lo invertido. Los resultados pasados no garantizan resultados futuros.</p>
 {% endblock %}

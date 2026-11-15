@@ -48,5 +48,10 @@ cat <<'TEXTO'
   ==========================================================
 
 TEXTO
+# Precios que se mueven solos (simulados para la demostración), en segundo plano mientras la ventana esté abierta.
+export FUENTE_PRECIOS=simulada
+.venv/bin/python -m flask --app financiera precios-en-vivo >/dev/null 2>&1 &
+VIVO=$!
+trap 'kill $VIVO 2>/dev/null' EXIT
 (sleep 2; open "http://127.0.0.1:5000") &
-exec .venv/bin/python -m flask --app financiera run --port 5000
+.venv/bin/python -m flask --app financiera run --port 5000

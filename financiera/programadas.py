@@ -1,10 +1,11 @@
-"""Órdenes programadas por precio. Quedan abiertas hasta que el precio llega al nivel elegido; entonces se ejecutan a
-precio de mercado con el mismo motor que una orden común. No reservan saldo: si al dispararse no alcanza, la orden
-falla y se avisa al cliente."""
+"""Órdenes programadas por precio (límite y stop). Quedan abiertas hasta que el precio llega al nivel elegido; entonces se
+ejecutan a precio de mercado con el mismo motor que una orden común. Las órdenes por un monto fijo reservan ese saldo
+(dólares para comprar, monedas para vender) mientras están abiertas; «vender todo» no reserva y vende lo que haya. Si al
+dispararse no alcanza, la orden falla y se avisa al cliente."""
 from decimal import Decimal
 
 from . import auditoria, cartera, db, notificaciones, operaciones
-from .dinero import fmt_precio, fmt_usd, valor_cent
+from .dinero import fmt_precio, fmt_usd, unidades_por, valor_cent
 from .tiempo import ahora
 
 MAX_ABIERTAS = 20
@@ -21,7 +22,8 @@ def nombre(o):
 def crear(cliente, activo, lado, precio, monto_cent, usuario, todo=False, ts=None):
     if lado not in ("compra", "venta"):
         raise operaciones.ErrorNegocio("Elige comprar o vender.")
-    if not db.uno("SELECT 1 FROM activos WHERE codigo = ?", (activo,)):
+    a = db.uno("SELECT * FROM activos WHERE codigo = ?", (activo,))
+    if not a or (lado == "compra" and not a["habilitado"]):
         raise operaciones.ErrorNegocio("Esa moneda no está disponible.")
     if cliente["kyc_estado"] != "verificado":
         raise operaciones.ErrorNegocio("Para operar primero tenemos que verificar tu identidad. Revisa tu perfil.")
@@ -31,7 +33,7 @@ def crear(cliente, activo, lado, precio, monto_cent, usuario, todo=False, ts=Non
         raise operaciones.ErrorNegocio(f"No hay precio de {activo} en este momento.")
     if precio <= 0 or precio == vig["precio"]:
         raise operaciones.ErrorNegocio("Elige un precio distinto del actual.")
-    ten = cartera.tenencias(cliente["id"])
+    ten = cartera.disponible(cliente["id"])
     if lado == "venta":
         tengo = ten.get(activo, 0)
         if tengo <= 0:
@@ -40,11 +42,14 @@ def crear(cliente, activo, lado, precio, monto_cent, usuario, todo=False, ts=Non
         if todo:
             monto_cent = 0
         elif monto_cent > valor:
-            raise operaciones.ErrorNegocio(f"Tienes {fmt_usd(valor)} en {activo}; no puedes programar una venta mayor.")
+            raise operaciones.ErrorNegocio(f"Tienes {fmt_usd(valor)} disponibles en {activo}; no puedes programar una venta mayor.")
+        elif unidades_por(monto_cent, precio) > tengo:
+            raise operaciones.ErrorNegocio(f"A {fmt_precio(precio)}, {fmt_usd(monto_cent)} son más {activo} de los que tienes disponibles.")
     else:
         todo = False
         if monto_cent > ten.get("USD", 0):
-            raise operaciones.ErrorNegocio("No tienes saldo en dólares suficiente para esa compra.")
+            raise operaciones.ErrorNegocio("No tienes saldo en dólares disponible suficiente para esa compra "
+                                           "(lo reservado en otras órdenes no cuenta).")
     if not todo and monto_cent < 1000:
         raise operaciones.ErrorNegocio("El mínimo de una orden programada es de US$ 10.")
     if monto_cent > operaciones._umbral("ORDEN_MAXIMA_USD"):
@@ -98,7 +103,7 @@ def revisar(vigentes, ts=None, precios_usar=None):
         cli = db.uno("SELECT * FROM clientes WHERE id = ?", (o["cliente_id"],))
         try:
             opid, _ = operaciones.operar(cli, o["activo"], o["lado"], o["monto_cent"], None, todo=bool(o["todo"]), ts=ts,
-                                         precios_usar=precios_usar)
+                                         precios_usar=precios_usar, excepto_programada=o["id"])
             db.ejecutar("UPDATE programadas SET estado = 'ejecutada', resuelta_ts = ?, operacion_id = ? WHERE id = ?", (ts, opid, o["id"]))
             texto = f"Se ejecutó tu orden programada: {nombre(o).lower()} de {o['activo']} con el precio en {fmt_precio(actual)}."
             hechas += 1

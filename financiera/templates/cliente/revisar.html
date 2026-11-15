@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph with context %}
+{% block titulo %}Revisar {{ "depósito" if tipo == 'aporte' else "retiro" }}{% endblock %}
+{% block contenido %}
+{{ ph("Revisa tu " ~ ("depósito" if tipo == 'aporte' else "retiro"), "Controla los datos antes de enviar la solicitud. Nada se registra hasta que confirmes.") }}
+<div class="g2">
+  <section class="card col">
+    <div class="detalle-monto num">{{ v.monto|usd }}</div>
+    <dl class="detalle">
+      <div><dt>Operación</dt><dd>{{ "Depósito" if tipo == 'aporte' else "Retiro" }}</dd></div>
+      <div><dt>Método</dt><dd>{{ metodo }}</dd></div>
+      {% if tipo == 'aporte' %}
+        {% if v.cambio_pyg %}<div><dt>Depositas</dt><dd class="num">{{ form.monto }} ₲</dd></div><div><dt>Tipo de cambio</dt><dd class="num">{{ v.cambio_pyg|gs }} por dólar</dd></div>{% endif %}
+        <div><dt>Destino</dt><dd>{{ ("Cartera " ~ v.modelo.nombre) if v.modelo else "Saldo en dólares, para comprar monedas" }}</dd></div>
+        {% if v.fuera %}<div><dt>Riesgo</dt><dd class="warn-txt">Mayor que tu perfil (lo aceptaste)</dd></div>{% endif %}
+        <div><dt>{{ "Hash de la transacción" if form.metodo == 'usdt' else "Comprobante" }}</dt><dd>{{ form.referencia or "Sin cargar" }}</dd></div>
+        <div><dt>Se acredita</dt><dd>Cuando el equipo confirme que recibió el dinero</dd></div>
+      {% else %}
+        {% if v.monto_pyg %}<div><dt>Cobras</dt><dd class="num">{{ v.monto_pyg|gs }}</dd></div><div><dt>Tipo de cambio</dt><dd class="num">{{ v.cambio_pyg|gs }} por dólar</dd></div>{% endif %}
+        <div><dt>Disponible después</dt><dd class="num">{{ (v.disponible - v.monto)|usd }}</dd></div>
+        <div><dt>Pago</dt><dd>{{ "En la cuenta bancaria a tu nombre registrada en tu legajo" if form.metodo == 'transferencia' else "En efectivo en la oficina, con tu cédula" }}</dd></div>
+        <div><dt>Cómo se paga</dt><dd>Primero tu saldo en dólares y luego una parte proporcional de cada moneda</dd></div>
+      {% endif %}
+      <div><dt>Comisión de la casa</dt><dd>Sin comisión</dd></div>
+    </dl>
+    <form method="post" class="row" style="justify-content:flex-end;margin-top:6px">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      {% for k, val in form.items() %}<input type="hidden" name="{{ k }}" value="{{ val }}">{% endfor %}
+      <button class="btn" type="submit" name="paso" value="editar">Corregir</button>
+      <button class="btn primary" type="submit" name="paso" value="confirmar">Confirmar y enviar</button>
+    </form>
+  </section>
+  <div class="col">
+    <section class="card">
+      <div class="ch"><h3>Qué pasa después</h3></div>
+      <ol class="linea-tiempo">
+        <li class="hecho"><b>Envías la solicitud</b><span class="small muted">La ves en Movimientos con su estado</span></li>
+        <li class="falta"><b>{{ "El equipo confirma que llegó el dinero" if tipo == 'aporte' else "El equipo revisa la solicitud" }}</b><span class="small muted">Primera firma</span></li>
+        <li class="falta"><b>Aprobación con segunda firma</b><span class="small muted">Dos personas distintas del equipo</span></li>
+        <li class="falta"><b>{{ "Se acredita en tu billetera" if tipo == 'aporte' else "Se hace el pago" }}</b><span class="small muted">Te avisamos al instante</span></li>
+      </ol>
+    </section>
+    {% include "cliente/_comisiones.html" %}
+  </div>
+</div>
+{% endblock %}

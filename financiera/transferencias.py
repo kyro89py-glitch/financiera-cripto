@@ -38,6 +38,8 @@ def buscar(texto, excepto_cliente=None):
                   if "".join(ch for ch in x["documento"].upper() if ch.isalnum()).endswith(doc) and len(doc) >= 5), None)
     if c and excepto_cliente and c["id"] == excepto_cliente:
         return None
+    if c and not c["recibir_envios"]:  # eligió no aparecer en las búsquedas de envíos
+        return None
     return c
 
 
@@ -72,7 +74,7 @@ def enviar(cliente, destino_texto, activo, monto_cent, usuario, clave, codigo=No
     activo = (activo or "").upper()
     if activo != "USD" and not db.uno("SELECT 1 FROM activos WHERE codigo = ?", (activo,)):
         raise ErrorEnvio("Elige qué moneda enviar.")
-    ten = cartera.tenencias(cliente["id"])
+    ten = cartera.disponible(cliente["id"])
     tengo = ten.get(activo, 0)
     if tengo <= 0:
         raise ErrorEnvio(f"No tienes {'dólares' if activo == 'USD' else activo} para enviar.")

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph, check with context %}
+{% block titulo %}Dispositivos y seguridad{% endblock %}
+{% block contenido %}
+{% if cli %}<a class="volver" href="{{ url_for('cliente.perfil') }}">← Perfil</a>{% endif %}
+{% call ph("Dispositivos y seguridad", "Dónde está abierta tu cuenta, el historial de ingresos y los avisos de seguridad.") %}
+  {% if activas|length > 1 %}<form method="post" action="{{ url_for('auth.sesiones_cerrar_otras') }}" data-confirmar="¿Cerrar la sesión en todos los demás dispositivos?">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn" type="submit">Cerrar las demás sesiones</button></form>{% endif %}
+{% endcall %}
+<div class="g2">
+  <div class="col">
+    <section class="card flush">
+      <div class="ch"><h3>Dispositivos conectados</h3><span class="meta">{{ activas|length }} activo{{ 's' if activas|length != 1 }}</span></div>
+      <div class="list">
+      {% for s in activas %}
+        <div class="item"><span class="mov-ico">{{ icono('dispositivo') }}</span>
+          <div class="grow"><div class="t">{{ s.dispositivo or "Dispositivo" }}{% if s.id == actual %} <span class="pill ok">Este dispositivo</span>{% endif %}</div>
+            <div class="d">IP {{ s.ip or "—" }} · ingresó {{ s.creada|fecha }} · última actividad {{ s.ultima|hace }}</div></div>
+          {% if s.id != actual %}<form method="post" action="{{ url_for('auth.sesion_cerrar', sid=s.id) }}" data-confirmar="¿Cerrar la sesión en {{ s.dispositivo }}?">
+            <input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn sm" type="submit">Cerrar</button></form>{% endif %}
+        </div>
+      {% else %}<p class="small muted vacio-sm">No hay sesiones activas registradas.</p>{% endfor %}
+      </div>
+    </section>
+    <section class="card col">
+      <div class="ch" style="margin:0"><h3>Protección de la cuenta</h3></div>
+      <ul class="checks">
+        {{ check(usuario.totp_secreto is not none, "Verificación en dos pasos activada" if usuario.totp_secreto else "Verificación en dos pasos desactivada: te recomendamos activarla") }}
+        {{ check(true, "Te avisamos cuando alguien ingresa desde un dispositivo nuevo") }}
+        {{ check(true, "La sesión se cierra sola tras " ~ config.INACTIVIDAD_MIN ~ " minutos sin uso") }}
+        {{ check(true, "Tras " ~ config.INTENTOS_LOGIN ~ " intentos fallidos la cuenta se bloquea unos minutos") }}
+      </ul>
+      <div class="row"><a class="btn" href="{{ url_for('auth.seguridad') }}">{{ icono('escudo') }}Dos pasos</a><a class="btn" href="{{ url_for('auth.clave') }}">{{ icono('llave') }}Cambiar contraseña</a></div>
+    </section>
+  </div>
+  <div class="col">
+    <section class="card flush">
+      <div class="ch"><h3>Notificaciones de seguridad</h3><span class="meta">últimos eventos</span></div>
+      <div class="list">
+      {% for e in eventos %}
+        <div class="item"><div class="grow"><div class="t {{ 'down' if e.accion in ('ingreso.fallido', '2fa.desactivada') }}">{{ nombres[e.accion] }}</div><div class="d">{{ e.ts|fecha }}{% if e.ip %} · IP {{ e.ip }}{% endif %}</div></div></div>
+      {% else %}<p class="small muted vacio-sm">Sin eventos todavía.</p>{% endfor %}
+      </div>
+    </section>
+    <section class="card flush">
+      <div class="ch"><h3>Historial de sesiones</h3></div>
+      <div class="list">
+      {% for s in historial %}
+        <div class="item"><div class="grow"><div class="t">{{ s.dispositivo or "Dispositivo" }}</div>
+          <div class="d">{{ s.creada|fecha }} · IP {{ s.ip or "—" }}{% if s.cerrada %} · {{ {'salida': 'cerró sesión', 'usuario': 'cerrada a distancia', 'clave': 'cerrada por cambio de seguridad', 'vencida': 'venció', 'renovada': 'renovada', 'equipo': 'cerrada por el equipo'}.get(s.cierre, 'cerrada') }} {{ s.cerrada|fecha }}{% endif %}</div></div>
+          {% if not s.cerrada and s.ultima >= limite %}<span class="pill ok">Activa</span>{% elif not s.cerrada %}<span class="pill plain">Inactiva</span>{% endif %}</div>
+      {% else %}<p class="small muted vacio-sm">Sin sesiones registradas.</p>{% endfor %}
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

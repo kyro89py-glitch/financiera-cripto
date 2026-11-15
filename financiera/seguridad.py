@@ -123,13 +123,50 @@ def csrf_token():
     return session["csrf"]
 
 
-def iniciar_sesion(usuario):
+def describir_agente(ua):
+    """«Chrome en Windows», «Safari en iPhone»… a partir del agente del navegador."""
+    ua = ua or ""
+    nav = ("Edge" if "Edg/" in ua else "Opera" if "OPR/" in ua else "Chrome" if ("Chrome/" in ua or "CriOS" in ua)
+           else "Firefox" if ("Firefox/" in ua or "FxiOS" in ua) else "Safari" if "Safari/" in ua else "Navegador")
+    so = ("Android" if "Android" in ua else "iPhone" if "iPhone" in ua else "iPad" if "iPad" in ua
+          else "Windows" if "Windows" in ua else "Mac" if ("Mac OS X" in ua or "Macintosh" in ua)
+          else "Linux" if "Linux" in ua else "otro sistema")
+    return f"{nav} en {so}"
+
+
+def iniciar_sesion(usuario, motivo=None):
+    """Abre una sesión nueva y la registra por dispositivo. Si el dispositivo es nuevo para el usuario, le avisa."""
+    from .tiempo import ahora
+    anterior = session.get("sid")
     session.clear()
     session.permanent = True
     session["uid"] = usuario["id"]
     session["ver"] = usuario["sesion_ver"]
     session["ult"] = time.time()
     session["csrf"] = secrets.token_urlsafe(32)
+    agente = (request.headers.get("User-Agent") or "")[:300] if request else ""
+    disp = describir_agente(agente)
+    ts = ahora()
+    sid = secrets.token_urlsafe(18)
+    with db.transaccion() as c:
+        if anterior:
+            c.execute("UPDATE sesiones SET cerrada = ?, cierre = ? WHERE id = ? AND cerrada IS NULL", (ts, motivo or "renovada", anterior))
+        conocido = c.execute("SELECT 1 FROM sesiones WHERE usuario_id = ? AND dispositivo = ? LIMIT 1", (usuario["id"], disp)).fetchone()
+        previas = c.execute("SELECT 1 FROM sesiones WHERE usuario_id = ? LIMIT 1", (usuario["id"],)).fetchone()
+        c.execute("INSERT INTO sesiones (id, usuario_id, creada, ultima, ip, agente, dispositivo) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                  (sid, usuario["id"], ts, ts, request.remote_addr if request else None, agente, disp))
+    session["sid"] = sid
+    session["sid_t"] = time.time()
+    if previas and not conocido and not motivo:
+        from . import notificaciones
+        notificaciones.notificar(usuario["id"], f"Nuevo ingreso a tu cuenta desde {disp} (IP {request.remote_addr}). "
+                                 "Si no fuiste tú, cambia tu contraseña y cierra esa sesión desde Seguridad.", "/cuenta/sesiones", ts=ts)
+
+
+def cerrar_sesiones(usuario_id, cierre, excepto=None):
+    from .tiempo import ahora
+    return db.ejecutar("UPDATE sesiones SET cerrada = ?, cierre = ? WHERE usuario_id = ? AND cerrada IS NULL AND id IS NOT ?",
+                       (ahora(), cierre, usuario_id, excepto)).rowcount
 
 
 def puede(permiso, usuario=None):
@@ -162,12 +199,22 @@ def init_app(app):
         if uid is not None:
             u = db.uno("SELECT * FROM usuarios WHERE id = ?", (uid,))
             inactivo = time.time() - session.get("ult", 0) > app.config["INACTIVIDAD_MIN"] * 60
-            if not u or not u["activo"] or u["sesion_ver"] != session.get("ver") or inactivo:
+            sid = session.get("sid")
+            fila = db.uno("SELECT cerrada FROM sesiones WHERE id = ?", (sid,)) if sid else None
+            cerrada = bool(sid) and (not fila or fila["cerrada"])
+            if not u or not u["activo"] or u["sesion_ver"] != session.get("ver") or inactivo or cerrada:
+                if sid and fila and not fila["cerrada"]:
+                    from .tiempo import ahora
+                    db.ejecutar("UPDATE sesiones SET cerrada = ?, cierre = ? WHERE id = ?", (ahora(), "vencida", sid))
                 session.clear()
                 g.sesion_vencida = True
             else:
                 g.usuario = u
                 session["ult"] = time.time()
+                if sid and time.time() - session.get("sid_t", 0) > 60:
+                    from .tiempo import ahora
+                    db.ejecutar("UPDATE sesiones SET ultima = ? WHERE id = ?", (ahora(), sid))
+                    session["sid_t"] = time.time()
 
         if request.method not in ("GET", "HEAD", "OPTIONS"):
             enviado = request.form.get("csrf") or request.headers.get("X-CSRF-Token") or ""

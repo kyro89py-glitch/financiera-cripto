@@ -8,7 +8,17 @@ services:
     volumes:
       - datos:/datos
 
-  # Tareas de fondo: precios y correos cada 5 minutos; el día 1 de cada mes, la comisión del mes anterior
+  # Precios en tiempo real: actualiza cada VIVO_SEGUNDOS (3 por defecto) desde la fuente configurada y revisa en cada
+  # actualización las órdenes límite y stop y las alertas de precio.
+  precios:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - datos:/datos
+    entrypoint: ["flask", "--app", "financiera", "precios-en-vivo"]
+
+  # Tareas de fondo: precios (respaldo del servicio anterior) y correos cada 5 minutos; el día 1 de cada mes, la comisión del mes anterior
   # (es idempotente: repetirla no cobra dos veces).
   tareas:
     build: .

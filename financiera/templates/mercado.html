@@ -1,49 +1,106 @@
 {% extends "base.html" %}
 {% from "macros.html" import escena3d, chispa, ph, vacio with context %}
-{% block titulo %}Mercado{% endblock %}
+{% block titulo %}Mercados{% endblock %}
+{% block clase_app %} ancha{% endblock %}
 {% block cabeza %}<script src="{{ url_for('static', filename='js/escena3d.js') }}?v={{ VERSION }}" defer></script>{% endblock %}
 {% block contenido %}
-{{ ph("Mercado", "Precios de " ~ fuente ~ ", actualizados solos mientras tienes la página abierta. Toca una moneda para ver su gráfico" ~ (" y operar." if usuario.rol == 'cliente' else ".")) }}
-<section class="hero3d">
+{% call ph("Mercados", total ~ " criptomonedas contra el dólar. Precios de " ~ fuente ~ " que se actualizan solos cada pocos segundos.") %}
+  <span class="vivo" data-vivo><i></i><span>{% if vivo[0] %}En vivo · {{ vivo[2] }}{% else %}Conectando…{% endif %}</span></span>
+{% endcall %}
+
+<section class="hero3d mercado-hero">
   <div class="info">
-    <span class="lab">{{ datos3d.titulo }}</span>
-    <h3 style="font-size:24px;color:#fff;margin:0">Así se reparte entre las monedas del mercado</h3>
-    <p class="small" style="opacity:.75;margin:0">Cada anillo es una moneda y gira alrededor de la más grande. Toca uno para ver cuánto vale.</p>
+    <span class="lab">Resumen del mercado</span>
+    <dl class="res-mercado">
+      <div><dt>Capitalización</dt><dd class="num">{{ resumen.cap|compacto }}</dd></div>
+      <div><dt>Volumen 24 h</dt><dd class="num">{{ resumen.volumen|compacto }}</dd></div>
+      <div><dt>Dominancia de Bitcoin</dt><dd class="num">{{ resumen.dominancia|pct(1, false) if resumen.dominancia else "—" }}</dd></div>
+      <div><dt>Suben / bajan hoy</dt><dd class="num"><span class="up">{{ resumen.suben }}</span> / <span class="down">{{ resumen.bajan }}</span></dd></div>
+    </dl>
+    <p class="xs" style="opacity:.7;margin:0">Capitalización y volumen sumados de las monedas listadas. La figura muestra {{ datos3d.titulo|lower }}: toca un anillo para ver cuánto vale.</p>
   </div>
   {{ escena3d(datos3d, heroe=true, forma="orbitas") }}
 </section>
-<div class="row spread" style="margin-bottom:12px">
-  <div class="chips">
-    {% for v, t in [('todos', 'Todas'), ('favoritos', '★ Favoritas'), ('cartera', 'En mi billetera' if usuario.rol == 'cliente' else 'Bajo gestión')] %}
-    <a href="{{ url_for('auth.mercado', ver=v, orden=orden or none) }}" aria-current="{{ 'true' if ver == v else 'false' }}">{{ t }}</a>{% endfor %}
+
+<div class="destacados">
+  {% for clave, titulo in [('suben', 'Más suben'), ('bajan', 'Más bajan'), ('volumen', 'Más volumen')] %}
+  <section class="card dest">
+    <h3>{{ titulo }} <span class="meta">24 h</span></h3>
+    {% for m in destacados[clave] %}
+    <a class="dest-fila" href="{{ url_for('auth.trading', codigo=m.codigo) }}">
+      <span class="moneda-ico sm" style="--c:{{ m.color }}">{{ m.codigo[0] }}</span><b>{{ m.codigo }}</b>
+      <span class="num grow r" data-px="{{ m.codigo }}">{{ m.precio|precio if m.precio else "—" }}</span>
+      {% if clave == 'volumen' %}<span class="num muted r w7">{{ m.volumen|compacto }}</span>
+      {% else %}<span class="num r w7 {{ 'up' if (m.cambio or 0) >= 0 else 'down' }}" data-cambio="{{ m.codigo }}">{{ m.cambio|pct }}</span>{% endif %}
+    </a>
+    {% else %}<p class="small muted">Sin datos.</p>{% endfor %}
+  </section>
+  {% endfor %}
+</div>
+
+{% if mapa %}
+<section class="card mapa-card">
+  <div class="ch"><h3>Mapa de calor</h3><span class="meta">tamaño según capitalización · color según variación de 24 h</span></div>
+  <div class="mapa" role="list">
+    {% for x, y, w, h, m in mapa %}{% set c = (m.cambio or 0)|float %}
+    <a role="listitem" class="tile {{ 'up' if c >= 0 else 'down' }}{{ ' chico' if w * h < 60 }}{{ ' mini' if w * h < 22 }}{{ ' angosto' if w < 9 }}" data-mapa="{{ m.codigo }}"
+       href="{{ url_for('auth.trading', codigo=m.codigo) }}" style="left:{{ x|round(3) }}%;top:{{ (y / 56 * 100)|round(3) }}%;width:{{ w|round(3) }}%;height:{{ (h / 56 * 100)|round(3) }}%;--a:{{ [1, 0.25 + (c|abs) / 6]|min }}"
+       aria-label="{{ m.nombre }}: {{ m.cambio|pct if m.cambio is not none else 'sin dato' }}">
+      <b>{{ m.codigo }}</b><span class="pc num">{{ m.cambio|pct if m.cambio is not none else "" }}</span>
+    </a>
+    {% endfor %}
   </div>
-  <div class="chips">
-    {% for v, t in [('', 'Por tamaño'), ('suben', 'Más suben'), ('bajan', 'Más bajan')] %}
-    <a href="{{ url_for('auth.mercado', ver=ver, orden=v or none) }}" aria-current="{{ 'true' if orden == v else 'false' }}">{{ t }}</a>{% endfor %}
+</section>
+{% endif %}
+
+<form class="filtros-mercado" method="get" action="{{ url_for('auth.mercado') }}" role="search">
+  <label class="buscador">{{ icono('buscar') }}<input type="search" name="q" value="{{ q }}" placeholder="Buscar por nombre o símbolo" aria-label="Buscar moneda" autocomplete="off" data-filtro-tabla="tabla-mercado"></label>
+  <input type="hidden" name="ver" value="{{ ver }}"><input type="hidden" name="cat" value="{{ cat }}">
+  <label class="orden-sel">Ordenar
+    <select name="orden" data-autoenvio>
+      {% for v, t in [('', 'Capitalización'), ('volumen', 'Volumen'), ('suben', 'Más suben'), ('bajan', 'Más bajan'), ('nombre', 'Nombre')] %}
+      <option value="{{ v }}"{% if orden == v %} selected{% endif %}>{{ t }}</option>{% endfor %}
+    </select>
+  </label>
+  <noscript><button class="btn sm" type="submit">Aplicar</button></noscript>
+</form>
+<div class="row spread filtros-chips">
+  <div class="chips" aria-label="Vista">
+    {% for v, t in [('todos', 'Todas'), ('favoritos', '★ Favoritas'), ('cartera', 'En mi billetera' if usuario.rol == 'cliente' else 'Bajo gestión')] %}
+    <a href="{{ url_for('auth.mercado', ver=v, orden=orden or none, cat=cat or none, q=q or none) }}" aria-current="{{ 'true' if ver == v else 'false' }}">{{ t }}</a>{% endfor %}
+  </div>
+  <div class="chips" aria-label="Categoría">
+    <a href="{{ url_for('auth.mercado', ver=ver, orden=orden or none, q=q or none) }}" aria-current="{{ 'true' if not cat else 'false' }}">Todas las categorías</a>
+    {% for k, t in categorias.items() %}<a href="{{ url_for('auth.mercado', ver=ver, orden=orden or none, cat=k, q=q or none) }}" aria-current="{{ 'true' if cat == k else 'false' }}">{{ t }}</a>{% endfor %}
   </div>
 </div>
+
 <section class="card flush">
   {% if filas %}
-  <div class="tablewrap"><table class="tabla resp mercado">
-    <thead><tr><th>Moneda</th><th class="r">Precio</th><th class="r">24 h</th><th class="r">7 días</th><th>Evolución</th><th class="r">{{ "Tienes" if usuario.rol == 'cliente' else "Bajo gestión" }}</th><th></th></tr></thead>
+  <div class="tablewrap"><table class="tabla resp mercado" id="tabla-mercado">
+    <thead><tr><th>Par</th><th class="r">Precio</th><th class="r">24 h</th><th class="r oc">Volumen 24 h</th><th class="r oc">Capitalización</th><th class="r oc">7 días</th><th class="oc">Evolución</th><th class="r oc">{{ "Tienes" if usuario.rol == 'cliente' else "Bajo gestión" }}</th><th></th></tr></thead>
     <tbody>{% for m in filas %}
-      <tr>
+      <tr data-buscar="{{ m.codigo|lower }} {{ m.nombre|lower }}">
         <td><div class="row" style="gap:10px;flex-wrap:nowrap">
           <form method="post" action="{{ url_for('auth.favorito', codigo=m.codigo) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="volver" value="{{ request.full_path.rstrip('?') }}">
             <button class="estrella{{ ' on' if m.codigo in favs }}" type="submit" aria-label="{{ 'Quitar de' if m.codigo in favs else 'Agregar a' }} favoritas: {{ m.codigo }}" aria-pressed="{{ 'true' if m.codigo in favs else 'false' }}">{{ icono('estrella') }}</button></form>
           <span class="moneda-ico" style="--c:{{ m.color }}">{{ m.codigo[0] }}</span>
-          <span><a class="fila" href="{{ url_for('auth.moneda', codigo=m.codigo) }}">{{ m.codigo }}</a><span class="sec">{{ m.nombre }}</span></span></div></td>
+          <span><a class="fila" href="{{ url_for('auth.moneda', codigo=m.codigo) }}">{{ m.codigo }}<span class="muted">/USD</span></a>
+            <span class="sec">{{ m.nombre }}{% if m.nuevo %} <span class="pill info plain">Nueva</span>{% endif %}{% if not m.habilitado %} <span class="pill plain">Solo venta</span>{% endif %}</span></span></div></td>
         <td class="r num" style="white-space:nowrap" data-px="{{ m.codigo }}">{% if m.precio %}{{ m.precio|precio }}{% else %}—{% endif %}</td>
         <td class="r num {{ 'up' if (m.cambio or 0) >= 0 else 'down' }}" data-cambio="{{ m.codigo }}">{{ m.cambio|pct if m.cambio is not none else "—" }}</td>
+        <td class="r num oc" data-vol="{{ m.codigo }}">{{ m.volumen|compacto if m.volumen else "—" }}</td>
+        <td class="r num oc">{{ m.cap|compacto if m.cap else "—" }}</td>
         <td class="r num oc {{ 'up' if (m.var or 0) >= 0 else 'down' }}">{{ m.var|pct if m.var is not none else "—" }}</td>
         <td class="oc">{{ chispa(m.chispa) }}</td>
         <td class="r num oc">{{ tengo[m.codigo]|usd(0) if tengo.get(m.codigo) else "—" }}</td>
-        <td class="r oc"><a class="btn sm{{ ' primary' if usuario.rol == 'cliente' }}" href="{{ url_for('auth.moneda', codigo=m.codigo) }}{{ '#operar' if usuario.rol == 'cliente' }}">{{ "Operar" if usuario.rol == 'cliente' else "Ver" }}</a></td>
+        <td class="r"><a class="btn sm{{ ' primary' if usuario.rol == 'cliente' }}" href="{{ url_for('auth.trading', codigo=m.codigo) }}">{{ "Operar" if usuario.rol == 'cliente' else "Ver" }}</a></td>
       </tr>
     {% endfor %}</tbody>
   </table></div>
+  <p class="small muted vacio-sm" id="sin-resultados" hidden>Ninguna moneda coincide con la búsqueda.</p>
   {% else %}
-    {{ vacio('mercado', "Todavía no marcaste ninguna moneda como favorita. Toca la estrella de una moneda para agregarla." if ver == 'favoritos' else "No hay monedas para mostrar.") }}
+    {{ vacio('mercado', "Todavía no marcaste ninguna moneda como favorita. Toca la estrella de una moneda para agregarla." if ver == 'favoritos' else "No hay monedas que coincidan con el filtro.") }}
   {% endif %}
 </section>
 <p class="note">Los precios son una referencia; el precio de cada compra o venta es el que se obtiene al ejecutarla. Las criptomonedas son inversiones de alto riesgo: puedes perder parte o todo lo invertido.</p>

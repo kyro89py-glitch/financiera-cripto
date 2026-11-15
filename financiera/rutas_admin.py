@@ -21,8 +21,24 @@ def _guardia():
 
 @bp.get("/precios", endpoint="precios")
 def precios_ver():
+    en_vivo, seg, fuente_vivo = precios.vivo()
     return render_template("admin/precios.html", fuente=precios.fuente(), activos=precios.activos(), vig=precios.vigentes(),
-                           viejos=dict(precios.antiguos()))
+                           viejos=dict(precios.antiguos()), en_vivo=en_vivo, seg=seg, categorias=precios.CATEGORIAS,
+                           custodia=set(cartera.activos_en_custodia()))
+
+
+@bp.post("/precios/<codigo>/habilitar")
+def moneda_habilitar(codigo):
+    a = db.uno("SELECT * FROM activos WHERE codigo = ?", (codigo,))
+    if a:
+        nuevo = 0 if a["habilitado"] else 1
+        with db.transaccion():
+            db.ejecutar("UPDATE activos SET habilitado = ? WHERE codigo = ?", (nuevo, codigo))
+            auditoria.registrar("activo.habilitado" if nuevo else "activo.suspendido", f"activo:{codigo}",
+                                {"texto": f"{'Habilitó' if nuevo else 'Suspendió'} las compras de {codigo}."
+                                          + ("" if nuevo else " Quien la tiene la puede seguir vendiendo.")}, usuario=g.usuario)
+        flash(f"{codigo}: " + ("se puede comprar de nuevo." if nuevo else "compras suspendidas; las ventas siguen habilitadas."), "ok")
+    return redirect(url_for("admin.precios"))
 
 
 

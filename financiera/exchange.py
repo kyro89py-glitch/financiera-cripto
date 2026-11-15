@@ -348,6 +348,51 @@ class Binance:
                 out[a] = (_dec(d["lastPrice"]), _dec(d.get("priceChangePercent", "0")))
         return out
 
+    def mercado(self, activos):
+        """Precio, variación, máximo, mínimo y volumen (en USDT) de 24 h por activo. Si un par no existe en Binance se
+        consulta uno por uno y se omite el que falla."""
+        simbolos = [self.simbolo(a) for a in activos if self.opera(a)]
+        try:
+            datos = self._pedir("GET", "/api/v3/ticker/24hr", {"symbols": json.dumps(simbolos, separators=(",", ":"))})
+        except ErrorExchange as e:
+            if e.codigo != -1121:
+                raise
+            datos = []
+            for sim in simbolos:
+                try:
+                    datos.append(self._pedir("GET", "/api/v3/ticker/24hr", {"symbol": sim}))
+                except ErrorExchange as e2:
+                    if e2.codigo != -1121:
+                        raise
+        por_simbolo = {d["symbol"]: d for d in datos}
+        out = {}
+        for a in activos:
+            if a == MONEDA_COTIZACION:
+                out[a] = {"precio": Decimal(1), "cambio": Decimal(0)}
+                continue
+            d = por_simbolo.get(self.simbolo(a))
+            if d and _dec(d.get("lastPrice", "0")) > 0:
+                out[a] = {"precio": _dec(d["lastPrice"]), "cambio": _dec(d.get("priceChangePercent", "0")),
+                          "max": _dec(d["highPrice"]) if d.get("highPrice") else None,
+                          "min": _dec(d["lowPrice"]) if d.get("lowPrice") else None,
+                          "volumen": float(d["quoteVolume"]) if d.get("quoteVolume") else None}
+        return out
+
+    # ---- datos públicos para la pantalla de trading ----
+    def velas(self, activo, intervalo, limite=200):
+        """[(ms, apertura, máximo, mínimo, cierre, volumen en USDT)] del par."""
+        filas = self._pedir("GET", "/api/v3/klines", {"symbol": self.simbolo(activo), "interval": intervalo, "limit": limite})
+        return [(int(f[0]), _dec(f[1]), _dec(f[2]), _dec(f[3]), _dec(f[4]), float(f[7])) for f in filas]
+
+    def libro(self, activo, limite=20):
+        d = self._pedir("GET", "/api/v3/depth", {"symbol": self.simbolo(activo), "limit": limite})
+        return ([(_dec(p), _dec(q)) for p, q in d.get("bids", [])], [(_dec(p), _dec(q)) for p, q in d.get("asks", [])])
+
+    def operaciones_mercado(self, activo, limite=30):
+        """Últimas operaciones del par en el exchange: (ms, precio, cantidad, compra)."""
+        filas = self._pedir("GET", "/api/v3/trades", {"symbol": self.simbolo(activo), "limit": limite})
+        return [(int(f["time"]), _dec(f["price"]), _dec(f["qty"]), not f.get("isBuyerMaker")) for f in reversed(filas)]
+
     def verificar(self):
         """Controles de la conexión y de la clave. Devuelve [(ok, texto)]; ok=None es una advertencia."""
         out = []

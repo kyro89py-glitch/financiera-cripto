@@ -54,7 +54,7 @@
 {% block layout %}
 {% set nav = navegacion() %}
 {% if nav %}{% set px = cinta() %}{% if px %}
-<div class="cinta" aria-label="Precios"><div class="cinta-in">{% for vuelta in (1, 2) %}{% for p in px %}<a href="{{ url_for('auth.moneda', codigo=p.codigo) }}"{% if vuelta == 2 %} aria-hidden="true" tabindex="-1"{% endif %}><b>{{ p.codigo }}</b><span class="num" data-px="{{ p.codigo }}">{{ p.precio|precio }}</span>{% if p.cambio is not none %}<span class="num {{ 'up' if p.cambio >= 0 else 'down' }}" data-cambio="{{ p.codigo }}">{{ p.cambio|pct }}</span>{% endif %}</a>{% endfor %}{% endfor %}</div></div>
+<div class="cinta" aria-label="Precios"><div class="cinta-in">{% for vuelta in (1, 2) %}{% for p in px %}<a href="{{ url_for('auth.trading', codigo=p.codigo) }}"{% if vuelta == 2 %} aria-hidden="true" tabindex="-1"{% endif %}><b>{{ p.codigo }}</b><span class="num" data-px="{{ p.codigo }}">{{ p.precio|precio }}</span>{% if p.cambio is not none %}<span class="num {{ 'up' if p.cambio >= 0 else 'down' }}" data-cambio="{{ p.codigo }}">{{ p.cambio|pct }}</span>{% endif %}</a>{% endfor %}{% endfor %}</div></div>
 {% endif %}{% endif %}
 <div class="app{% if not nav %} sola{% endif %}{% block clase_app %}{% endblock %}">
   {% if nav %}

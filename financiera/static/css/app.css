@@ -991,3 +991,4 @@ nav.tabs a{transition:background-color .15s,color .15s}
 .mas-g span{font-size:12px;color:var(--muted)}
 textarea{font:inherit}
 @media (max-width:520px){.msg{max-width:92%}.mas-g{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.matriz th.c,.matriz td.c{text-align:center}.matriz .si{color:var(--up);font-weight:700}.matriz .no{color:var(--muted)}

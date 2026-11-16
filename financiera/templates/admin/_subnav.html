@@ -1,2 +1,6 @@
 {% from "macros.html" import subnav with context %}
-{{ subnav([("admin.precios", "Precios"), ("admin.guaranies", "Guaraníes"), ("admin.comisiones", "Comisiones"), ("admin.ejecucion", "Ejecución"), ("admin.usuarios", "Usuarios del equipo"), ("admin.respaldos", "Respaldos")]) }}
+{% if g.usuario.rol == 'admin' %}
+{{ subnav([("admin.panel", "Panel"), ("admin.precios", "Precios"), ("admin.limites", "Límites"), ("admin.guaranies", "Guaraníes"), ("admin.comisiones", "Comisiones"), ("admin.ejecucion", "Ejecución"), ("admin.usuarios", "Usuarios del equipo"), ("admin.permisos", "Permisos"), ("admin.respaldos", "Respaldos")]) }}
+{% else %}
+{{ subnav([("admin.panel", "Panel"), ("admin.permisos", "Permisos"), ("admin.ejecucion", "Ejecución")]) }}
+{% endif %}

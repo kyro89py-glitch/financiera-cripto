@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph, pill with context %}
+{% block titulo %}Permisos{% endblock %}
+{% block clase_app %} ancha{% endblock %}
+{% block contenido %}
+{{ ph("Roles y permisos", "Qué puede hacer cada rol del equipo. Las operaciones grandes necesitan además dos personas distintas.") }}
+{% include "admin/_subnav.html" %}
+<div class="g2 ancho-izq">
+  <section class="panel">
+    <header><h3>Matriz de permisos</h3></header>
+    <div class="tablewrap"><table class="tabla-activos matriz">
+      <thead><tr><th>Permiso</th>{% for r in roles %}<th class="c">{{ ROLES[r] }}</th>{% endfor %}</tr></thead>
+      <tbody>{% for p, quienes in permisos.items() %}<tr><td>{{ descripcion.get(p, p) }}<span class="sec mono">{{ p }}</span></td>{% for r in roles %}<td class="c">{% if r in quienes %}<span class="si" aria-label="Sí">✓</span>{% else %}<span class="no" aria-label="No">—</span>{% endif %}</td>{% endfor %}</tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+  <section class="panel">
+    <header><h3>Equipo</h3>{% if puede('usuarios.gestionar') %}<a class="small" href="{{ url_for('admin.usuarios') }}">Gestionar</a>{% endif %}</header>
+    <div class="list">{% for u in equipo %}<div class="item"><div class="grow"><div class="t">{{ u.nombre }}{% if not u.activo %} <span class="pill bad">Inactivo</span>{% endif %}</div><div class="d">{{ ROLES[u.rol] }} · {{ u.email }}{% if u.ultimo_ingreso %} · último ingreso {{ u.ultimo_ingreso|hace }}{% endif %}</div></div>{{ pill('ok' if u.dos_pasos else 'warn', 'Dos pasos' if u.dos_pasos else 'Sin dos pasos') }}</div>{% endfor %}</div>
+    <p class="xs muted">Conviene que todo el equipo tenga la verificación en dos pasos activa.</p>
+  </section>
+</div>
+{% endblock %}

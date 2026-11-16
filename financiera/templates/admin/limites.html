@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph with context %}
+{% block titulo %}Límites{% endblock %}
+{% block contenido %}
+{{ ph("Límites de operación", "Valen para todos los clientes desde el momento en que los guardas. Cada cambio queda en la bitácora.") }}
+{% include "admin/_subnav.html" %}
+<form class="panel" method="post" data-confirmar="¿Guardar los límites? Se aplican de inmediato a todos los clientes.">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  {% for clave, titulo, desc, vigente, defecto, mn, mx in filas %}
+  <div class="pref"><div class="grow"><label for="{{ clave }}"><b>{{ titulo }}</b></label><span class="small muted">{{ desc }} Valor de la configuración: {{ (defecto * 100)|usd(0) }}.{% if vigente != defecto %} <b class="warn-txt">Modificado.</b>{% endif %}</span></div>
+    <label class="field" style="width:170px">US$<input id="{{ clave }}" name="{{ clave }}" inputmode="numeric" value="{{ vigente }}" required></label></div>
+  {% endfor %}
+  <button class="btn primary" type="submit" style="align-self:flex-start">Guardar límites</button>
+</form>
+{% endblock %}

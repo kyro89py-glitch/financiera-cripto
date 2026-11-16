@@ -14,6 +14,8 @@ def _guardia():
         return r
     if request.endpoint == "admin.ejecucion" and seguridad.puede("ejecucion.ver"):
         return None  # Cumplimiento también puede ver la ejecución y activar la pausa de emergencia
+    if request.endpoint in ("admin.panel", "admin.permisos") and seguridad.puede("panel.ver"):
+        return None  # Cumplimiento ve el panel y la matriz de permisos, sin poder cambiar ajustes
     if g.usuario["rol"] != "admin":
         abort(403)
     return None
@@ -201,3 +203,91 @@ def respaldos():
     filas = db.todos("SELECT * FROM respaldos ORDER BY id DESC LIMIT 30")
     return render_template("admin/respaldos.html", filas=filas, carpeta=current_app.config["RESPALDOS_DIR"],
                            conservar=current_app.config["RESPALDOS_CONSERVAR"], externo=bool(current_app.config["RESPALDO_COMANDO"]))
+
+
+# ---------- v0.20: panel de administración, límites y permisos ----------
+@bp.get("/panel")
+@seguridad.requiere("panel.ver")
+def panel():
+    from datetime import timedelta
+
+    from . import antilavado, ejecucion, observabilidad
+    from .tiempo import ahora_dt, iso
+    d1, d7, d30 = (iso(ahora_dt() - timedelta(days=n)) for n in (1, 7, 30))
+    uno = lambda sql, *a: db.uno(sql, a)["n"]  # noqa: E731
+    clientes = uno("SELECT COUNT(*) AS n FROM clientes")
+    usuarios = {
+        "clientes": clientes, "nuevos7": uno("SELECT COUNT(*) AS n FROM clientes WHERE creado >= ?", d7),
+        "nuevos30": uno("SELECT COUNT(*) AS n FROM clientes WHERE creado >= ?", d30),
+        "verificados": uno("SELECT COUNT(*) AS n FROM clientes WHERE kyc_estado = 'verificado'"),
+        "pendientes_kyc": uno("SELECT COUNT(*) AS n FROM clientes WHERE kyc_estado != 'verificado'"),
+        "con_2fa": uno("SELECT COUNT(*) AS n FROM usuarios WHERE rol = 'cliente' AND totp_secreto IS NOT NULL"),
+        "activos7": uno("SELECT COUNT(DISTINCT usuario_id) AS n FROM sesiones WHERE ultima >= ?", d7),
+        "equipo": uno("SELECT COUNT(*) AS n FROM usuarios WHERE rol != 'cliente' AND activo = 1"),
+    }
+    vol = {k: db.uno("SELECT COALESCE(SUM(importe_cent), 0) AS v, COUNT(*) AS n FROM ordenes WHERE ts >= ?", (d,))
+           for k, d in (("24 h", d1), ("7 días", d7), ("30 días", d30))}
+    flujos = {t: db.uno("SELECT COALESCE(SUM(liquidado_cent), 0) AS v, COUNT(*) AS n FROM operaciones WHERE tipo = ? AND estado = 'liquidada'"
+                        " AND resuelto_ts >= ?", (t, d30)) for t in ("aporte", "retiro")}
+    envios = db.uno("SELECT COALESCE(SUM(valor_cent), 0) AS v, COUNT(*) AS n FROM transferencias WHERE ts >= ?", (d30,))
+    activos_top = db.todos("SELECT o.activo, a.color, SUM(o.importe_cent) AS v, COUNT(*) AS n, COUNT(DISTINCT o.cliente_id) AS clientes"
+                           " FROM ordenes o JOIN activos a ON a.codigo = o.activo WHERE o.ts >= ? GROUP BY o.activo ORDER BY v DESC LIMIT 8", (d30,))
+    estado_salud, salud = observabilidad.chequeos()
+    aml = {r["nivel"]: r["n"] for r in db.todos("SELECT nivel, COUNT(*) AS n FROM alertas_aml WHERE estado = 'abierta' GROUP BY nivel")}
+    riesgos = []
+    if aml.get("critica"):
+        riesgos.append(("bad", f"{aml['critica']} coincidencia(s) con listas de sanciones sin resolver.", url_for("equipo.antilavado")))
+    if aml.get("alta") or aml.get("media"):
+        riesgos.append(("warn", f"{aml.get('alta', 0) + aml.get('media', 0)} alerta(s) antilavado abiertas.", url_for("equipo.antilavado")))
+    if ejecucion.pausada():
+        riesgos.append(("bad", "La ejecución de operaciones está en pausa.", url_for("admin.ejecucion")))
+    if salud.get("ejecuciones_incompletas"):
+        riesgos.append(("bad", f"{salud['ejecuciones_incompletas']} ejecución(es) a medias.", url_for("admin.ejecucion")))
+    if salud.get("precios"):
+        riesgos.append(("warn", "Precios desactualizados: no se ejecutan operaciones.", url_for("admin.precios")))
+    if salud.get("ultimo_respaldo_h") is None or salud["ultimo_respaldo_h"] > 26:
+        riesgos.append(("warn", "No hay un respaldo de las últimas 26 horas.", url_for("admin.respaldos") if seguridad.puede("respaldos.gestionar") else None))
+    bloqueadas = uno("SELECT COUNT(*) AS n FROM usuarios WHERE bloqueado_hasta IS NOT NULL AND bloqueado_hasta > ?", iso(ahora_dt()))
+    if bloqueadas:
+        riesgos.append(("warn", f"{bloqueadas} cuenta(s) bloqueadas por intentos fallidos.", None))
+    consultas = uno("SELECT COUNT(*) AS n FROM consultas WHERE estado = 'abierta'")
+    if consultas:
+        riesgos.append(("info", f"{consultas} consulta(s) de clientes esperando respuesta.", url_for("equipo.soporte")))
+    grandes = db.todos("SELECT o.*, c.nombre FROM ordenes o JOIN clientes c ON c.id = o.cliente_id WHERE o.ts >= ? ORDER BY o.importe_cent DESC LIMIT 8", (d7,))
+    acciones = db.todos("SELECT b.ts, b.accion, b.detalle, u.nombre, u.rol FROM bitacora b JOIN usuarios u ON u.id = b.usuario_id"
+                        " WHERE u.rol != 'cliente' ORDER BY b.id DESC LIMIT 15")
+    return render_template("admin/panel.html", usuarios=usuarios, vol=vol, flujos=flujos, envios=envios, activos_top=activos_top,
+                           riesgos=riesgos, grandes=grandes, acciones=acciones, salud=salud, estado_salud=estado_salud,
+                           aml_total=sum(aml.values()), antilavado=antilavado)
+
+
+@bp.route("/limites", methods=["GET", "POST"])
+@seguridad.requiere("limites.editar")
+def limites():
+    from . import niveles
+    if request.method == "POST":
+        cambios, errores = 0, []
+        for clave in niveles.LIMITES:
+            texto = (request.form.get(clave) or "").replace(".", "").replace(",", "").strip()
+            if not texto:
+                continue
+            try:
+                cambios += niveles.fijar(clave, int(texto), g.usuario)
+            except ValueError as e:
+                errores.append(str(e) if "elige" in str(e) else f"{niveles.LIMITES[clave][0]}: escribe un número entero de dólares.")
+        for e in errores:
+            flash(e, "error")
+        if cambios:
+            flash(f"{cambios} límite(s) actualizados. El cambio quedó en la bitácora.", "ok")
+        return redirect(url_for("admin.limites"))
+    filas = [(k, t, d, niveles.valor(k), current_app.config[k], mn, mx) for k, (t, d, mn, mx) in niveles.LIMITES.items()]
+    return render_template("admin/limites.html", filas=filas)
+
+
+@bp.get("/permisos")
+@seguridad.requiere("panel.ver")
+def permisos():
+    equipo = db.todos("SELECT nombre, email, rol, activo, totp_secreto IS NOT NULL AS dos_pasos, ultimo_ingreso FROM usuarios"
+                      " WHERE rol != 'cliente' ORDER BY rol, nombre")
+    return render_template("admin/permisos.html", permisos=seguridad.PERMISOS, descripcion=seguridad.DESCRIPCION_PERMISOS,
+                           roles=seguridad.ROLES_EQUIPO, equipo=equipo)

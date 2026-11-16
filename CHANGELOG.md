@@ -65,6 +65,11 @@ Evolución completa de la plataforma, trabajada por módulos. Los servicios fina
 - **Análisis de cartera:** peso, volatilidad, aporte al riesgo y resultado de cada activo, diversificación efectiva y rendimiento por período frente a Bitcoin y al Top 10.
 - Navegación: Análisis, Academia, Earn y Ayuda en la barra lateral de escritorio y en el perfil en el celular.
 
+### Módulo 8 · Panel administrativo
+- **Panel de administración:** clientes (altas, verificados, con dos pasos, activos), volumen operado en 24 horas, 7 y 30 días, depósitos, retiros y envíos, activos más utilizados, alertas de riesgo (sanciones, antilavado, ejecución, precios, respaldos, cuentas bloqueadas, consultas), mayores órdenes y últimas acciones del equipo.
+- **Límites editables** por Administración (máximo por orden, envíos y retiros por día, doble firma, umbral antilavado), con rangos válidos y registro en la bitácora.
+- **Roles y permisos:** matriz completa de qué puede cada rol y estado de dos pasos del equipo. Cumplimiento ve el panel y la matriz en solo lectura; solo Administración cambia ajustes.
+
 ## [0.10.0] - 2026-11-15
 
 Etapa 2 del plan (rediseño visual) más las dos correcciones críticas de la auditoría técnica.

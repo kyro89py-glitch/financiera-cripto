@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph, pill, vacio with context %}
+{% block titulo %}Panel de administración{% endblock %}
+{% block clase_app %} ancha{% endblock %}
+{% block contenido %}
+{% call ph("Panel de administración", "Usuarios, volúmenes, riesgos y acciones del equipo.") %}<span class="pill {{ 'ok' if estado_salud == 'ok' else ('warn' if estado_salud == 'degradado' else 'bad') }}">Sistema: {{ estado_salud }}</span>{% endcall %}
+{% include "admin/_subnav.html" %}
+<section class="indicadores">
+  <div><dt>Clientes</dt><dd class="num">{{ usuarios.clientes }}</dd><span>+{{ usuarios.nuevos7 }} en 7 días · +{{ usuarios.nuevos30 }} en 30</span></div>
+  <div><dt>Identidad verificada</dt><dd class="num">{{ usuarios.verificados }}</dd><span>{{ usuarios.pendientes_kyc }} pendientes de verificación</span></div>
+  <div><dt>Con dos pasos</dt><dd class="num">{{ ((usuarios.con_2fa / usuarios.clientes * 100) if usuarios.clientes else 0)|pct(0, false) }}</dd><span>{{ usuarios.con_2fa }} de {{ usuarios.clientes }} clientes</span></div>
+  <div><dt>Activos en 7 días</dt><dd class="num">{{ usuarios.activos7 }}</dd><span>usuarios con sesión reciente</span></div>
+  <div><dt>Volumen operado 30 días</dt><dd class="num">{{ vol['30 días'].v|usd(0) }}</dd><span>{{ vol['30 días'].n }} órdenes</span></div>
+  <div><dt>Alertas antilavado</dt><dd class="num {{ 'warn-txt' if aml_total }}">{{ aml_total }}</dd><span>abiertas</span></div>
+</section>
+<div class="g2">
+  <section class="panel">
+    <header><h3>Alertas de riesgo</h3></header>
+    {% for nivel, texto, enlace in riesgos %}
+      {% if enlace %}<a class="alerta-hoy {{ nivel }}" href="{{ enlace }}"><i></i><span>{{ texto }}</span><span class="ir">›</span></a>{% else %}<div class="alerta-hoy {{ nivel }}"><i></i><span>{{ texto }}</span></div>{% endif %}
+    {% else %}<div class="empty compacto">{{ icono('escudo') }}<span>Sin alertas de riesgo.</span></div>{% endfor %}
+    <dl class="mini-kpis"><div><dt>Precios</dt><dd class="num">{{ salud.precios_min if salud.precios_min is not none else '—' }} min</dd></div><div><dt>Último respaldo</dt><dd class="num">{{ (salud.ultimo_respaldo_h ~ ' h') if salud.ultimo_respaldo_h is not none else 'nunca' }}</dd></div>
+      <div><dt>Ejecución</dt><dd>{{ salud.ejecucion }}</dd></div><div><dt>Correos en cola</dt><dd class="num">{{ salud.correos_pendientes }}</dd></div></dl>
+  </section>
+  <section class="panel">
+    <header><h3>Volumen</h3><span class="meta">compras y ventas ejecutadas</span></header>
+    <dl class="mini-kpis tres">{% for k, v in vol.items() %}<div><dt>{{ k }}</dt><dd class="num">{{ v.v|usd(0) }}</dd><span class="xs muted">{{ v.n }} órdenes</span></div>{% endfor %}</dl>
+    <header><h3>Depósitos y retiros · 30 días</h3></header>
+    <dl class="mini-kpis tres">
+      <div><dt>Depósitos</dt><dd class="num up">{{ flujos.aporte.v|usd(0) }}</dd><span class="xs muted">{{ flujos.aporte.n }} acreditados</span></div>
+      <div><dt>Retiros</dt><dd class="num down">{{ flujos.retiro.v|usd(0) }}</dd><span class="xs muted">{{ flujos.retiro.n }} pagados</span></div>
+      <div><dt>Flujo neto</dt><dd class="num">{{ (flujos.aporte.v - flujos.retiro.v)|usd(0) }}</dd></div>
+      <div><dt>Envíos entre clientes</dt><dd class="num">{{ envios.v|usd(0) }}</dd><span class="xs muted">{{ envios.n }} envío{{ 's' if envios.n != 1 }}</span></div>
+    </dl>
+  </section>
+  <section class="panel">
+    <header><h3>Activos más utilizados</h3><span class="meta">30 días</span></header>
+    {% set mx = activos_top[0].v if activos_top else 1 %}
+    {% for a in activos_top %}<div class="limite"><div class="row spread small"><b>{{ a.activo }}</b><span class="num">{{ a.v|usd(0) }} · {{ a.n }} órdenes · {{ a.clientes }} cliente{{ 's' if a.clientes != 1 }}</span></div><div class="peso-barra"><i style="width:{{ (a.v / mx * 100)|round(1) }}%;background:{{ a.color }}"></i></div></div>
+    {% else %}{{ vacio('mercado', 'Sin operaciones en 30 días.') }}{% endfor %}
+  </section>
+  <section class="panel">
+    <header><h3>Supervisión: mayores órdenes</h3><span class="meta">7 días</span></header>
+    <div class="list">{% for o in grandes %}<a class="item" href="{{ url_for('equipo.operacion', opid=o.operacion_id) }}"><div class="grow"><div class="t">{{ 'Compra' if o.lado == 'compra' else 'Venta' }} de {{ o.activo }} · {{ o.nombre }}</div><div class="d">{{ o.ts|fecha }} · {{ o.venue }}</div></div><div class="amt num">{{ o.importe_cent|usd }}</div></a>
+    {% else %}<p class="small muted vacio-sm">Sin órdenes en 7 días.</p>{% endfor %}</div>
+  </section>
+</div>
+<section class="panel">
+  <header><h3>Acciones del equipo</h3>{% if puede('cumplimiento.ver') %}<a class="small" href="{{ url_for('equipo.bitacora') }}">Bitácora completa</a>{% endif %}</header>
+  <div class="list">{% for a in acciones %}<div class="item"><div class="grow"><div class="t">{{ a.detalle|detalle_txt }}</div><div class="d">{{ a.nombre }} ({{ ROLES[a.rol] }}) · {{ a.ts|fecha }} · <span class="mono xs">{{ a.accion }}</span></div></div></div>
+  {% else %}<p class="small muted vacio-sm">Sin acciones registradas.</p>{% endfor %}</div>
+</section>
+{% endblock %}

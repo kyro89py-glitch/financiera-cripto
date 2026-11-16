@@ -14,6 +14,19 @@ from flask import abort, current_app, g, redirect, request, session, url_for
 from . import db
 
 ROLES_EQUIPO = ("operador", "cumplimiento", "admin")
+DESCRIPCION_PERMISOS = {
+    "equipo.ver": "Entrar al área del equipo", "operaciones.aprobar": "Aprobar o rechazar depósitos y retiros",
+    "clientes.crear": "Dar de alta clientes", "clientes.clave": "Entregar contraseñas temporales",
+    "clientes.kyc": "Verificar identidad y debida diligencia", "clientes.origen": "Registrar origen de fondos",
+    "cumplimiento.ver": "Ver alertas, bitácora y conciliación", "reportes.exportar": "Exportar reportes regulatorios",
+    "documentos.subir": "Subir documentos de clientes", "documentos.revisar": "Aceptar o rechazar documentos",
+    "conciliacion.registrar": "Registrar conciliaciones", "comisiones.cobrar": "Cobrar comisiones",
+    "ejecucion.ver": "Ver el estado de la ejecución", "ejecucion.pausar": "Pausar la ejecución",
+    "ejecucion.reanudar": "Reanudar la ejecución", "precios.editar": "Precios, monedas y ajustes",
+    "usuarios.gestionar": "Gestionar usuarios del equipo", "antilavado.resolver": "Resolver alertas antilavado",
+    "respaldos.gestionar": "Crear y probar respaldos", "limites.editar": "Cambiar límites de operación",
+    "soporte.atender": "Responder consultas de clientes", "panel.ver": "Ver el panel de administración",
+}
 
 PERMISOS = {
     "equipo.ver": {"operador", "cumplimiento", "admin"},
@@ -37,6 +50,7 @@ PERMISOS = {
     "respaldos.gestionar": {"admin"},
     "limites.editar": {"admin"},
     "soporte.atender": {"operador", "cumplimiento", "admin"},
+    "panel.ver": {"cumplimiento", "admin"},
 }
 
 # Versión vigente de las condiciones y la información de riesgos que acepta cada cliente.

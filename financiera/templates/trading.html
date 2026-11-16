@@ -236,10 +236,10 @@
     <header><h3>Análisis de {{ a.codigo }}</h3><span class="meta">{% if analisis %}con {{ analisis.dias }} días de historia{% endif %}</span></header>
     {% if analisis %}
     <dl class="mini-kpis tres">
-      {% for k, v in analisis.rend.items() %}<div><dt>Rendimiento {{ k }}</dt><dd class="num {{ 'up' if v >= 0 else 'down' }}">{{ "+" if v >= 0 }}{{ v|round(2) }} %</dd></div>{% endfor %}
-      {% if analisis.volatilidad is defined %}<div><dt>Volatilidad anual (30 días)</dt><dd class="num">{{ analisis.volatilidad|round(1) }} %</dd></div>{% endif %}
+      {% for k, v in analisis.rend.items() %}<div><dt>Rendimiento {{ k }}</dt><dd class="num {{ 'up' if v >= 0 else 'down' }}">{{ v|pct(2) }}</dd></div>{% endfor %}
+      {% if analisis.volatilidad is defined %}<div><dt>Volatilidad anual (30 días)</dt><dd class="num">{{ analisis.volatilidad|pct(1, false) }}</dd></div>{% endif %}
       <div><dt>Máximo del período</dt><dd class="num">{{ Decimal(analisis.maximo|string)|precio }}</dd></div>
-      <div><dt>Distancia al máximo</dt><dd class="num {{ 'down' if analisis.desde_maximo < 0 else 'up' }}">{{ analisis.desde_maximo|round(1) }} %</dd></div>
+      <div><dt>Distancia al máximo</dt><dd class="num {{ 'down' if analisis.desde_maximo < 0 else 'up' }}">{{ analisis.desde_maximo|pct(1) }}</dd></div>
       {% if analisis.rsi is not none %}<div><dt>RSI 14 diario</dt><dd class="num">{{ analisis.rsi|round(0)|int }}</dd><span class="xs muted">{{ analisis.rsi_texto }}</span></div>{% endif %}
     </dl>
     {% if analisis.tendencia %}<p class="small"><span class="pill {{ 'ok' if analisis.tendencia[0] == 'alcista' else ('bad' if analisis.tendencia[0] == 'bajista' else '') }}">Tendencia {{ analisis.tendencia[0] }}</span> {{ analisis.tendencia[1] }}</p>{% endif %}
@@ -252,7 +252,7 @@
     <dl class="mini-kpis">
       <div><dt>Tienes</dt><dd class="num">{{ expo.unidades|unidades(a.codigo) }}</dd></div>
       <div><dt>Valor</dt><dd class="num">{{ expo.valor|usd }}</dd></div>
-      <div><dt>Peso en tu cartera</dt><dd class="num {{ 'warn-txt' if expo.peso > 50 }}">{{ expo.peso|round(1) }} %</dd></div>
+      <div><dt>Peso en tu cartera</dt><dd class="num {{ 'warn-txt' if expo.peso > 50 }}">{{ expo.peso|pct(1, false) }}</dd></div>
       <div><dt>Costo promedio</dt><dd class="num">{{ expo.promedio|precio if expo.promedio else "—" }}</dd></div>
       <div><dt>Resultado sin realizar</dt><dd class="num {{ 'up' if (expo.resultado or 0) >= 0 else 'down' }}">{% if expo.resultado is not none %}{{ "+" if expo.resultado >= 0 }}{{ expo.resultado|usd }}{% else %}—{% endif %}</dd></div>
       <div><dt>Reservado en órdenes</dt><dd class="num">{{ bloq_u|unidades(a.codigo) if bloq_u else "—" }}</dd></div>

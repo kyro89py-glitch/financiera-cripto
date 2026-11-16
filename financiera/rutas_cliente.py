@@ -304,6 +304,18 @@ def plan_cancelar(pid):
 @bp.post("/alertas")
 def alerta_crear():
     activo = (request.form.get("activo") or "").upper()
+    if request.form.get("tipo") == "variacion":
+        try:
+            umbral = float((request.form.get("umbral") or "").replace(",", ".").replace("%", "").strip())
+            alertas.crear_variacion(g.usuario, activo, umbral, request.form.get("sentido"))
+            umb = f"{umbral:g}".replace(".", ",")
+            flash(f"Listo: te avisamos cuando {activo} {'suba' if request.form.get('sentido') == 'sube' else 'baje'} "
+                  f"{umb} % o más en 24 horas.", "ok")
+        except ValueError:
+            flash("Escribe la variación como número, por ejemplo 5.", "error")
+        except operaciones.ErrorNegocio as e:
+            flash(str(e), "error")
+        return redirect(_volver(activo) + "#alertas")
     try:
         from .dinero import leer_precio
         vig = precios.vigentes().get(activo)

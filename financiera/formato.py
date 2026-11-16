@@ -200,6 +200,10 @@ def init_app(app):
     from . import guarani
     app.jinja_env.filters["gs"] = guarani.fmt
     app.jinja_env.filters["compacto"] = compacto
+    app.jinja_env.filters["hora_ms"] = lambda s: datetime.fromtimestamp(s, zona()).strftime("%H:%M:%S")
+    app.jinja_env.filters["fecha_ms"] = lambda s: (lambda d: f"{d.day} {MESES_LARGOS[d.month - 1][:3]}")(datetime.fromtimestamp(s, zona()))
+    app.jinja_env.filters["precio_f"] = lambda v: dinero.fmt_precio(Decimal(str(v))) if v is not None else "—"
+    app.jinja_env.filters["cantidad_f"] = lambda v: (f"{float(v):,.6f}".rstrip("0").rstrip(".")).replace(",", "X").replace(".", ",").replace("X", ".")
 
     def en_gs(cent):
         """Equivalente en guaraníes de un importe en dólares, o None si no hay tipo de cambio cargado."""

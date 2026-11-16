@@ -36,6 +36,14 @@ Evolución completa de la plataforma, trabajada por módulos. Los servicios fina
 - **Resumen del mercado en palabras** con números calculados: variación ponderada por capitalización, cuántas suben, mayor suba y baja, dominancia de Bitcoin.
 - **Centro de avisos:** categorías (operaciones, precios y órdenes, seguridad, cuenta, mercado), filtro de no leídos, agrupación por día y elección de qué categorías llegan por correo (seguridad siempre llega).
 
+### Módulo 4 · Mercados y ficha de cada moneda
+- **Listado:** ranking por capitalización, fuente y hora de la última actualización visibles, tarjetas de tendencia de 7 días y de las más negociadas respecto de su tamaño, orden por tendencia.
+- **Mapa de calor:** período de 24 horas o 7 días, leyenda de colores y detalle al pasar el cursor (precio, variación y capitalización).
+- **Comparar monedas:** hasta cuatro en la misma escala (todas parten de 0 %) en 7, 30 o 90 días o 1 año, con tabla lado a lado de precio, variaciones, volatilidad, RSI, distancia al máximo, capitalización, volumen y ranking.
+- **Alertas por variación:** además de las de precio, avisan cuando una moneda sube o baja un porcentaje en 24 horas. Cada alerta avisa una vez.
+- **Ficha de cada moneda:** qué es, año de lanzamiento, cómo funciona y categoría (texto descriptivo, no datos de mercado), ranking, estadísticas con su fuente y hora, rendimientos a 7, 30 y 90 días y 1 año, volatilidad y RSI, actividad del mercado (mejor compra y venta, diferencia y últimas operaciones, marcadas como simuladas cuando lo son), cotizaciones diarias y exportación del último año a CSV con fuente y zona horaria. Rangos nuevos de 90 días y 1 año.
+- **Gráficos de línea en tiempo real:** el eje horizontal ahora respeta las fechas; antes, las últimas horas (que tienen más puntos) se estiraban y deformaban la curva.
+
 ## [0.10.0] - 2026-11-15
 
 Etapa 2 del plan (rediseño visual) más las dos correcciones críticas de la auditoría técnica.

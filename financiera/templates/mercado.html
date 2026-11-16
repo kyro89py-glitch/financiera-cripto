@@ -6,7 +6,9 @@
 {% block contenido %}
 {% call ph("Mercados", total ~ " criptomonedas contra el dólar. Precios de " ~ fuente ~ " que se actualizan solos cada pocos segundos.") %}
   <span class="vivo" data-vivo><i></i><span>{% if vivo[0] %}En vivo · {{ vivo[2] }}{% else %}Conectando…{% endif %}</span></span>
+  <a class="btn" href="{{ url_for('auth.comparar') }}">{{ icono('mercado') }}Comparar monedas</a>
 {% endcall %}
+<p class="fuente-dato">Fuente: <b>{{ fuente }}</b>{% if actualizado %} · última actualización {{ actualizado|fecha }} ({{ actualizado|hace }}){% endif %}. Capitalización y volumen corresponden a las últimas 24 horas según la misma fuente.</p>
 
 <section class="hero3d mercado-hero">
   <div class="info">
@@ -23,14 +25,16 @@
 </section>
 
 <div class="destacados">
-  {% for clave, titulo in [('suben', 'Más suben'), ('bajan', 'Más bajan'), ('volumen', 'Más volumen')] %}
+  {% for clave, titulo in [('suben', 'Más suben'), ('bajan', 'Más bajan'), ('tendencia', 'Tendencia 7 días'), ('volumen', 'Más volumen'), ('actividad', 'Más negociadas')] %}
   <section class="card dest">
-    <h3>{{ titulo }} <span class="meta">24 h</span></h3>
+    <h3>{{ titulo }} <span class="meta">{{ '7 días' if clave == 'tendencia' else ('volumen / capitalización' if clave == 'actividad' else '24 h') }}</span></h3>
     {% for m in destacados[clave] %}
     <a class="dest-fila" href="{{ url_for('auth.trading', codigo=m.codigo) }}">
       <span class="moneda-ico sm" style="--c:{{ m.color }}">{{ m.codigo[0] }}</span><b>{{ m.codigo }}</b>
       <span class="num grow r" data-px="{{ m.codigo }}">{{ m.precio|precio if m.precio else "—" }}</span>
       {% if clave == 'volumen' %}<span class="num muted r w7">{{ m.volumen|compacto }}</span>
+      {% elif clave == 'tendencia' %}<span class="num r w7 {{ 'up' if (m.var or 0) >= 0 else 'down' }}">{{ m.var|pct }}</span>
+      {% elif clave == 'actividad' %}<span class="num muted r w7">{{ (m.volumen / m.cap * 100)|pct(1, false) }}</span>
       {% else %}<span class="num r w7 {{ 'up' if (m.cambio or 0) >= 0 else 'down' }}" data-cambio="{{ m.codigo }}">{{ m.cambio|pct }}</span>{% endif %}
     </a>
     {% else %}<p class="small muted">Sin datos.</p>{% endfor %}
@@ -39,17 +43,20 @@
 </div>
 
 {% if mapa %}
-<section class="card mapa-card">
-  <div class="ch"><h3>Mapa de calor</h3><span class="meta">tamaño según capitalización · color según variación de 24 h</span></div>
+<section class="card mapa-card" id="mapa">
+  <div class="ch"><h3>Mapa de calor</h3>
+    <div class="row" style="gap:10px"><span class="meta">tamaño según capitalización · color según variación</span>
+      <div class="segmentos" role="group" aria-label="Período del mapa">{% for k, t in [('24h', '24 h'), ('7d', '7 días')] %}<a href="{{ url_for('auth.mercado', ver=ver, orden=orden or none, cat=cat or none, q=q or none, var=var_f or none, tam=tam or none, mapa=k if k != '24h' else none) }}#mapa" aria-pressed="{{ 'true' if periodo_mapa == k else 'false' }}" role="button">{{ t }}</a>{% endfor %}</div></div></div>
   <div class="mapa" role="list">
-    {% for x, y, w, h, m in mapa %}{% set c = (m.cambio or 0)|float %}
+    {% for x, y, w, h, m in mapa %}{% set c = (m.mapa_var or 0)|float %}
     <a role="listitem" class="tile {{ 'up' if c >= 0 else 'down' }}{{ ' chico' if w * h < 60 }}{{ ' mini' if w * h < 22 }}{{ ' angosto' if w < 9 }}" data-mapa="{{ m.codigo }}"
        href="{{ url_for('auth.trading', codigo=m.codigo) }}" style="left:{{ x|round(3) }}%;top:{{ (y / 56 * 100)|round(3) }}%;width:{{ w|round(3) }}%;height:{{ (h / 56 * 100)|round(3) }}%;--a:{{ [1, 0.25 + (c|abs) / 6]|min }}"
-       aria-label="{{ m.nombre }}: {{ m.cambio|pct if m.cambio is not none else 'sin dato' }}">
-      <b>{{ m.codigo }}</b><span class="pc num">{{ m.cambio|pct if m.cambio is not none else "" }}</span>
+       aria-label="{{ m.nombre }}: {{ m.mapa_var|pct if m.mapa_var is not none else 'sin dato' }}" title="{{ m.nombre }} · {{ m.precio|precio if m.precio else '' }} · {{ m.mapa_var|pct if m.mapa_var is not none else '' }} · cap. {{ m.cap|compacto if m.cap else '—' }}">
+      <b>{{ m.codigo }}</b><span class="pc num">{{ m.mapa_var|pct if m.mapa_var is not none else "" }}</span>
     </a>
     {% endfor %}
   </div>
+  <div class="mapa-leyenda" aria-hidden="true"><span>−6 % o más</span><i></i><span>0</span><i class="sube"></i><span>+6 % o más</span></div>
 </section>
 {% endif %}
 
@@ -64,7 +71,7 @@
   </label>
   <label class="orden-sel">Ordenar
     <select name="orden" data-autoenvio>
-      {% for v, t in [('', 'Capitalización'), ('volumen', 'Volumen'), ('suben', 'Más suben'), ('bajan', 'Más bajan'), ('nombre', 'Nombre')] %}
+      {% for v, t in [('', 'Ranking (capitalización)'), ('volumen', 'Volumen'), ('suben', 'Más suben hoy'), ('bajan', 'Más bajan hoy'), ('tendencia', 'Tendencia 7 días'), ('nombre', 'Nombre')] %}
       <option value="{{ v }}"{% if orden == v %} selected{% endif %}>{{ t }}</option>{% endfor %}
     </select>
   </label>
@@ -84,9 +91,10 @@
 <section class="card flush">
   {% if filas %}
   <div class="tablewrap"><table class="tabla resp mercado" id="tabla-mercado">
-    <thead><tr><th>Par</th><th class="r">Precio</th><th class="r">24 h</th><th class="r oc">Volumen 24 h</th><th class="r oc">Capitalización</th><th class="r oc">7 días</th><th class="oc">Evolución</th><th class="r oc">{{ "Tienes" if usuario.rol == 'cliente' else "Bajo gestión" }}</th><th></th></tr></thead>
+    <thead><tr><th class="r oc">#</th><th>Par</th><th class="r">Precio</th><th class="r">24 h</th><th class="r oc">Volumen 24 h</th><th class="r oc">Capitalización</th><th class="r oc">7 días</th><th class="oc">Evolución</th><th class="r oc">{{ "Tienes" if usuario.rol == 'cliente' else "Bajo gestión" }}</th><th></th></tr></thead>
     <tbody>{% for m in filas %}
       <tr data-buscar="{{ m.codigo|lower }} {{ m.nombre|lower }}">
+        <td class="r num oc muted">{{ m.rank }}</td>
         <td><div class="row" style="gap:10px;flex-wrap:nowrap">
           <form method="post" action="{{ url_for('auth.favorito', codigo=m.codigo) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="volver" value="{{ request.full_path.rstrip('?') }}">
             <button class="estrella{{ ' on' if m.codigo in favs }}" type="submit" aria-label="{{ 'Quitar de' if m.codigo in favs else 'Agregar a' }} favoritas: {{ m.codigo }}" aria-pressed="{{ 'true' if m.codigo in favs else 'false' }}">{{ icono('estrella') }}</button></form>

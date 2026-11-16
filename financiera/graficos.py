@@ -44,6 +44,32 @@ def _corto(cent, paso_cent=None, ref_cent=None):
     return texto + suf
 
 
+def _seg(ts):
+    from .tiempo import leer
+    try:
+        return leer(ts).timestamp()
+    except (TypeError, ValueError):
+        from datetime import datetime
+        return datetime.fromisoformat(ts).timestamp()
+
+
+def _tiempos(serie):
+    """Posición horizontal de cada punto (0 a 1) según su hora real, no según su orden: así un tramo con muchos
+    puntos (las últimas horas, que se guardan cada minuto) no se estira sobre días con pocos puntos."""
+    t = [_seg(ts) for ts, _ in serie]
+    span = (t[-1] - t[0]) or 1
+    return [(x - t[0]) / span for x in t]
+
+
+def _etiquetas_tiempo(serie, izq, w):
+    from datetime import datetime, timezone
+
+    from .tiempo import iso
+    t0, t1 = _seg(serie[0][0]), _seg(serie[-1][0])
+    return [{"x": izq + w * f, "texto": f_fecha(iso(datetime.fromtimestamp(t0 + (t1 - t0) * f, timezone.utc)), False), "ancla": a}
+            for f, a in ((0, "start"), (0.5, "middle"), (1, "end"))]
+
+
 def linea(serie, ancho=640, alto=200, fmt=None, rango_min=100):
     """serie: [(ts_iso, valor_cent)]. Eje vertical que no arranca en cero para que se vea el movimiento."""
     if len(serie) < 2:
@@ -58,9 +84,10 @@ def linea(serie, ancho=640, alto=200, fmt=None, rango_min=100):
     if hi - mx < paso * 0.15:
         hi += paso
     w, h = ancho - izq - der, alto - arr - aba
+    tiempos = _tiempos(serie)
 
     def xy(i, v):
-        return izq + i / (len(vals) - 1) * w, arr + (1 - (v - lo) / (hi - lo)) * h
+        return izq + tiempos[i] * w, arr + (1 - (v - lo) / (hi - lo)) * h
 
     pts = [xy(i, v) for i, v in enumerate(vals)]
     puntos = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
@@ -69,8 +96,7 @@ def linea(serie, ancho=640, alto=200, fmt=None, rango_min=100):
     while v <= hi + paso / 1000:
         marcas.append({"y": arr + (1 - (v - lo) / (hi - lo)) * h, "texto": fmt(v) if fmt else _corto(v, paso, hi)})
         v += paso
-    etiquetas = [{"x": izq + w * f, "texto": f_fecha(serie[int(f * (len(serie) - 1))][0], False), "ancla": a}
-                 for f, a in ((0, "start"), (0.5, "middle"), (1, "end"))]
+    etiquetas = _etiquetas_tiempo(serie, izq, w)
     return {"ancho": ancho, "alto": alto, "puntos": puntos, "area": f"{izq},{arr + h} {puntos} {izq + w},{arr + h}",
             "marcas": marcas, "etiquetas": etiquetas, "izq": izq, "der": ancho - der, "fin": pts[-1],
             "sube": vals[-1] >= vals[0], "inicio_valor": vals[0], "fin_valor": vals[-1]}
@@ -205,3 +231,44 @@ def mapa(items, ancho=100.0, alto=60.0):
                 xx += ancho_r
             y, h = y + alto_fila, h - alto_fila
     return out
+
+
+def comparacion(series, ancho=760, alto=300):
+    """series: [(codigo, color, [(ts_iso, precio)])] -> líneas normalizadas a 100 al inicio del período, para comparar
+    el rendimiento de varias monedas con distinto precio en una misma escala."""
+    norm = []
+    for codigo, color, s in series:
+        if len(s) >= 2 and s[0][1]:
+            base = s[0][1]
+            norm.append((codigo, color, [(t, v / base * 100) for t, v in s]))
+    if not norm:
+        return None
+    izq, der, arr, aba = 48, 64, 10, 26
+    todos = [v for _, _, s in norm for _, v in s]
+    mn, mx = min(todos), max(todos)
+    paso = _paso_bonito(max(mx - mn, 2) * 1.2, 4)
+    lo, hi = math.floor(mn / paso) * paso, math.ceil(mx / paso) * paso
+    if hi - lo < paso:  # serie plana: deja aire arriba y abajo
+        lo, hi = lo - paso, hi + paso
+    w, h = ancho - izq - der, alto - arr - aba
+    y = lambda v: arr + (1 - (v - lo) / (hi - lo)) * h  # noqa: E731
+    lineas = []
+    for codigo, color, s in norm:
+        tt = _tiempos(s)
+        pts = [(izq + tt[i] * w, y(v)) for i, (_, v) in enumerate(s)]
+        lineas.append({"codigo": codigo, "color": color, "puntos": " ".join(f"{a:.1f},{b:.1f}" for a, b in pts),
+                       "fin": pts[-1], "var": s[-1][1] - 100})
+    # Etiquetas finales separadas para que no se pisen.
+    for ln in lineas:
+        ln["etiqueta_y"] = ln["fin"][1]
+    ordenadas = sorted(lineas, key=lambda x: x["fin"][1])
+    for a, b in zip(ordenadas, ordenadas[1:]):
+        if b["etiqueta_y"] - a["etiqueta_y"] < 14:
+            b["etiqueta_y"] = a["etiqueta_y"] + 14
+    marcas, v = [], lo
+    while v <= hi + paso / 1000:
+        marcas.append({"y": y(v), "texto": f"{v - 100:+.0f} %".replace("+0 %", "0 %"), "base": abs(v - 100) < 1e-9})
+        v += paso
+    etiquetas = _etiquetas_tiempo(norm[0][2], izq, w)
+    return {"ancho": ancho, "alto": alto, "lineas": lineas, "marcas": marcas, "etiquetas": etiquetas, "izq": izq,
+            "der": ancho - der, "y100": y(100)}

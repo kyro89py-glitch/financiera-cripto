@@ -150,7 +150,7 @@ main{padding:20px 16px 100px;display:flex;flex-direction:column;gap:16px;min-wid
 .kpi.alerta{border-color:color-mix(in srgb, var(--down) 45%, var(--line))}
 
 .chart{display:block;width:100%;height:auto}
-.chart .eje{font:500 10.5px var(--mono);fill:var(--muted)}
+.chart .eje{font:500 11px var(--sans);fill:var(--muted);font-variant-numeric:tabular-nums}
 .chart .grid{stroke:var(--line);stroke-width:1}
 .chart .cero{stroke:var(--line-strong);stroke-width:1}
 .leyenda{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
@@ -876,3 +876,32 @@ nav.tabs a{transition:background-color .15s,color .15s}
 .tabla-activos td.num,.tabla-activos td .num,.rend-tabla td{white-space:nowrap}
 .rend-tabla .sec{white-space:normal}
 .modulo.medio .tabla-activos{font-size:13.5px}
+
+/* v0.20 · mercados */
+.destacados{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+.fuente-dato{font-size:12.5px;color:var(--muted);margin:-6px 0 0}
+.fuente-dato b{color:var(--ink-2);font-weight:600}
+.mapa-card .ch{gap:8px}
+.segmentos a{display:inline-block;color:var(--muted);text-decoration:none;font-size:12.5px;font-weight:600;padding:5px 11px;border-radius:7px}
+.segmentos a[aria-pressed="true"]{background:var(--surface-3);color:var(--ink)}
+.mapa-leyenda{display:flex;align-items:center;gap:8px;justify-content:flex-end;font-size:11.5px;color:var(--muted);margin-top:10px}
+.mapa-leyenda i{display:block;width:90px;height:8px;border-radius:4px;background:linear-gradient(90deg,#E23B52,#0E1626)}
+.mapa-leyenda i.sube{background:linear-gradient(90deg,#0E1626,#1BA672)}
+.comp-graf{width:100%;height:auto;display:block}
+.comp-graf .grid{stroke:var(--line);stroke-width:1}
+.comp-graf .base{stroke:var(--line-strong);stroke-dasharray:4 4}
+.comp-graf .eje{fill:var(--muted);font-size:11px;font-family:var(--sans)}
+.comp-graf polyline{fill:none;stroke-width:2.2;stroke-linejoin:round;stroke-linecap:round}
+.comp-graf .etq{font-size:12px;font-weight:700;font-family:var(--sans)}
+.elegir-monedas{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.elegir-monedas select{min-height:40px;border-radius:var(--r-sm);border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);padding:0 10px;font:inherit}
+.ficha{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+@media (min-width:900px){.ficha{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr)}}
+.stat-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 18px;margin:0}
+@media (min-width:700px){.stat-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.stat-grid dt{font-size:12px;color:var(--muted)}
+.stat-grid dd{margin:2px 0 0;font-weight:650;font-size:15px}
+.trades{display:grid;grid-template-columns:1fr 1fr auto;gap:2px 14px;font-size:13px}
+.trades span:nth-child(3n){color:var(--muted);text-align:right}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.panel.elegir-monedas{flex-direction:row;flex-wrap:wrap;align-items:center}

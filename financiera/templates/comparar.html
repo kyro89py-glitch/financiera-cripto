@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph with context %}
+{% block titulo %}Comparar monedas{% endblock %}
+{% block clase_app %} ancha{% endblock %}
+{% block contenido %}
+{{ ph("Comparar monedas", "Rendimiento de hasta cuatro monedas en la misma escala: todas empiezan en 0 % al inicio del período.", volver=url_for('auth.mercado'), volver_txt="Mercados") }}
+<form class="elegir-monedas panel" method="get" action="{{ url_for('auth.comparar') }}">
+  {% for i in range(4) %}
+  <label class="sr-only" for="m{{ i }}">Moneda {{ i + 1 }}</label>
+  <select id="m{{ i }}" name="m" data-autoenvio>
+    <option value="">{{ '—' if i >= 2 else 'Elegir' }}</option>
+    {% for d in disponibles %}<option value="{{ d.codigo }}"{% if elegidas|length > i and elegidas[i] == d.codigo %} selected{% endif %}>{{ d.codigo }} · {{ d.nombre }}</option>{% endfor %}
+  </select>{% endfor %}
+  <input type="hidden" name="r" value="{{ rango }}">
+  <div class="segmentos" role="group" aria-label="Período">{% for k, (d, t) in rangos.items() if k != '1' %}<a role="button" aria-pressed="{{ 'true' if k == rango else 'false' }}" href="{{ url_for('auth.comparar', m=elegidas, r=k) }}">{{ t }}</a>{% endfor %}</div>
+  <noscript><button class="btn sm" type="submit">Comparar</button></noscript>
+</form>
+<section class="panel">
+  <header><h3>Rendimiento en {{ rangos[rango][1] }}</h3><span class="meta">base: precio al inicio del período</span></header>
+  {% if graf %}
+  <svg class="comp-graf" viewBox="0 0 {{ graf.ancho }} {{ graf.alto }}" role="img" aria-label="Comparación de rendimiento de {{ elegidas|join(', ') }}">
+    {% for m in graf.marcas %}<line class="{{ 'base' if m.base else 'grid' }}" x1="{{ graf.izq }}" x2="{{ graf.der }}" y1="{{ '%.1f'|format(m.y) }}" y2="{{ '%.1f'|format(m.y) }}"/><text class="eje" x="{{ graf.izq - 6 }}" y="{{ '%.1f'|format(m.y + 4) }}" text-anchor="end">{{ m.texto }}</text>{% endfor %}
+    {% for l in graf.lineas %}<polyline points="{{ l.puntos }}" stroke="{{ l.color }}"/>
+      <circle cx="{{ '%.1f'|format(l.fin[0]) }}" cy="{{ '%.1f'|format(l.fin[1]) }}" r="3.5" fill="{{ l.color }}"/>
+      <text class="etq" x="{{ '%.1f'|format(l.fin[0] + 8) }}" y="{{ '%.1f'|format(l.etiqueta_y + 4) }}" fill="{{ l.color }}">{{ l.codigo }}</text>{% endfor %}
+    {% for e in graf.etiquetas %}<text class="eje" x="{{ '%.1f'|format(e.x) }}" y="{{ graf.alto - 6 }}" text-anchor="{{ e.ancla }}">{{ e.texto }}</text>{% endfor %}
+  </svg>
+  {% else %}<p class="small muted">No hay historia suficiente para comparar en este período.</p>{% endif %}
+</section>
+<section class="panel">
+  <header><h3>Lado a lado</h3></header>
+  <div class="tablewrap"><table class="tabla-activos">
+    <thead><tr><th>Moneda</th><th class="r">Precio</th><th class="r">24 h</th><th class="r">{{ rangos[rango][1] }}</th><th class="r">Volatilidad anual</th><th class="r oc">RSI 14</th><th class="r oc">Desde el máximo</th><th class="r oc">Capitalización</th><th class="r oc">Volumen 24 h</th><th class="r oc">#</th></tr></thead>
+    <tbody>{% for f in filas %}
+      <tr><td><a class="activo-cel" href="{{ url_for('auth.moneda', codigo=f.codigo) }}"><span class="moneda-ico sm" style="--c:{{ f.color }}">{{ f.codigo[0] }}</span><span><b>{{ f.codigo }}</b><span class="sec">{{ f.nombre }}</span></span></a></td>
+        <td class="r num" data-px="{{ f.codigo }}">{{ f.precio|precio if f.precio else '—' }}</td>
+        <td class="r num {{ 'up' if (f.cambio or 0) >= 0 else 'down' }}" data-cambio="{{ f.codigo }}">{{ f.cambio|pct if f.cambio is not none else '—' }}</td>
+        <td class="r num {{ 'up' if (f.var or 0) >= 0 else 'down' }}"><b>{{ f.var|pct if f.var is not none else '—' }}</b></td>
+        <td class="r num">{{ f.vol|pct(0, false) if f.vol is not none else '—' }}</td>
+        <td class="r num oc">{{ f.rsi|round|int if f.rsi is not none else '—' }}</td>
+        <td class="r num oc">{{ f.desde_max|pct(1) if f.desde_max is not none else '—' }}</td>
+        <td class="r num oc">{{ f.cap|compacto if f.cap else '—' }}</td>
+        <td class="r num oc">{{ f.volumen|compacto if f.volumen else '—' }}</td>
+        <td class="r num oc muted">{{ f.rank or '—' }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  <p class="xs muted">Fuente de precios: {{ filas[0].fuente if filas and filas[0].fuente else '—' }}. Volatilidad, RSI y distancia al máximo se calculan con las velas diarias. Rendimientos pasados no garantizan los futuros.</p>
+</section>
+{% endblock %}

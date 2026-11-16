@@ -371,6 +371,8 @@ def mercado():
         pos, titulo = cartera.resumen_casa()["activos"], "Activos bajo gestión"
     tengo = {p["activo"]: p["valor"] for p in pos}
     todas = [m for m in todas if m["habilitado"] or tengo.get(m["codigo"])]
+    for i, m in enumerate(sorted(todas, key=lambda m: -(m["cap"] or 0))):
+        m["rank"] = i + 1
     for m in todas:
         m["chispa"] = graficos.chispa(m["serie"], 160, 40)
     favs = _favoritos()
@@ -406,7 +408,7 @@ def mercado():
         filas = [m for m in filas if m["cap"] is not None and lo <= m["cap"] < hi]
     else:
         tam = ""
-    claves = {"suben": lambda m: -(m["cambio"] or 0), "bajan": lambda m: (m["cambio"] or 0),
+    claves = {"suben": lambda m: -(m["cambio"] or 0), "bajan": lambda m: (m["cambio"] or 0), "tendencia": lambda m: -(m["var"] or 0),
               "volumen": lambda m: -(m["volumen"] or 0), "nombre": lambda m: m["nombre"].lower()}
     if orden in claves:
         filas = sorted(filas, key=claves[orden])
@@ -417,18 +419,26 @@ def mercado():
         "suben": sorted(con_px, key=lambda m: -m["cambio"])[:3],
         "bajan": sorted(con_px, key=lambda m: m["cambio"])[:3],
         "volumen": sorted([m for m in todas if m["volumen"]], key=lambda m: -m["volumen"])[:3],
+        "tendencia": sorted([m for m in con_px if m["var"] is not None], key=lambda m: -m["var"])[:3],
+        "actividad": sorted([m for m in todas if m["volumen"] and m["cap"] and not m["estable"]],
+                            key=lambda m: -(m["volumen"] / m["cap"]))[:3],
     }
     cap_total = sum(m["cap"] or 0 for m in todas)
     resumen = {"cap": cap_total, "volumen": sum(m["volumen"] or 0 for m in todas),
                "dominancia": (next((m["cap"] for m in todas if m["codigo"] == "BTC"), 0) or 0) / cap_total * 100 if cap_total else None,
                "suben": sum(1 for m in con_px if m["cambio"] > 0), "bajan": sum(1 for m in con_px if m["cambio"] < 0)}
     peso = lambda m: (m["cap"] or m["volumen"] or 1e8) ** 0.5  # noqa: E731  escala comprimida para que se lean las chicas
+    periodo_mapa = "7d" if request.args.get("mapa") == "7d" else "24h"
+    for m in todas:
+        v = m["var"] if periodo_mapa == "7d" else m["cambio"]
+        m["mapa_var"] = float(v) if v is not None else None
     mapa = graficos.mapa([(peso(m), m) for m in todas if not m["estable"]], 100, 56)
+    ult = db.uno("SELECT MAX(ts) AS ts FROM precios")["ts"]
     datos = {"titulo": titulo, "grupos": [{"label": p["activo"] if p["activo"] != "USD" else "Saldo USD", "value": p["valor"],
                                            "col": p["color"]} for p in pos if p["valor"] > 0]}
     return render_template("mercado.html", filas=filas, tengo=tengo, datos3d=datos, fuente=precios.fuente(), favs=favs,
                            ver=ver, orden=orden, cat=cat, q=q, var_f=var_f, tam=tam, categorias=precios.CATEGORIAS, destacados=destacados,
-                           resumen=resumen, mapa=mapa, total=len(todas), vivo=precios.vivo())
+                           resumen=resumen, mapa=mapa, total=len(todas), vivo=precios.vivo(), periodo_mapa=periodo_mapa, actualizado=ult)
 
 
 @bp.get("/mercado/precios.json")
@@ -566,7 +576,7 @@ def trading(codigo):
     return resp
 
 
-RANGOS = {"1": (1, "24 h"), "7": (7, "7 días"), "30": (30, "30 días")}
+RANGOS = {"1": (1, "24 h"), "7": (7, "7 días"), "30": (30, "30 días"), "90": (90, "90 días"), "365": (365, "1 año")}
 
 
 @bp.get("/mercado/<codigo>")
@@ -637,9 +647,90 @@ def moneda(codigo):
                                        {"label": "Resto bajo gestión", "value": resto, "col": "#4A5878"}) if g_["value"] > 0]
     if not ctx["grupos"]:
         ctx["grupos"] = [{"label": codigo, "value": 100000, "col": a["color"]}]
+    from . import analisis, mercado_info
+    from . import velas as velas_mod
+    diarias, _ = velas_mod.velas(codigo, "1d")
+    compras, ventas, libro_sim = velas_mod.libro(codigo, 10)
+    trades, trades_sim = velas_mod.operaciones_mercado(codigo, 10)
+    todas_m = precios.mercado()
+    rank = next((i + 1 for i, m in enumerate(sorted(todas_m, key=lambda m: -(m["cap"] or 0))) if m["codigo"] == codigo), None)
+    info_m = next((m for m in todas_m if m["codigo"] == codigo), {})
+    ctx["extra"] = {"ficha": mercado_info.ficha(codigo), "rank": rank, "cap": info_m.get("cap"), "volumen": info_m.get("volumen"),
+                    "var7": info_m.get("var"), "diarias": list(reversed(diarias[-14:])), "analisis": analisis.activo(codigo, vig["precio"] if vig else None),
+                    "mejor_compra": compras[0][0] if compras else None, "mejor_venta": ventas[0][0] if ventas else None,
+                    "libro_sim": libro_sim, "trades": trades, "trades_sim": trades_sim, "fuente": vig["fuente"] if vig else None,
+                    "ts": vig["ts"] if vig else None, "categorias": precios.CATEGORIAS}
     return render_template("moneda.html", a=a, vig=vig, graf=graf, stats=stats, velas=velas, modo=modo, rango=rango, rangos=RANGOS, cli=cli,
                            favorito=codigo in _favoritos(), datos3d={"titulo": a["nombre"], "grupos": ctx["grupos"]},
                            maximo=current_app.config["ORDEN_MAXIMA_USD"], **ctx)
+
+
+@bp.get("/mercado/comparar")
+def comparar():
+    r = seguridad.exigir_sesion()
+    if r:
+        return r
+    from . import analisis, graficos, precios
+    disponibles = precios.activos(solo_habilitados=True)
+    codigos = {a["codigo"]: a for a in disponibles}
+    elegidas = list(dict.fromkeys(c.upper() for c in request.args.getlist("m") if c and c.upper() in codigos))[:4]
+    for extra in ("BTC", "ETH", "SOL"):
+        if len(elegidas) >= 2:
+            break
+        if extra not in elegidas:
+            elegidas.append(extra)
+    rango = request.args.get("r", "30")
+    if rango not in RANGOS:
+        rango = "30"
+    desde = iso(ahora_dt() - timedelta(days=RANGOS[rango][0]))
+    hist = precios.historial(elegidas, desde)
+    vig = precios.vigentes()
+    mercado_d = {m["codigo"]: m for m in precios.mercado()}
+    rank = {m["codigo"]: i + 1 for i, m in enumerate(sorted(mercado_d.values(), key=lambda m: -(m["cap"] or 0)))}
+    series, filas = [], []
+    for c in elegidas:
+        s = [(ts, float(p)) for ts, p in hist.get(c, [])]
+        if c in vig:
+            s.append((ahora(), float(vig[c]["precio"])))
+        series.append((c, codigos[c]["color"], s))
+        an = analisis.activo(c, vig[c]["precio"] if c in vig else None)
+        m = mercado_d.get(c, {})
+        filas.append({"codigo": c, "nombre": codigos[c]["nombre"], "color": codigos[c]["color"], "precio": vig[c]["precio"] if c in vig else None,
+                      "cambio": vig[c]["cambio"] if c in vig else None, "var": (s[-1][1] / s[0][1] - 1) * 100 if len(s) >= 2 and s[0][1] else None,
+                      "vol": an.get("volatilidad"), "rsi": an.get("rsi"), "desde_max": an.get("desde_maximo"), "cap": m.get("cap"),
+                      "volumen": m.get("volumen"), "rank": rank.get(c), "fuente": vig[c]["fuente"] if c in vig else None})
+    return render_template("comparar.html", graf=graficos.comparacion(series), filas=filas, elegidas=elegidas, disponibles=disponibles,
+                           rango=rango, rangos=RANGOS)
+
+
+@bp.get("/mercado/<codigo>/historial.csv")
+def historial_csv(codigo):
+    r = seguridad.exigir_sesion()
+    if r:
+        return r
+    limites.exigir(("datos", f"u{g.usuario['id']}"))
+    import csv
+    import io
+
+    from . import precios, velas
+    from .formato import zona
+    a = db.uno("SELECT * FROM activos WHERE codigo = ?", (codigo.upper(),))
+    if not a:
+        from flask import abort
+        abort(404)
+    filas, con_volumen = velas.velas(a["codigo"], "1d")
+    fuente = precios.fuente()
+    buf = io.StringIO()
+    w = csv.writer(buf, delimiter=";")
+    w.writerow([f"Cotizaciones diarias de {a['codigo']}/USD", f"fuente: {fuente}", f"zona horaria: {current_app.config['ZONA_HORARIA']}",
+                f"generado: {datetime.now(zona()).strftime('%Y-%m-%d %H:%M')}"])
+    w.writerow(["fecha", "apertura", "maximo", "minimo", "cierre", "volumen" if con_volumen else "volumen (no disponible)"])
+    for t, o, h, lo, c, v in filas:
+        w.writerow([datetime.fromtimestamp(t / 1000, zona()).strftime("%Y-%m-%d"), f"{o:.8g}", f"{h:.8g}", f"{lo:.8g}", f"{c:.8g}",
+                    f"{v:.8g}" if con_volumen else ""])
+    resp = current_app.response_class("\ufeff" + buf.getvalue(), mimetype="text/csv; charset=utf-8")
+    resp.headers["Content-Disposition"] = f'attachment; filename="cotizaciones-{a["codigo"]}.csv"'
+    return resp
 
 
 @bp.post("/mercado/<codigo>/favorito")

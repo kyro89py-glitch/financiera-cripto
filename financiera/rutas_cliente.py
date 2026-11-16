@@ -72,13 +72,24 @@ def inicio():
     pr_v = precios.vigentes()
     no_realizado = sum(valor_cent(a, k["cantidad"], pr_v[a]["precio"]) - k["costo"] for a, k in costos.items()
                        if a in pr_v and k["cantidad"] > 0)
-    return render_template("cliente/inicio.html", filas=filas, total=total, aportado=aportado, modelo=modelo,
+    from . import panel, preferencias
+    pref = preferencias.leer(g.usuario["id"])
+    ind = cartera.indicadores(c["id"], filas, total, ten)
+    riesgo_d = panel.riesgo(c, filas, ind)
+    vivo = {"ten": {a: u for a, u in ten.items() if u}, "precios": {a: float(p["precio"]) for a, p in pr_v.items()}}
+    return render_template("cliente/inicio.html", pref=pref, modulos=preferencias.MODULOS, vivo=vivo,
+                           rendimientos=panel.rendimientos(c["id"], total, mercado) if "rendimientos" not in pref["ocultos"] else [],
+                           riesgo=riesgo_d, ranking=panel.ranking(filas, costos),
+                           alertas_hoy=panel.alertas(c, g.usuario, filas, total, abiertas, ind),
+                           sugerencias=panel.sugerencias(c, g.usuario, filas, total, mayor, riesgo_d, modelo),
+                           frases=panel.resumen_mercado(mercado),
+                           filas=filas, total=total, aportado=aportado, modelo=modelo,
                            abiertas=abiertas, faltan=faltan, rend=cartera.rendimiento(c["id"], total),
                            datos3d=datos3d(filas, ""), destacados=destacados, mayor_desvio=mayor, resumen=resumen,
                            disp_usd=ten.get("USD", 0) - bloq.get("USD", 0), reservado=operaciones.reservado_cent(c["id"]),
                            en_retiros=sum(o["monto_cent"] for o in abiertas if o["tipo"] == "retiro"),
                            ultimos=_movimientos(c)[:6], actividad=_actividad_mes(c["id"]),
-                           ind=cartera.indicadores(c["id"], filas, total, ten), no_realizado=no_realizado,
+                           ind=ind, no_realizado=no_realizado,
                            realizado=sum(k["realizado"] for k in costos.values()), rangos=rangos)
 
 

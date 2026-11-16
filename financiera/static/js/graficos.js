@@ -4,7 +4,10 @@
   var caja = document.querySelector("[data-grafico='patrimonio']"), datosEl = document.getElementById("datos-patrimonio");
   if (!caja || !datosEl) return;
   var R = JSON.parse(datosEl.textContent), canvas = caja.querySelector("canvas"), tip = caja.querySelector(".graf-tip");
-  var ctx = canvas.getContext("2d"), raiz = document.documentElement, rango = Object.keys(R)[0], hover = -1, W = 0, H = 0, dpr = 1;
+  var ctx = canvas.getContext("2d"), raiz = document.documentElement, hover = -1, W = 0, H = 0, dpr = 1;
+  // El rango inicial es el del botón marcado (las claves del JSON llegan ordenadas alfabéticamente).
+  var marcado = document.querySelector("[data-rango][aria-pressed='true']");
+  var rango = marcado && R[marcado.getAttribute("data-rango")] ? marcado.getAttribute("data-rango") : Object.keys(R)[0];
   var MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
   function col(v) { return getComputedStyle(raiz).getPropertyValue(v).trim(); }
   function usd(c) {
@@ -22,6 +25,15 @@
     canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
     canvas.style.width = W + "px"; canvas.style.height = H + "px";
     dibujar();
+  }
+  var resumenEl = document.querySelector("[data-graf-resumen]");
+  function resumir() {
+    var s = R[rango] || [];
+    if (!resumenEl || s.length < 2) return;
+    var dif = s[s.length - 1][1] - s[0][1], pct = s[0][1] ? dif / s[0][1] * 100 : 0;
+    resumenEl.className = "graf-resumen num small " + (dif >= 0 ? "up" : "down");
+    resumenEl.textContent = (dif >= 0 ? "+" : "") + usd(dif) + (s[0][1] > 0 ? " (" + (pct >= 0 ? "+" : "") + pct.toFixed(2).replace(".", ",") + " %)" : "") + " en " +
+      ({ "7D": "7 días", "1M": "1 mes", "3M": "3 meses", "1A": "1 año", "Todo": "todo el período" }[rango] || rango) + ", con depósitos y retiros";
   }
   function dibujar() {
     var s = R[rango] || [];
@@ -56,6 +68,9 @@
       tip.hidden = false;
       tip.innerHTML = "";
       var b = document.createElement("b"); b.textContent = usd(s[hover][1]); tip.appendChild(b);
+      var dif = s[hover][1] - s[0][1], ch = document.createElement("span");
+      ch.className = dif >= 0 ? "up" : "down"; ch.textContent = (dif >= 0 ? "+" : "") + usd(dif) + (s[0][1] ? " (" + (dif >= 0 ? "+" : "") + (dif / s[0][1] * 100).toFixed(2).replace(".", ",") + " %)" : "");
+      tip.appendChild(ch);
       var sp = document.createElement("span"); sp.textContent = fecha(s[hover][0], rango === "7D" || rango === "1M"); tip.appendChild(sp);
       var tw = tip.offsetWidth; tip.style.left = Math.min(Math.max(hx - tw / 2, 0), W - tw) + "px";
     } else { tip.hidden = true; }
@@ -69,9 +84,63 @@
     b.addEventListener("click", function () {
       rango = b.getAttribute("data-rango"); hover = -1;
       document.querySelectorAll("[data-rango]").forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
-      dibujar();
+      resumir(); dibujar();
     });
   });
   if (window.ResizeObserver) new ResizeObserver(medir).observe(caja); else window.addEventListener("resize", medir);
-  medir();
+  resumir(); medir();
+})();
+
+/* Patrimonio animado: cuenta hasta el valor al abrir y se actualiza suave con cada precio en vivo. */
+(function () {
+  "use strict";
+  var el = document.querySelector("[data-patrimonio]"), datos = document.getElementById("datos-vivo");
+  if (!el || !datos) return;
+  var V = JSON.parse(datos.textContent), actual = +el.getAttribute("data-patrimonio") || 0, mostrado = 0, anim = null;
+  var quieto = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function usd(c) {
+    var p = (Math.abs(c) / 100).toFixed(2).split(".");
+    return (c < 0 ? "−" : "") + "US$ " + p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "," + p[1];
+  }
+  function ir(destino, ms) {
+    if (anim) cancelAnimationFrame(anim);
+    if (quieto) { mostrado = destino; el.textContent = usd(destino); return; }
+    var desde = mostrado, t0 = performance.now();
+    (function paso(t) {
+      var k = Math.min(1, (t - t0) / ms), e = 1 - Math.pow(1 - k, 3);
+      mostrado = Math.round(desde + (destino - desde) * e); el.textContent = usd(mostrado);
+      if (k < 1) anim = requestAnimationFrame(paso);
+    })(t0);
+  }
+  ir(actual, 900);
+  document.addEventListener("precios", function (e) {
+    var P = e.detail.precios, total = 0;
+    for (var a in V.ten) {
+      if (a === "USD") { total += V.ten[a]; continue; }
+      var px = P[a] ? P[a].valor : V.precios[a];
+      if (px) total += Math.round(V.ten[a] / 1e8 * px * 100);
+    }
+    if (Math.abs(total - actual) >= 1) {
+      el.classList.remove("tick-up", "tick-down"); void el.offsetWidth;
+      el.classList.add(total > actual ? "tick-up" : "tick-down");
+      actual = total; ir(total, 600);
+    }
+  });
+})();
+
+/* Personalizar el inicio: subir y bajar módulos con botones accesibles. */
+(function () {
+  "use strict";
+  var lista = document.getElementById("orden-mods"), form = document.getElementById("f-panel");
+  if (!lista || !form) return;
+  lista.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-mover]"); if (!b) return;
+    var li = b.closest("li"), dir = +b.getAttribute("data-mover");
+    if (dir < 0 && li.previousElementSibling) lista.insertBefore(li, li.previousElementSibling);
+    else if (dir > 0 && li.nextElementSibling) lista.insertBefore(li.nextElementSibling, li);
+    b.focus();
+  });
+  form.addEventListener("submit", function () {
+    form.orden.value = Array.prototype.map.call(lista.children, function (li) { return li.getAttribute("data-mod"); }).join(",");
+  });
 })();

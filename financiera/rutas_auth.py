@@ -1,6 +1,6 @@
 """Ingreso, salida, cambio de contraseña y verificación en dos pasos."""
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from flask import Blueprint, current_app, flash, g, redirect, render_template, request, session, url_for
 
@@ -672,10 +672,24 @@ def avisos():
     r = seguridad.exigir_sesion()
     if r:
         return r
-    from . import notificaciones
-    lista = notificaciones.listar(g.usuario["id"])
-    notificaciones.marcar_leidas(g.usuario["id"])
-    return render_template("auth/avisos.html", lista=lista)
+    from . import notificaciones, preferencias
+    from .formato import zona
+    from .tiempo import leer
+    cat = request.args.get("cat") if request.args.get("cat") in preferencias.CATEGORIAS else None
+    nuevas = request.args.get("ver") == "nuevas"
+    lista = notificaciones.listar(g.usuario["id"], 100, categoria=cat, solo_no_leidas=nuevas)
+    hoy = datetime.now(zona()).date()
+    grupos = {}
+    for a in lista:
+        dia = leer(a["ts"]).astimezone(zona()).date()
+        clave = "Hoy" if dia == hoy else "Ayer" if (hoy - dia).days == 1 else "Esta semana" if (hoy - dia).days < 7 else "Antes"
+        grupos.setdefault(clave, []).append(a)
+    ids = [a["id"] for a in lista if not a["leida"]]
+    if ids:
+        db.ejecutar(f"UPDATE notificaciones SET leida = 1 WHERE usuario_id = ? AND id IN ({','.join('?' * len(ids))})", (g.usuario["id"], *ids))
+    return render_template("auth/avisos.html", grupos=grupos, cat=cat, nuevas=nuevas, categorias=preferencias.CATEGORIAS,
+                           conteo=notificaciones.por_categoria(g.usuario["id"]), pref=preferencias.leer(g.usuario["id"]),
+                           correo=notificaciones.correo_activo())
 
 
 # ---------- recuperación de contraseña (S-07) ----------
@@ -766,3 +780,27 @@ def recuperar_nueva(token):
             flash("Listo: tu contraseña nueva ya funciona. Ingresa con ella.", "ok")
             return redirect(url_for("auth.ingresar"))
     return render_template("auth/recuperar_nueva.html", invalido=False, dos_pasos=bool(u["totp_secreto"]), error=error)
+
+
+@bp.post("/cuenta/preferencias")
+def preferencias_guardar():
+    r = seguridad.exigir_sesion()
+    if r:
+        return r
+    from . import preferencias
+    f = request.form
+    cambios = {}
+    if f.get("accion") == "panel":
+        cambios["orden"] = [x for x in (f.get("orden") or "").split(",") if x]
+        visibles = set(f.getlist("visible"))
+        cambios["ocultos"] = [m for m in preferencias.MODULOS if m not in visibles]
+        if f.get("restablecer"):
+            cambios = {"orden": list(preferencias.MODULOS), "ocultos": []}
+    elif f.get("accion") == "moneda":
+        cambios["moneda"] = f.get("moneda")
+    elif f.get("accion") == "correo":
+        cambios["correo"] = {k: f.get(k) == "si" for k in preferencias.CATEGORIAS}
+    preferencias.guardar(g.usuario["id"], cambios)
+    flash("Preferencias guardadas.", "ok")
+    destino = f.get("volver") or ""
+    return redirect(destino if destino.startswith(("/cliente", "/cuenta", "/mercado", "/trading")) and "//" not in destino else url_for("inicio"))

@@ -27,6 +27,15 @@ Evolución completa de la plataforma, trabajada por módulos. Los servicios fina
 - **Análisis del activo:** rendimiento a 7, 30 y 90 días y 1 año, volatilidad anual, máximo y distancia al máximo, RSI diario y tendencia respecto de sus medias de 20 y 50 días, con la aclaración de que no son recomendaciones. **Tu posición y riesgo:** cantidad, valor, peso, costo promedio, resultado sin realizar y lo reservado.
 - **Validación en el servidor:** toda orden revisa identidad, revisión de cumplimiento, moneda habilitada, pausa de seguridad, precio vigente y saldo disponible.
 
+### Módulo 3 · Inicio inteligente y centro de avisos
+- **Panel personalizable:** cada persona elige qué módulos ver y en qué orden (con botones accesibles para subir y bajar); se guarda en su cuenta y se valida en el servidor.
+- **Patrimonio animado:** cuenta hasta el valor al abrir y se actualiza suavemente con cada precio en vivo. El gráfico muestra el cambio del período elegido y, al tocar un punto, cuánto cambió desde el inicio. Corregido: el gráfico abría en «1 año» aunque estuviera marcado «7D».
+- **Rendimiento por período** (24 horas, 7 días, 30 días, 1 año): cambio del patrimonio y rentabilidad ponderada por tiempo comparada con Bitcoin y con el promedio de las 10 monedas de mayor capitalización.
+- **Riesgo de tu cartera:** nivel según la volatilidad comparado con el perfil declarado, diversificación efectiva, peso en dólares y estables y mayor posición. **Mejores y peores** de la cartera según el resultado sobre el costo.
+- **Alertas importantes** (órdenes a punto de activarse, retiros en revisión, concentración, avisos de seguridad sin leer, precios sin actualizar) y **Para considerar**: observaciones automáticas con su porqué, aclarando que no son asesoramiento.
+- **Resumen del mercado en palabras** con números calculados: variación ponderada por capitalización, cuántas suben, mayor suba y baja, dominancia de Bitcoin.
+- **Centro de avisos:** categorías (operaciones, precios y órdenes, seguridad, cuenta, mercado), filtro de no leídos, agrupación por día y elección de qué categorías llegan por correo (seguridad siempre llega).
+
 ## [0.10.0] - 2026-11-15
 
 Etapa 2 del plan (rediseño visual) más las dos correcciones críticas de la auditoría técnica.

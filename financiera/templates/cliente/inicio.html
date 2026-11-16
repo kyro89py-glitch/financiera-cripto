@@ -6,18 +6,14 @@
 <script src="{{ url_for('static', filename='js/graficos.js') }}?v={{ VERSION }}" defer></script>{% endblock %}
 {% block contenido %}
 {% set cli = g.cliente %}
-<div class="saludo"><div><span class="lab">{{ ['Buen día', 'Buenas tardes', 'Buenas noches'][0 if ahora_local().hour < 12 else (1 if ahora_local().hour < 19 else 2)] }}</span><h2>{{ cli.nombre.split()[0] }}</h2></div>{{ kyc(cli) }}</div>
-{% if cli.kyc_estado == 'observado' and cli.kyc_nota %}
-  <div class="flash error">Tu verificación tiene una observación: {{ cli.kyc_nota }} Hasta resolverla no se pueden aprobar nuevas operaciones. <a href="{{ url_for('cliente.perfil') }}">Ir a tu perfil</a></div>
-{% elif faltan %}
-  <div class="flash warn">Para completar tu verificación falta: {{ faltan|join('; ') }}. <a href="{{ url_for('cliente.perfil') }}#legajo">Subir documentos</a></div>
-{% endif %}
 
+{# ---------------- módulos ---------------- #}
+{% macro m_patrimonio() %}
 <section class="patrimonio">
   <div class="pat-info privado">
     <span class="lab">Patrimonio total</span>
-    <div class="cifra-mayor num" data-cuenta="{{ total }}">{{ total|usd }}</div>
-    {% if en_gs(total) %}<div class="num muted small">≈ {{ en_gs(total) }}</div>{% endif %}
+    <div class="cifra-mayor num" data-patrimonio="{{ total }}">{{ total|usd }}</div>
+    {% if en_gs(total) %}<div class="num muted small" data-patrimonio-gs>≈ {{ en_gs(total) }}</div>{% endif %}
     {% if total %}
     <div class="delta num {{ 'up' if ind.mercado24 >= 0 else 'down' }}">
       <span class="flecha" aria-hidden="true">{{ '▲' if ind.mercado24 >= 0 else '▼' }}</span>{{ "+" if ind.mercado24 >= 0 }}{{ ind.mercado24|usd }}
@@ -33,8 +29,11 @@
   </div>
   <div class="pat-graf">
     {% if rangos %}
-    <div class="segmentos" role="group" aria-label="Período del gráfico">
-      {% for k in rangos %}<button type="button" data-rango="{{ k }}" aria-pressed="{{ 'true' if loop.first else 'false' }}">{{ k }}</button>{% endfor %}
+    <div class="row spread" style="align-items:center">
+      <div class="graf-resumen num small" data-graf-resumen aria-live="polite"></div>
+      <div class="segmentos" role="group" aria-label="Período del gráfico">
+        {% for k in rangos %}<button type="button" data-rango="{{ k }}" aria-pressed="{{ 'true' if loop.first else 'false' }}">{{ k }}</button>{% endfor %}
+      </div>
     </div>
     <div class="graf-area" data-grafico="patrimonio" role="img" aria-label="Evolución de tu patrimonio"><canvas></canvas><div class="graf-tip num" hidden></div></div>
     <script type="application/json" id="datos-patrimonio">{{ rangos|tojson }}</script>
@@ -43,7 +42,9 @@
     {% endif %}
   </div>
 </section>
+{% endmacro %}
 
+{% macro m_acciones() %}
 <nav class="acciones" aria-label="Accesos rápidos">
   <a href="{{ url_for('cliente.invertir') }}"><span>{{ icono('invertir') }}</span>Depositar</a>
   <a href="{{ url_for('auth.trading') }}"><span>{{ icono('trading') }}</span>Comprar</a>
@@ -52,7 +53,9 @@
   <a href="{{ url_for('cliente.enviar') }}"><span>{{ icono('enviar') }}</span>Enviar</a>
   <a href="{{ url_for('cliente.retirar') }}"><span>{{ icono('retiro') }}</span>Retirar</a>
 </nav>
+{% endmacro %}
 
+{% macro m_indicadores() %}
 {% if total %}
 <section class="indicadores privado" aria-label="Indicadores financieros">
   <div><dt>Rentabilidad</dt><dd class="num {{ 'up' if rend and rend.twr >= 0 else ('down' if rend else '') }}">{{ rend.twr|pct if rend else "—" }}</dd>
@@ -64,9 +67,150 @@
   <div><dt>Volatilidad</dt><dd class="num">{{ ind.volatilidad|pct(0, false) if ind.volatilidad is not none else "—" }}</dd><span>anual, según los últimos 30 días</span></div>
 </section>
 {% endif %}
+{% endmacro %}
 
-{% if mayor_desvio >= 5 %}<div class="flash">Tu cartera se alejó {{ mayor_desvio|pct(1, false) }} de la composición de {{ modelo.nombre }} por los movimientos del mercado. <a href="{{ url_for('cliente.cartera') }}#composicion">Ver composición</a></div>{% endif %}
+{% macro m_alertas() %}
+<section class="panel">
+  <header><h3>Alertas importantes</h3><a class="small" href="{{ url_for('auth.avisos') }}">Centro de avisos</a></header>
+  {% for nivel, texto, enlace in alertas_hoy %}
+  <a class="alerta-hoy {{ nivel }}" href="{{ enlace }}"><i aria-hidden="true"></i><span>{{ texto }}</span><span class="ir" aria-hidden="true">›</span></a>
+  {% else %}<div class="empty compacto">{{ icono('escudo') }}<span>Todo en orden: no hay nada que requiera tu atención.</span></div>{% endfor %}
+</section>
+{% endmacro %}
 
+{% macro m_rendimientos() %}
+<section class="panel privado">
+  <header><h3>Rendimiento por período</h3><span class="meta">frente a referencias</span></header>
+  {% if rendimientos %}
+  <div class="tablewrap"><table class="tabla-activos rend-tabla">
+    <thead><tr><th>Período</th><th class="r">Cambio</th><th class="r">Tu rendimiento</th><th class="r">Bitcoin</th><th class="r oc">Top 10</th></tr></thead>
+    <tbody>{% for r in rendimientos %}
+      <tr><td><b>{{ r.etiqueta }}</b>{% if r.parcial %}<span class="sec">desde que abriste la cuenta</span>{% endif %}</td>
+        <td class="r num"><span class="{{ 'up' if r.cambio >= 0 else 'down' }}">{{ "+" if r.cambio >= 0 }}{{ r.cambio|usd }}</span><span class="sec">desde {{ r.inicio|usd }}</span></td>
+        <td class="r num {{ 'up' if (r.twr or 0) >= 0 else 'down' }}"><b>{{ ("%+.2f"|format(r.twr)).replace('.', ',') ~ ' %' if r.twr is not none else '—' }}</b></td>
+        <td class="r num {{ 'up' if (r.btc or 0) >= 0 else 'down' }}">{{ ("%+.2f"|format(r.btc)).replace('.', ',') ~ ' %' if r.btc is not none else '—' }}</td>
+        <td class="r num oc {{ 'up' if (r.top10 or 0) >= 0 else 'down' }}">{{ ("%+.2f"|format(r.top10)).replace('.', ',') ~ ' %' if r.top10 is not none else '—' }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  <p class="xs muted">«Cambio» incluye depósitos y retiros. «Tu rendimiento» los descuenta (ponderado por tiempo), así se compara con Bitcoin y con el promedio simple de las 10 monedas de mayor capitalización.</p>
+  {% else %}{{ vacio('resumen', 'Aparece cuando tengas tu primer movimiento.') }}{% endif %}
+</section>
+{% endmacro %}
+
+{% macro m_activos() %}
+<section class="panel activos-panel privado">
+  <header><h3>Tus activos</h3><a class="small" href="{{ url_for('cliente.cartera') }}">Billetera</a></header>
+  {% if filas %}
+  {{ barra(filas) }}
+  <table class="tabla-activos">
+    <thead><tr><th>Activo</th><th class="r oc">Precio</th><th class="r">24 h</th><th class="r">Valor</th><th class="r oc">Peso</th></tr></thead>
+    <tbody>{% for f in filas %}
+      <tr>
+        <td><a class="activo-cel" href="{{ url_for('auth.trading', codigo=f.activo) if f.activo != 'USD' else url_for('cliente.cartera') }}"><span class="moneda-ico sm" style="--c:{{ f.color }}">{{ '$' if f.activo == 'USD' else f.activo[0] }}</span><span><b>{{ f.activo if f.activo != 'USD' else 'Dólares' }}</b><span class="sec">{{ f.unidades|unidades(f.activo) if f.activo != 'USD' else 'Saldo' }}</span></span></a></td>
+        <td class="r num oc">{% if f.activo != 'USD' and f.precio %}<span data-px="{{ f.activo }}">{{ f.precio|precio }}</span>{% else %}—{% endif %}</td>
+        <td class="r num">{% if f.activo != 'USD' and f.cambio is not none %}<span class="{{ 'up' if f.cambio >= 0 else 'down' }}" data-cambio="{{ f.activo }}">{{ f.cambio|pct }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td class="r num">{{ f.valor|usd }}</td>
+        <td class="r oc"><span class="peso"><i style="width:{{ '%.1f'|format(f.peso * 100) }}%;background:{{ f.color }}"></i></span><span class="num small">{{ (f.peso * 100)|pct(1, false) }}</span></td>
+      </tr>{% endfor %}</tbody>
+  </table>
+  {% else %}{{ vacio('invertir', 'Todavía no tienes activos.') }}{% endif %}
+</section>
+{% endmacro %}
+
+{% macro m_composicion() %}
+<section class="panel composicion-panel">
+  <header><h3>Composición</h3><span class="meta">gírala con el dedo</span></header>
+  {% if filas %}{{ escena3d(datos3d) }}{% else %}{{ vacio('mercado', 'Tu composición aparece cuando inviertas.') }}{% endif %}
+</section>
+{% endmacro %}
+
+{% macro m_riesgo() %}
+<section class="panel privado">
+  <header><h3>Riesgo de tu cartera</h3>{% if riesgo.nivel %}<span class="pill {{ 'ok' if riesgo.nivel == 'bajo' else ('warn' if riesgo.nivel == 'medio' else 'bad') }}">Nivel {{ riesgo.nivel }}</span>{% endif %}</header>
+  <div class="medidor" aria-hidden="true">{% for n in ['bajo', 'medio', 'alto'] %}<span class="{{ 'on' if riesgo.nivel == n }}{{ ' esperado' if riesgo.esperado == n }}">{{ n|capitalize }}</span>{% endfor %}</div>
+  <p class="small">{{ riesgo.texto }}</p>
+  <dl class="mini-kpis">
+    <div><dt>Volatilidad anual</dt><dd class="num">{{ riesgo.volatilidad|pct(0, false) if riesgo.volatilidad is not none else "—" }}</dd></div>
+    <div><dt>Diversificación efectiva</dt><dd class="num">{{ '%.1f'|format(riesgo.efectivos)|replace('.', ',') }} activos</dd></div>
+    <div><dt>En dólares y estables</dt><dd class="num">{{ riesgo.estables|pct(0, false) }}</dd></div>
+    <div><dt>Mayor posición</dt><dd class="num">{% if riesgo.mayor %}{{ riesgo.mayor[0] }} {{ riesgo.mayor[1]|pct(0, false) }}{% else %}—{% endif %}</dd></div>
+  </dl>
+  <p class="xs muted">La diversificación efectiva dice a cuántos activos de igual peso equivale tu cartera. El nivel marcado con borde es el esperable para tu perfil {{ riesgo.perfil }}.</p>
+</section>
+{% endmacro %}
+
+{% macro m_ranking() %}
+<section class="panel privado">
+  <header><h3>Mejores y peores de tu cartera</h3><span class="meta">resultado sobre tu costo</span></header>
+  {% if ranking.mejores or ranking.peores %}
+  <div class="ranking">
+    {% for grupo, lista in [('Mejor rendimiento', ranking.mejores), ('Más pérdida', ranking.peores)] %}
+    <div><span class="lab">{{ grupo }}</span>
+      {% for x in lista %}<a class="rank-item" href="{{ url_for('auth.trading', codigo=x.activo) }}"><span class="moneda-ico sm" style="--c:{{ x.color }}">{{ x.activo[0] }}</span><b>{{ x.activo }}</b>
+        <span class="num {{ 'up' if x.pct >= 0 else 'down' }}">{{ ("%+.1f"|format(x.pct)).replace('.', ',') }} %</span><span class="num sec">{{ "+" if x.resultado >= 0 }}{{ x.resultado|usd }}</span></a>
+      {% else %}<p class="xs muted">Ninguno por ahora.</p>{% endfor %}
+    </div>{% endfor %}
+  </div>
+  {% else %}{{ vacio('mercado', 'Aparece cuando compres monedas.') }}{% endif %}
+</section>
+{% endmacro %}
+
+{% macro m_mercado() %}
+<section class="panel">
+  <header><h3>Resumen del mercado</h3><a class="small" href="{{ url_for('auth.mercado') }}">Mercados</a></header>
+  {% if frases %}<ul class="frases">{% for t, n in frases %}<li>{{ t }}{% if n %} <span class="xs muted">({{ n }})</span>{% endif %}.</li>{% endfor %}</ul>{% endif %}
+  <dl class="mini-kpis">
+    <div><dt>Capitalización</dt><dd class="num">{{ resumen.cap|compacto }}</dd></div>
+    <div><dt>Volumen 24 h</dt><dd class="num">{{ resumen.volumen|compacto }}</dd></div>
+  </dl>
+  <div class="tabs-sec" role="tablist" aria-label="Mercados destacados">
+    {% for k, t in [('principales', 'Principales'), ('suben', 'Ganadoras'), ('bajan', 'Perdedoras')] %}<button type="button" role="tab" aria-selected="{{ 'true' if loop.first else 'false' }}" aria-controls="dest-{{ k }}" id="tab-dest-{{ k }}">{{ t }}</button>{% endfor %}
+  </div>
+  {% for k in ['principales', 'suben', 'bajan'] %}
+  <div class="list" id="dest-{{ k }}" role="tabpanel" aria-labelledby="tab-dest-{{ k }}"{% if not loop.first %} hidden{% endif %}>{% for m in destacados[k] %}{{ mercado_item(m) }}{% endfor %}</div>
+  {% endfor %}
+</section>
+{% endmacro %}
+
+{% macro m_recomendaciones() %}
+<section class="panel">
+  <header><h3>Para considerar</h3><span class="meta">según tus datos</span></header>
+  {% for s in sugerencias %}
+  <article class="sugerencia"><div><b>{{ s.titulo }}</b><p class="small muted">{{ s.texto }}</p></div><a class="btn sm" href="{{ s.enlace }}">{{ s.accion }}</a></article>
+  {% else %}<div class="empty compacto">{{ icono('escudo') }}<span>Nada para sugerir por ahora.</span></div>{% endfor %}
+  <p class="xs muted">Son observaciones automáticas sobre tu cuenta, no asesoramiento financiero ni recomendaciones de compra o venta.</p>
+</section>
+{% endmacro %}
+
+{% macro m_actividad() %}
+<section class="panel privado">
+  <header><h3>Actividad reciente</h3><a class="small" href="{{ url_for('cliente.movimientos') }}">Ver todo</a></header>
+  <div class="list">{% for m in ultimos %}
+    {% if m.clase == 'op' %}<a class="item" href="{{ m.url }}"><span class="mov-ico {{ m.o.tipo }}">{{ icono({'aporte': 'invertir', 'retiro': 'retiro', 'compra': 'mercado', 'venta': 'mercado'}.get(m.o.tipo, 'documento')) }}</span><div class="grow"><div class="t">{{ tipo_op(m.o) }}</div><div class="d">{{ m.ts|fecha }} · {{ estado(m.o) }}</div></div><div class="amt num {{ 'up' if m.o.tipo == 'aporte' else ('' if m.o.tipo in ('compra', 'venta') else 'down') }}">{{ signo(m.o) }}{{ m.monto|usd }}</div></a>
+    {% else %}<a class="item" href="{{ m.url }}"><span class="mov-ico envio">{{ icono('enviar') }}</span><div class="grow"><div class="t">{{ ("Enviaste a " if m.sale else "Recibiste de ") ~ ocultar(m.otro) }}</div><div class="d">{{ m.ts|fecha }} · <span class="pill ok">Hecho</span></div></div><div class="amt num {{ 'down' if m.sale else 'up' }}">{{ '−' if m.sale else '+' }}{{ m.monto|usd }}</div></a>{% endif %}
+  {% else %}<p class="small muted vacio-sm">Todavía no tienes movimientos.</p>{% endfor %}</div>
+  <dl class="actividad">
+    {% for k, t in [('aporte', 'Depósitos'), ('retiro', 'Retiros'), ('compra', 'Compras'), ('venta', 'Ventas')] %}{% set x = actividad.get(k, (0, 0)) %}
+    <div><dt>{{ t }} del mes</dt><dd><span class="num">{{ x[1]|usd }}</span><span class="xs muted">{{ x[0] }} movimiento{{ 's' if x[0] != 1 }}</span></dd></div>
+    {% endfor %}
+  </dl>
+</section>
+{% endmacro %}
+
+{% set M = {"patrimonio": m_patrimonio, "acciones": m_acciones, "indicadores": m_indicadores, "alertas": m_alertas,
+            "rendimientos": m_rendimientos, "activos": m_activos, "composicion": m_composicion, "riesgo": m_riesgo,
+            "ranking": m_ranking, "mercado": m_mercado, "recomendaciones": m_recomendaciones, "actividad": m_actividad} %}
+
+{# ---------------- página ---------------- #}
+<div class="saludo">
+  <div><span class="lab">{{ ['Buen día', 'Buenas tardes', 'Buenas noches'][0 if ahora_local().hour < 12 else (1 if ahora_local().hour < 19 else 2)] }}</span><h2>{{ cli.nombre.split()[0] }}</h2></div>
+  <div class="row" style="gap:8px">{{ kyc(cli) }}<button class="btn sm ghost" type="button" data-abrir="d-panel">{{ icono('ajustes') }}Personalizar</button></div>
+</div>
+{% if cli.kyc_estado == 'observado' and cli.kyc_nota %}
+  <div class="flash error">Tu verificación tiene una observación: {{ cli.kyc_nota }} Hasta resolverla no se pueden aprobar nuevas operaciones. <a href="{{ url_for('cliente.perfil') }}">Ir a tu perfil</a></div>
+{% elif faltan %}
+  <div class="flash warn">Para completar tu verificación falta: {{ faltan|join('; ') }}. <a href="{{ url_for('cliente.perfil') }}#legajo">Subir documentos</a></div>
+{% endif %}
 {% if abiertas %}
 <section class="panel">
   <header><h3>Solicitudes en curso</h3><a class="small" href="{{ url_for('cliente.movimientos', ver='abiertos') }}">Ver todas</a></header>
@@ -76,58 +220,29 @@
 </section>
 {% endif %}
 
-<div class="rejilla-inicio">
-  <section class="panel activos-panel privado">
-    <header><h3>Tus activos</h3><a class="small" href="{{ url_for('cliente.cartera') }}">Billetera</a></header>
-    {% if filas %}
-    {{ barra(filas) }}
-    <table class="tabla-activos">
-      <thead><tr><th>Activo</th><th class="r oc">Precio</th><th class="r">24 h</th><th class="r">Valor</th><th class="r oc">Peso</th></tr></thead>
-      <tbody>{% for f in filas %}
-        <tr>
-          <td><a class="activo-cel" href="{{ url_for('auth.trading', codigo=f.activo) if f.activo != 'USD' else url_for('cliente.cartera') }}"><span class="moneda-ico sm" style="--c:{{ f.color }}">{{ '$' if f.activo == 'USD' else f.activo[0] }}</span><span><b>{{ f.activo if f.activo != 'USD' else 'Dólares' }}</b><span class="sec">{{ f.unidades|unidades(f.activo) if f.activo != 'USD' else 'Saldo' }}</span></span></a></td>
-          <td class="r num oc">{% if f.activo != 'USD' and f.precio %}<span data-px="{{ f.activo }}">{{ f.precio|precio }}</span>{% else %}—{% endif %}</td>
-          <td class="r num">{% if f.activo != 'USD' and f.cambio is not none %}<span class="{{ 'up' if f.cambio >= 0 else 'down' }}" data-cambio="{{ f.activo }}">{{ f.cambio|pct }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
-          <td class="r num">{{ f.valor|usd }}</td>
-          <td class="r oc"><span class="peso"><i style="width:{{ '%.1f'|format(f.peso * 100) }}%;background:{{ f.color }}"></i></span><span class="num small">{{ (f.peso * 100)|pct(1, false) }}</span></td>
-        </tr>{% endfor %}</tbody>
-    </table>
-    {% else %}{{ vacio('invertir', 'Todavía no tienes activos.') }}{% endif %}
-  </section>
-
-  <section class="panel composicion-panel">
-    <header><h3>Composición</h3><span class="meta">gírala con el dedo</span></header>
-    {% if filas %}{{ escena3d(datos3d) }}{% else %}{{ vacio('mercado', 'Tu composición aparece cuando inviertas.') }}{% endif %}
-  </section>
-
-  <section class="panel">
-    <header><h3>Resumen del mercado</h3><a class="small" href="{{ url_for('auth.mercado') }}">Mercados</a></header>
-    <dl class="mini-kpis">
-      <div><dt>Capitalización</dt><dd class="num">{{ resumen.cap|compacto }}</dd></div>
-      <div><dt>Volumen 24 h</dt><dd class="num">{{ resumen.volumen|compacto }}</dd></div>
-      <div><dt>Dominancia BTC</dt><dd class="num">{{ resumen.dominancia|pct(1, false) if resumen.dominancia else "—" }}</dd></div>
-      <div><dt>Suben / bajan</dt><dd class="num"><span class="up">{{ resumen.suben }}</span> / <span class="down">{{ resumen.bajan }}</span></dd></div>
-    </dl>
-    <div class="tabs-sec" role="tablist" aria-label="Mercados destacados">
-      {% for k, t in [('principales', 'Principales'), ('suben', 'Ganadoras'), ('bajan', 'Perdedoras')] %}<button type="button" role="tab" aria-selected="{{ 'true' if loop.first else 'false' }}" aria-controls="dest-{{ k }}" id="tab-dest-{{ k }}">{{ t }}</button>{% endfor %}
-    </div>
-    {% for k in ['principales', 'suben', 'bajan'] %}
-    <div class="list" id="dest-{{ k }}" role="tabpanel" aria-labelledby="tab-dest-{{ k }}"{% if not loop.first %} hidden{% endif %}>{% for m in destacados[k] %}{{ mercado_item(m) }}{% endfor %}</div>
-    {% endfor %}
-  </section>
-
-  <section class="panel privado">
-    <header><h3>Actividad reciente</h3><a class="small" href="{{ url_for('cliente.movimientos') }}">Ver todo</a></header>
-    <div class="list">{% for m in ultimos %}
-      {% if m.clase == 'op' %}<a class="item" href="{{ m.url }}"><span class="mov-ico {{ m.o.tipo }}">{{ icono({'aporte': 'invertir', 'retiro': 'retiro', 'compra': 'mercado', 'venta': 'mercado'}.get(m.o.tipo, 'documento')) }}</span><div class="grow"><div class="t">{{ tipo_op(m.o) }}</div><div class="d">{{ m.ts|fecha }} · {{ ESTADOS[m.o.estado][1] }}</div></div><div class="amt num {{ 'up' if m.o.tipo == 'aporte' else ('' if m.o.tipo in ('compra', 'venta') else 'down') }}">{{ signo(m.o) }}{{ m.monto|usd }}</div></a>
-      {% else %}<a class="item" href="{{ m.url }}"><span class="mov-ico envio">{{ icono('enviar') }}</span><div class="grow"><div class="t">{{ ("Enviaste a " if m.sale else "Recibiste de ") ~ ocultar(m.otro) }}</div><div class="d">{{ m.ts|fecha }}</div></div><div class="amt num {{ 'down' if m.sale else 'up' }}">{{ '−' if m.sale else '+' }}{{ m.monto|usd }}</div></a>{% endif %}
-    {% else %}<p class="small muted vacio-sm">Todavía no tienes movimientos.</p>{% endfor %}</div>
-    <dl class="actividad">
-      {% for k, t in [('aporte', 'Depósitos'), ('retiro', 'Retiros'), ('compra', 'Compras'), ('venta', 'Ventas')] %}{% set x = actividad.get(k, (0, 0)) %}
-      <div><dt>{{ t }} del mes</dt><dd><span class="num">{{ x[1]|usd }}</span><span class="xs muted">{{ x[0] }} movimiento{{ 's' if x[0] != 1 }}</span></dd></div>
-      {% endfor %}
-    </dl>
-  </section>
+<div class="modulos">
+{% for m in pref.orden if m not in pref.ocultos %}
+  <div class="modulo {{ modulos[m][1] }}" data-modulo="{{ m }}">{{ M[m]() }}</div>
+{% endfor %}
 </div>
 <p class="note">Invertir en criptomonedas implica riesgo: los precios pueden bajar con fuerza y los resultados pasados no garantizan los futuros.</p>
+
+<dialog class="confirmar panel-dlg" id="d-panel" aria-labelledby="d-panel-t">
+  <h3 id="d-panel-t">Personalizar tu inicio</h3>
+  <p class="small muted">Elige qué ver y en qué orden. Se guarda en tu cuenta, así lo ves igual en cualquier dispositivo.</p>
+  <form method="post" action="{{ url_for('auth.preferencias_guardar') }}" id="f-panel">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="panel">
+    <input type="hidden" name="orden" value="{{ pref.orden|join(',') }}"><input type="hidden" name="volver" value="{{ url_for('cliente.inicio') }}">
+    <ul class="orden-mods" id="orden-mods">
+      {% for m in pref.orden %}<li data-mod="{{ m }}">
+        <label class="check"><input type="checkbox" name="visible" value="{{ m }}" {{ 'checked' if m not in pref.ocultos }}{{ ' disabled' if m == 'patrimonio' }}>{{ modulos[m][0] }}</label>
+        {% if m == 'patrimonio' %}<input type="hidden" name="visible" value="patrimonio">{% endif %}
+        <span class="mover"><button type="button" data-mover="-1" aria-label="Subir {{ modulos[m][0] }}">↑</button><button type="button" data-mover="1" aria-label="Bajar {{ modulos[m][0] }}">↓</button></span>
+      </li>{% endfor %}
+    </ul>
+    <div class="row spread"><button class="btn ghost sm" type="submit" name="restablecer" value="1">Restablecer</button>
+      <span class="row" style="gap:8px"><button class="btn" type="button" data-cerrar>Cancelar</button><button class="btn primary" type="submit">Guardar</button></span></div>
+  </form>
+</dialog>
+<script type="application/json" id="datos-vivo">{{ vivo|tojson }}</script>
 {% endblock %}

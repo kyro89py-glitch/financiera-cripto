@@ -196,6 +196,14 @@
     if (/[?&]lado=venta/.test(location.search)) elegir("venta"); else pintar();
   })();
 
+  // ---- diálogos genéricos: [data-abrir="id"] abre, [data-cerrar] cierra ----
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest("[data-abrir]");
+    if (a) { var d = document.getElementById(a.getAttribute("data-abrir")); if (d && d.showModal && !d.open) d.showModal(); return; }
+    var c = e.target.closest("dialog [data-cerrar]");
+    if (c) { var dl = c.closest("dialog"); if (dl.open) dl.close(); }
+  });
+
   var fuente = document.getElementById("datos-invertir");
   if (!fuente) return;
   var d = JSON.parse(fuente.textContent);
@@ -262,4 +270,5 @@
   document.querySelectorAll("input[name=modelo]").forEach(function (r) { r.addEventListener("change", render); });
   document.querySelectorAll("[data-monto]").forEach(function (b) { b.addEventListener("click", function () { monto.value = num(+b.getAttribute("data-monto"), 0); render(); }); });
   render();
+
 })();

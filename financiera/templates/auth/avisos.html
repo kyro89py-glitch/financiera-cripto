@@ -2,15 +2,42 @@
 {% from "macros.html" import ph, vacio with context %}
 {% block titulo %}Avisos{% endblock %}
 {% block contenido %}
-{{ ph("Avisos", "Novedades sobre tus operaciones, tu verificación y tus documentos.") }}
-<section class="card flush">
-  {% for a in lista %}
-    {% if a.enlace %}<a class="aviso-item{{ ' nuevo' if not a.leida }}" href="{{ a.enlace }}">{% else %}<div class="aviso-item{{ ' nuevo' if not a.leida }}">{% endif %}
-      <span class="marca" aria-hidden="true"></span>
-      <div class="grow"><div>{{ a.texto }}</div><div class="xs muted">{{ a.ts|fecha }} · {{ a.ts|hace }}</div></div>
-    {% if a.enlace %}</a>{% else %}</div>{% endif %}
-  {% else %}
-    {{ vacio('campana', 'No tienes avisos.') }}
-  {% endfor %}
-</section>
+{{ ph("Centro de avisos", "Tus operaciones, órdenes, seguridad y verificación, en un solo lugar.") }}
+<div class="avisos-g">
+  <div class="col">
+    <nav class="chips" aria-label="Filtrar avisos">
+      <a href="{{ url_for('auth.avisos') }}" aria-current="{{ 'true' if not cat and not nuevas else 'false' }}">Todos</a>
+      <a href="{{ url_for('auth.avisos', ver='nuevas') }}" aria-current="{{ 'true' if nuevas else 'false' }}">Sin leer</a>
+      {% for k, t in categorias.items() %}{% set c = conteo.get(k) %}
+      <a href="{{ url_for('auth.avisos', cat=k) }}" aria-current="{{ 'true' if cat == k else 'false' }}">{{ t }}{% if c and c[1] %} <span class="badge-in">{{ c[1] }}</span>{% endif %}</a>
+      {% endfor %}
+    </nav>
+    {% for titulo, lista in grupos.items() %}
+    <section class="panel avisos-grupo">
+      <header><h3>{{ titulo }}</h3><span class="meta">{{ lista|length }}</span></header>
+      {% for a in lista %}
+        {% if a.enlace %}<a class="aviso-item{{ ' nuevo' if not a.leida }} cat-{{ a.categoria }}" href="{{ a.enlace }}">{% else %}<div class="aviso-item{{ ' nuevo' if not a.leida }} cat-{{ a.categoria }}">{% endif %}
+          <span class="aviso-ico" aria-hidden="true">{{ icono({'seguridad': 'escudo', 'precios': 'campana', 'operaciones': 'movimientos', 'mercado': 'mercado'}.get(a.categoria, 'perfil')) }}</span>
+          <div class="grow"><div>{{ a.texto }}</div><div class="xs muted">{{ categorias.get(a.categoria, '') }} · {{ a.ts|fecha }} · {{ a.ts|hace }}</div></div>
+        {% if a.enlace %}</a>{% else %}</div>{% endif %}
+      {% endfor %}
+    </section>
+    {% else %}
+      <section class="panel">{{ vacio('campana', 'No hay avisos ' ~ ('sin leer' if nuevas else 'en esta categoría' if cat else 'todavía') ~ '.') }}</section>
+    {% endfor %}
+  </div>
+  <aside class="panel">
+    <header><h3>Avisos por correo</h3></header>
+    {% if not correo %}<p class="xs muted">El envío de correos todavía no está configurado en la plataforma: por ahora los avisos se ven solo aquí.</p>{% endif %}
+    <form class="col" method="post" action="{{ url_for('auth.preferencias_guardar') }}">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="correo"><input type="hidden" name="volver" value="{{ request.full_path.rstrip('?') }}">
+      {% for k, t in categorias.items() %}
+      <label class="check"><input type="checkbox" name="{{ k }}" value="si" {{ 'checked' if pref.correo[k] }}{{ ' disabled' if k == 'seguridad' }}><span>{{ t }}{% if k == 'seguridad' %} <span class="xs muted">(siempre activo)</span>{% endif %}</span></label>
+      {% if k == 'seguridad' %}<input type="hidden" name="seguridad" value="si">{% endif %}
+      {% endfor %}
+      <button class="btn sm" type="submit">Guardar</button>
+    </form>
+    <p class="xs muted">Dentro de la plataforma siempre ves todos los avisos. Esto decide solo qué te llega también por correo.</p>
+  </aside>
+</div>
 {% endblock %}

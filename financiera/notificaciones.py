@@ -14,12 +14,29 @@ def correo_activo():
     return bool(current_app.config.get("SMTP_HOST"))
 
 
-def notificar(usuario_id, texto, enlace=None, asunto=None, ts=None):
-    """Deja un aviso al usuario y, si hay correo configurado, encola un correo con el mismo texto."""
+def categoria_de(texto, enlace):
+    t, e = (texto or "").lower(), enlace or ""
+    if e.startswith(("/cuenta/sesiones", "/cuenta/seguridad")) or "sesi" in t or "contraseña" in t or "dos pasos" in t:
+        return "seguridad"
+    if e.startswith(("/mercado/", "/trading/")) or "alerta de precio" in t or "orden programada" in t:
+        return "precios"
+    if e.startswith(("/cliente/movimientos", "/cliente/envios", "/equipo/operaciones")):
+        return "operaciones"
+    return "cuenta"
+
+
+def notificar(usuario_id, texto, enlace=None, asunto=None, ts=None, categoria=None):
+    """Deja un aviso al usuario y, si hay correo configurado y la persona no lo desactivó para esa categoría, encola un
+    correo con el mismo texto. Los avisos de seguridad siempre se envían."""
     ts = ts or ahora()
+    categoria = categoria or categoria_de(texto, enlace)
     with db.transaccion() as c:
-        c.execute("INSERT INTO notificaciones (usuario_id, texto, enlace, ts) VALUES (?, ?, ?, ?)",
-                  (usuario_id, texto, enlace, ts))
+        c.execute("INSERT INTO notificaciones (usuario_id, texto, enlace, ts, categoria) VALUES (?, ?, ?, ?, ?)",
+                  (usuario_id, texto, enlace, ts, categoria))
+    from . import preferencias
+    if not preferencias.leer(usuario_id)["correo"].get(categoria, True):
+        return
+    with db.transaccion() as c:
         if correo_activo():
             u = c.execute("SELECT email, nombre, activo FROM usuarios WHERE id = ?", (usuario_id,)).fetchone()
             if u and u["activo"]:
@@ -52,8 +69,19 @@ def no_leidas(usuario_id):
     return db.uno("SELECT COUNT(*) AS n FROM notificaciones WHERE usuario_id = ? AND leida = 0", (usuario_id,))["n"]
 
 
-def listar(usuario_id, limite=60):
-    return db.todos("SELECT * FROM notificaciones WHERE usuario_id = ? ORDER BY ts DESC, id DESC LIMIT ?", (usuario_id, limite))
+def listar(usuario_id, limite=60, categoria=None, solo_no_leidas=False):
+    sql, args = "SELECT * FROM notificaciones WHERE usuario_id = ?", [usuario_id]
+    if categoria:
+        sql += " AND categoria = ?"
+        args.append(categoria)
+    if solo_no_leidas:
+        sql += " AND leida = 0"
+    return db.todos(sql + " ORDER BY ts DESC, id DESC LIMIT ?", (*args, limite))
+
+
+def por_categoria(usuario_id):
+    return {r["categoria"]: (r["n"], r["nuevas"]) for r in db.todos(
+        "SELECT categoria, COUNT(*) AS n, SUM(leida = 0) AS nuevas FROM notificaciones WHERE usuario_id = ? GROUP BY categoria", (usuario_id,))}
 
 
 def marcar_leidas(usuario_id):

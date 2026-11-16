@@ -48,6 +48,7 @@ def create_app(config=None):
         ORDEN_MAXIMA_USD=int(_env("ORDEN_MAXIMA_USD", "25000")),
         PYG_MARGEN_MAX_PCT=int(_env("PYG_MARGEN_MAX_PCT", "5")),
         ENVIO_MAX_DIA_USD=int(_env("ENVIO_MAX_DIA_USD", "5000")),
+        RETIRO_MAX_DIA_USD=int(_env("RETIRO_MAX_DIA_USD", "50000")),
         OFICINA_DIRECCION=_env("OFICINA_DIRECCION", ""),
         DEPOSITO_USDT_DIRECCION=_env("DEPOSITO_USDT_DIRECCION", ""),
         DEPOSITO_USDT_RED=_env("DEPOSITO_USDT_RED", "TRON (TRC-20)"),

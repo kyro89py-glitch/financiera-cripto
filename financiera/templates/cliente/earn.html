@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph with context %}
+{% block titulo %}Earn{% endblock %}
+{% block contenido %}
+{{ ph("Earn", "Productos para generar rendimientos con tus criptomonedas. Todavía no están habilitados.") }}
+<div class="flash warn" role="note"><b>No disponible.</b> Ningún producto de rendimiento está activo en la plataforma. Para ofrecerlos hacen falta proveedores con contrato, un análisis de riesgos y las autorizaciones que correspondan. Esta página explica qué son y qué riesgos tienen; no promete ninguna ganancia.</div>
+<div class="earn-g">
+  {% for cod, titulo, que, riesgos in productos %}
+  <section class="panel">
+    <header><h3>{{ titulo }}</h3><span class="pill">No disponible</span></header>
+    <p class="small">{{ que }}</p>
+    <span class="lab">Riesgos</span>
+    <ul class="lista-simple small">{% for r in riesgos %}<li>{{ r }}</li>{% endfor %}</ul>
+    <form method="post"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="producto" value="{{ cod }}">
+      <button class="btn sm{{ ' primary' if cod not in interes }}" type="submit">{{ 'Ya no me interesa' if cod in interes else 'Me interesa: avísenme si se habilita' }}</button></form>
+  </section>
+  {% endfor %}
+</div>
+<p class="note">Marcar tu interés no te compromete a nada ni reserva ningún producto. Antes de habilitar cualquiera vas a recibir sus condiciones completas. Mientras tanto, la <a href="{{ url_for('auth.academia') }}">Academia</a> explica los conceptos.</p>
+{% endblock %}

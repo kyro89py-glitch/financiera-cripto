@@ -690,7 +690,16 @@ def perfil():
             flash(str(e), "error")
         return redirect(url_for("cliente.perfil") + "#legajo")
     modelo = db.uno("SELECT * FROM modelos WHERE codigo = ?", (c["modelo"],))
-    return render_template("cliente/perfil.html", legajo=documentos.legajo(c), modelo=modelo,
+    from . import niveles, preferencias
+    from . import transferencias as tr
+    lim = [("Máximo por orden", niveles.cent("ORDEN_MAXIMA_USD"), None),
+           ("Envíos por día", niveles.cent("ENVIO_MAX_DIA_USD"), tr.enviado_hoy(c["id"])),
+           ("Retiros por día", niveles.cent("RETIRO_MAX_DIA_USD"), niveles.retirado_hoy(c["id"]))]
+    actividad = db.todos("SELECT ts, accion, detalle, ip FROM bitacora WHERE usuario_id = ? ORDER BY id DESC LIMIT 15", (g.usuario["id"],))
+    return render_template("cliente/perfil.html", nivel=niveles.nivel(c, g.usuario), limites_op=lim,
+                           proteccion=niveles.proteccion(c, g.usuario), pref=preferencias.leer(g.usuario["id"]),
+                           actividad_cuenta=actividad, doble_firma=niveles.cent("UMBRAL_DOBLE_FIRMA_USD"),
+                           legajo=documentos.legajo(c), modelo=modelo,
                            tipos=documentos.TIPOS[c["tipo"]], estados_doc=documentos.ESTADOS,
                            riesgo_max=operaciones.RIESGO_MAX[c["perfil_riesgo"]])
 
@@ -708,3 +717,90 @@ def condiciones():
         error = "Para continuar tienes que marcar que leíste y aceptas las condiciones."
     return render_template("cliente/condiciones.html", vigente=vigente, error=error, version=seguridad.TERMINOS_VERSION,
                            comision=current_app.config["COMISION_ANUAL_PCT"])
+
+
+# ---------- v0.20: centro de ayuda, análisis de cartera y Earn (informativo) ----------
+@bp.route("/ayuda", methods=["GET", "POST"])
+def ayuda():
+    from . import soporte
+    if request.method == "POST":
+        limites.exigir(("consulta", f"u{g.usuario['id']}"))
+        try:
+            cid = soporte.crear(g.usuario, g.cliente, request.form.get("categoria"), request.form.get("asunto"), request.form.get("texto"))
+            flash("Recibimos tu consulta. Te avisamos cuando el equipo responda.", "ok")
+            return redirect(url_for("cliente.consulta", cid=cid))
+        except soporte.ErrorSoporte as e:
+            flash(str(e), "error")
+            return redirect(url_for("cliente.ayuda") + "#nueva")
+    q = (request.args.get("q") or "").strip().lower()[:40]
+    faq = [f for f in soporte.FAQ if not q or q in f[1].lower() or q in f[2].lower()]
+    return render_template("cliente/ayuda.html", faq=faq, q=q, categorias=soporte.CATEGORIAS, estados=soporte.ESTADOS,
+                           consultas=soporte.del_usuario(g.usuario["id"]))
+
+
+@bp.route("/ayuda/<int:cid>", methods=["GET", "POST"])
+def consulta(cid):
+    from . import soporte
+    q = db.uno("SELECT * FROM consultas WHERE id = ? AND usuario_id = ?", (cid, g.usuario["id"]))
+    if not q:
+        abort(404)
+    if request.method == "POST":
+        limites.exigir(("consulta", f"u{g.usuario['id']}"))
+        try:
+            if request.form.get("accion") == "cerrar":
+                soporte.cerrar(cid, g.usuario, False)
+                flash("Consulta cerrada.", "ok")
+            else:
+                soporte.responder(cid, g.usuario, request.form.get("texto"), False)
+        except soporte.ErrorSoporte as e:
+            flash(str(e), "error")
+        return redirect(url_for("cliente.consulta", cid=cid))
+    return render_template("cliente/consulta.html", q=q, mensajes=soporte.mensajes(cid), categorias=soporte.CATEGORIAS,
+                           estados=soporte.ESTADOS, equipo=False)
+
+
+@bp.get("/analisis")
+def analisis_cartera():
+    from . import analisis, panel
+    c = g.cliente
+    filas, total = cartera.posiciones(c["id"])
+    costos = cartera.costos(c["id"])
+    ind = cartera.indicadores(c["id"], filas, total)
+    detalle = []
+    for f in filas:
+        vol = analisis.activo(f["activo"], f["precio"]).get("volatilidad") if f["activo"] != "USD" else 0.0
+        k = costos.get(f["activo"])
+        res = (f["valor"] - k["costo"]) if k and k["cantidad"] and k["costo"] else None
+        detalle.append({**f, "vol": vol, "resultado": res, "res_pct": (res / k["costo"] * 100) if res is not None else None,
+                        "riesgo": (f["peso"] * vol) if vol is not None else None})
+    suma = sum(d["riesgo"] or 0 for d in detalle) or 1
+    for d in detalle:
+        d["aporte_riesgo"] = (d["riesgo"] or 0) / suma * 100
+    return render_template("cliente/analisis.html", filas=detalle, total=total, ind=ind, riesgo=panel.riesgo(c, filas, ind),
+                           rendimientos=panel.rendimientos(c["id"], total, precios.mercado()), ranking=panel.ranking(filas, costos),
+                           datos3d=datos3d(filas, ""))
+
+
+EARN = [
+    ("staking", "Staking", "Bloquear monedas de redes de prueba de participación (como ETH o SOL) para ayudar a validar la red y recibir recompensas en la misma moneda.",
+     ["La recompensa varía y no está garantizada.", "Las monedas pueden quedar bloqueadas días o semanas.", "El validador puede ser penalizado y perder parte de lo depositado.", "El precio de la moneda puede caer más que la recompensa."]),
+    ("ahorro", "Ahorro en monedas estables", "Prestar monedas estables (como USDT o USDC) a un tercero que paga un interés.",
+     ["Quien recibe el préstamo puede no devolverlo.", "La moneda estable puede perder su paridad con el dólar.", "No hay garantía de depósitos."]),
+    ("prestamos", "Préstamos con garantía", "Dejar criptomonedas como garantía para recibir dólares sin venderlas.",
+     ["Si el precio cae, la garantía puede liquidarse con pérdida.", "Se pagan intereses.", "Exige controles de riesgo en tiempo real."]),
+]
+
+
+@bp.route("/earn", methods=["GET", "POST"])
+def earn():
+    from . import preferencias
+    pref = preferencias.leer(g.usuario["id"])
+    if request.method == "POST":
+        prod = request.form.get("producto")
+        if prod in {e[0] for e in EARN}:
+            interes = [x for x in pref["earn_interes"] if x != prod] if prod in pref["earn_interes"] else pref["earn_interes"] + [prod]
+            preferencias.guardar(g.usuario["id"], {"earn_interes": interes})
+            flash("Anotado. Esto no te compromete a nada: solo nos ayuda a decidir qué desarrollar." if prod in interes
+                  else "Quitamos tu interés en ese producto.", "ok")
+        return redirect(url_for("cliente.earn"))
+    return render_template("cliente/earn.html", productos=EARN, interes=pref["earn_interes"])

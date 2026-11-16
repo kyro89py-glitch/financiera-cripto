@@ -26,6 +26,8 @@ DEFECTO = {
     "ocultos": [],
     "moneda": "USD",
     "correo": {k: True for k in CATEGORIAS},
+    "lecciones": [],
+    "earn_interes": [],
 }
 
 
@@ -44,6 +46,8 @@ def leer(usuario_id):
         if isinstance(guardado.get("correo", {}).get(k), bool):
             out["correo"][k] = guardado["correo"][k]
     out["correo"]["seguridad"] = True  # los avisos de seguridad siempre llegan
+    out["lecciones"] = [x for x in guardado.get("lecciones", []) if isinstance(x, str)][:100]
+    out["earn_interes"] = [x for x in guardado.get("earn_interes", []) if isinstance(x, str)][:20]
     return out
 
 
@@ -61,6 +65,9 @@ def guardar(usuario_id, cambios):
             if k in cambios["correo"]:
                 actual["correo"][k] = bool(cambios["correo"][k])
         actual["correo"]["seguridad"] = True
+    for clave in ("lecciones", "earn_interes"):
+        if isinstance(cambios.get(clave), list):
+            actual[clave] = list(dict.fromkeys(str(x)[:60] for x in cambios[clave]))[:100]
     db.ejecutar("INSERT INTO preferencias (usuario_id, datos, actualizado) VALUES (?, ?, ?)"
                 " ON CONFLICT(usuario_id) DO UPDATE SET datos = excluded.datos, actualizado = excluded.actualizado",
                 (usuario_id, json.dumps(actual, ensure_ascii=False), ahora()))

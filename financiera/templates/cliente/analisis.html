@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph, vacio, escena3d with context %}
+{% block titulo %}Análisis de cartera{% endblock %}
+{% block clase_app %} ancha{% endblock %}
+{% block cabeza %}<script src="{{ url_for('static', filename='js/escena3d.js') }}?v={{ VERSION }}" defer></script>{% endblock %}
+{% block contenido %}
+{{ ph("Análisis de cartera", "Cómo está repartido tu patrimonio, cuánto riesgo tiene y de dónde viene tu resultado.") }}
+{% if not filas %}<section class="panel">{{ vacio('resumen', 'El análisis aparece cuando tengas saldo o monedas.') }}</section>{% else %}
+<section class="indicadores privado">
+  <div><dt>Patrimonio</dt><dd class="num">{{ total|usd }}</dd><span>a precios actuales</span></div>
+  <div><dt>Nivel de riesgo</dt><dd>{{ (riesgo.nivel or '—')|capitalize }}</dd><span>perfil declarado: {{ riesgo.perfil }}</span></div>
+  <div><dt>Volatilidad anual</dt><dd class="num">{{ riesgo.volatilidad|pct(0, false) if riesgo.volatilidad is not none else '—' }}</dd><span>según los últimos 30 días</span></div>
+  <div><dt>Diversificación efectiva</dt><dd class="num">{{ '%.1f'|format(riesgo.efectivos)|replace('.', ',') }}</dd><span>activos de igual peso equivalentes</span></div>
+  <div><dt>Mayor posición</dt><dd class="num">{% if riesgo.mayor %}{{ riesgo.mayor[0] }} {{ riesgo.mayor[1]|pct(0, false) }}{% else %}—{% endif %}</dd><span>concentración</span></div>
+  <div><dt>Dólares y estables</dt><dd class="num">{{ riesgo.estables|pct(0, false) }}</dd><span>parte que no varía con el mercado</span></div>
+</section>
+<p class="small">{{ riesgo.texto }}</p>
+<section class="panel privado">
+  <header><h3>Activo por activo</h3><span class="meta">peso, riesgo y resultado</span></header>
+  <div class="tablewrap"><table class="tabla-activos">
+    <thead><tr><th>Activo</th><th class="r">Valor</th><th class="r">Peso</th><th class="r oc">Volatilidad anual</th><th class="r">Aporte al riesgo</th><th class="r oc">Resultado</th></tr></thead>
+    <tbody>{% for f in filas %}<tr>
+      <td><span class="activo-cel"><span class="moneda-ico sm" style="--c:{{ f.color }}">{{ '$' if f.activo == 'USD' else f.activo[0] }}</span><span><b>{{ f.activo }}</b><span class="sec">{{ f.nombre }}</span></span></span></td>
+      <td class="r num">{{ f.valor|usd }}</td>
+      <td class="r"><span class="peso"><i style="width:{{ '%.1f'|format(f.peso * 100) }}%;background:{{ f.color }}"></i></span><span class="num small">{{ (f.peso * 100)|pct(1, false) }}</span></td>
+      <td class="r num oc">{{ f.vol|pct(0, false) if f.vol is not none else '—' }}</td>
+      <td class="r"><span class="peso"><i style="width:{{ '%.1f'|format(f.aporte_riesgo) }}%;background:var(--warn)"></i></span><span class="num small">{{ f.aporte_riesgo|pct(0, false) }}</span></td>
+      <td class="r num oc">{% if f.resultado is not none %}<span class="{{ 'up' if f.resultado >= 0 else 'down' }}">{{ '+' if f.resultado >= 0 }}{{ f.resultado|usd }} ({{ f.res_pct|pct(1) }})</span>{% else %}—{% endif %}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  <p class="xs muted">El aporte al riesgo estima qué parte de la variación de tu cartera viene de cada activo (peso por volatilidad). Un activo puede pesar poco y aportar mucho riesgo si es muy volátil.</p>
+</section>
+<div class="g2">
+  <section class="panel privado">
+    <header><h3>Rendimiento por período</h3></header>
+    <div class="tablewrap"><table class="tabla-activos rend-tabla">
+      <thead><tr><th>Período</th><th class="r">Tu rendimiento</th><th class="r">Bitcoin</th><th class="r">Top 10</th></tr></thead>
+      <tbody>{% for r in rendimientos %}<tr><td><b>{{ r.etiqueta }}</b>{% if r.parcial %}<span class="sec">desde la apertura</span>{% endif %}</td>
+        <td class="r num {{ 'up' if (r.twr or 0) >= 0 else 'down' }}"><b>{{ r.twr|pct if r.twr is not none else '—' }}</b></td>
+        <td class="r num {{ 'up' if (r.btc or 0) >= 0 else 'down' }}">{{ r.btc|pct if r.btc is not none else '—' }}</td>
+        <td class="r num {{ 'up' if (r.top10 or 0) >= 0 else 'down' }}">{{ r.top10|pct if r.top10 is not none else '—' }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+  <section class="panel composicion-panel"><header><h3>Distribución</h3></header>{{ escena3d(datos3d) }}</section>
+</div>
+<p class="note">Estadísticas descriptivas con datos propios de la plataforma. No son asesoramiento financiero.</p>
+{% endif %}
+{% endblock %}

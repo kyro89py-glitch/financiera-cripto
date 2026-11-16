@@ -51,6 +51,20 @@ Evolución completa de la plataforma, trabajada por módulos. Los servicios fina
 - **Saldo pendiente de acreditar** (depósitos en revisión), además de disponible, reservado y en retiros.
 - **Vista en dólares o guaraníes:** se elige en la billetera y se guarda en la cuenta. Indica el tipo de cambio usado, de dónde sale y cuándo se cargó, y aclara que los saldos se llevan en dólares.
 
+### Módulo 6 · Perfil y centro de seguridad
+- **Nivel de verificación** (0 cuenta abierta, 1 identidad verificada, 2 reforzada) con lo que permite cada uno y qué falta para el siguiente.
+- **Límites de operación** visibles con lo usado hoy: máximo por orden, envíos por día y **retiros por día** (límite nuevo, US$ 50.000 por defecto).
+- **Centro de seguridad:** puntaje de protección de 0 a 100 con controles (dos pasos, contraseña, identidad, sesiones abiertas, intentos fallidos, avisos sin leer), dispositivos con sesión y actividad reciente.
+- **Preferencias:** moneda de la billetera, apariencia, avisos por correo e inicio. **Historial de actividad** con las últimas acciones del usuario tomadas de la bitácora.
+- Las claves de API para clientes no se ofrecen todavía; el perfil lo indica.
+
+### Módulo 7 · Ayuda, Academia, Earn y Análisis de cartera
+- **Centro de ayuda:** preguntas frecuentes con buscador y consultas con seguimiento. El equipo las atiende en una pantalla nueva de Soporte y el cliente recibe un aviso con cada respuesta.
+- **Academia:** 10 lecciones sobre primeros pasos, trading, seguridad y finanzas personales, con progreso guardado y enlace para practicar.
+- **Earn (solo informativo):** explica staking, ahorro en estables y préstamos con sus riesgos. Ningún producto está habilitado ni se promete rendimiento; solo se puede anotar interés.
+- **Análisis de cartera:** peso, volatilidad, aporte al riesgo y resultado de cada activo, diversificación efectiva y rendimiento por período frente a Bitcoin y al Top 10.
+- Navegación: Análisis, Academia, Earn y Ayuda en la barra lateral de escritorio y en el perfil en el celular.
+
 ## [0.10.0] - 2026-11-15
 
 Etapa 2 del plan (rediseño visual) más las dos correcciones críticas de la auditoría técnica.

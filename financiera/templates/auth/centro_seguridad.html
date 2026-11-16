@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph with context %}
+{% block titulo %}Centro de seguridad{% endblock %}
+{% block contenido %}
+{{ ph("Centro de seguridad", "El estado de protección de tu cuenta y lo que puedes hacer para mejorarlo.", volver=url_for('cliente.perfil') if cli else none, volver_txt="Perfil") }}
+<section class="seg-hero {{ p.estado }}">
+  <div class="prot-anillo grande {{ p.estado }}" style="--p:{{ p.puntos }}" role="img" aria-label="Protección {{ p.puntos }} de 100"><b class="num">{{ p.puntos }}</b><span>de 100</span></div>
+  <div><h3>Protección {{ p.estado }}</h3>
+    <p class="small muted">{% if p.estado == 'alta' %}Tu cuenta tiene activas las protecciones importantes. Revisa de vez en cuando tus sesiones.{% elif p.estado == 'media' %}Tu cuenta está protegida, pero hay pasos pendientes que la harían más segura.{% else %}Tu cuenta necesita atención: completa los pasos marcados.{% endif %}</p>
+    <p class="xs muted">Nunca te vamos a pedir tu contraseña ni tus códigos por teléfono, correo o mensajes.</p></div>
+</section>
+<div class="g2 ancho-izq">
+  <section class="panel">
+    <header><h3>Controles</h3><span class="meta">{{ p.controles|selectattr('ok')|list|length }} de {{ p.controles|length }} en orden</span></header>
+    {% for c in p.controles %}
+    <div class="control {{ 'ok' if c.ok else 'falta' }}"><i aria-hidden="true">{{ '✓' if c.ok else '!' }}</i><div class="grow"><b>{{ c.titulo }}</b><div class="small muted">{{ c.texto }}</div></div>
+      {% if c.enlace and (not c.ok or c.titulo in ('Sesiones abiertas', 'Contraseña')) %}<a class="btn sm{{ ' primary' if not c.ok }}" href="{{ c.enlace }}">{{ c.accion if not c.ok else 'Ver' }}</a>{% endif %}</div>
+    {% endfor %}
+  </section>
+  <div class="col">
+    <section class="panel">
+      <header><h3>Dispositivos con sesión</h3><a class="small" href="{{ url_for('auth.sesiones') }}">Administrar</a></header>
+      <div class="list">{% for s in activas %}<div class="item"><span class="aviso-ico">{{ icono('dispositivo') }}</span><div class="grow"><div class="t">{{ s.dispositivo or 'Dispositivo' }}{% if s.id == actual %} <span class="pill ok">Este</span>{% endif %}</div><div class="d">{{ s.ip or '' }} · activo {{ s.ultima|hace }}</div></div></div>
+      {% else %}<p class="small muted vacio-sm">Sin sesiones activas.</p>{% endfor %}</div>
+    </section>
+    <section class="panel">
+      <header><h3>Actividad de seguridad</h3></header>
+      <div class="list">{% for e in eventos %}<div class="item"><div class="grow"><div class="t">{{ nombres.get(e.accion, e.accion) }}</div><div class="d">{{ e.ts|fecha }}{% if e.ip %} · {{ e.ip }}{% endif %}</div></div></div>
+      {% else %}<p class="small muted vacio-sm">Sin eventos recientes.</p>{% endfor %}</div>
+    </section>
+  </div>
+</div>
+{% endblock %}

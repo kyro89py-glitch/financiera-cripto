@@ -51,7 +51,8 @@ def enviado_hoy(cliente_id):
 
 
 def limite_dia():
-    return int(current_app.config.get("ENVIO_MAX_DIA_USD", 5000)) * 100
+    from . import niveles
+    return niveles.cent("ENVIO_MAX_DIA_USD")
 
 
 def enviar(cliente, destino_texto, activo, monto_cent, usuario, clave, codigo=None, nota=None, todo=False, ts=None):

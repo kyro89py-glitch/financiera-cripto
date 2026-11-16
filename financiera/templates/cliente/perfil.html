@@ -4,8 +4,35 @@
 {% block contenido %}
 {% set cli = g.cliente %}
 {% call ph("Mi perfil", "Tus datos, tu verificación y la seguridad de tu cuenta.") %}{{ kyc(cli) }}{% endcall %}
+<section class="identidad">
+  <div class="id-avatar" aria-hidden="true">{{ iniciales(cli.nombre) }}</div>
+  <div class="grow"><h3>{{ cli.nombre }}</h3><div class="small muted">{{ g.usuario.email }} · cliente desde {{ cli.creado|dia }}</div>
+    <div class="niveles" role="img" aria-label="Nivel de verificación {{ nivel.n }} de 2: {{ nivel.nombre }}">
+      {% for i, t in [(0, 'Cuenta abierta'), (1, 'Identidad verificada'), (2, 'Verificación reforzada')] %}<span class="{{ 'on' if nivel.n >= i }}{{ ' actual' if nivel.n == i }}"><b>{{ i }}</b>{{ t }}</span>{% endfor %}
+    </div>
+    <p class="small">{{ nivel.puede }}{% if nivel.falta %} <span class="muted">{{ nivel.falta }}</span>{% endif %}</p>
+  </div>
+  <a class="prot-anillo {{ proteccion.estado }}" href="{{ url_for('auth.centro_seguridad') }}" style="--p:{{ proteccion.puntos }}" aria-label="Protección de la cuenta: {{ proteccion.puntos }} de 100">
+    <b class="num">{{ proteccion.puntos }}</b><span>Protección {{ proteccion.estado }}</span></a>
+</section>
+<nav class="mas-g" aria-label="Más secciones">
+  <a href="{{ url_for('cliente.analisis_cartera') }}">{{ icono('resumen') }}<b>Análisis de cartera</b><span>Riesgo y distribución</span></a>
+  <a href="{{ url_for('auth.academia') }}">{{ icono('documento') }}<b>Academia</b><span>Aprende a tu ritmo</span></a>
+  <a href="{{ url_for('cliente.earn') }}">{{ icono('invertir') }}<b>Earn</b><span>Rendimientos (informativo)</span></a>
+  <a href="{{ url_for('cliente.ayuda') }}">{{ icono('campana') }}<b>Ayuda</b><span>Preguntas y consultas</span></a>
+  <a href="{{ url_for('auth.avisos') }}">{{ icono('campana') }}<b>Avisos</b><span>Centro de notificaciones</span></a>
+  <a href="{{ url_for('auth.centro_seguridad') }}">{{ icono('escudo') }}<b>Seguridad</b><span>Estado de protección</span></a>
+</nav>
 <div class="g2">
   <div class="col">
+    <section class="card col" id="limites">
+      <div class="ch" style="margin:0"><h3>Límites de operación</h3><span class="meta">nivel {{ nivel.n }}</span></div>
+      {% for titulo, tope, usado in limites_op %}
+      <div class="limite"><div class="row spread small"><b>{{ titulo }}</b><span class="num">{% if usado is not none %}{{ usado|usd }} de {% endif %}{{ tope|usd(0) }}</span></div>
+        {% if usado is not none %}<div class="peso-barra" aria-hidden="true"><i style="width:{{ [(usado / tope * 100) if tope else 0, 100]|min }}%"></i></div>{% endif %}</div>
+      {% endfor %}
+      <p class="xs muted">Los depósitos y retiros desde {{ doble_firma|usd(0) }} necesitan dos aprobaciones del equipo. Si necesitas límites mayores, escríbenos desde <a href="{{ url_for('cliente.ayuda') }}">Ayuda</a>.</p>
+    </section>
     <section class="card">
       <div class="ch"><h3>Datos</h3></div>
       <dl class="datos">
@@ -28,11 +55,24 @@
         {% if g.usuario.terminos_ts %}{{ check(true, "Condiciones aceptadas el " ~ (g.usuario.terminos_ts|dia)) }}{% endif %}
       </ul>
       <div class="row">
+        <a class="btn primary" href="{{ url_for('auth.centro_seguridad') }}">{{ icono('escudo') }}Centro de seguridad</a>
         <a class="btn" href="{{ url_for('auth.sesiones') }}">{{ icono('dispositivo') }}Dispositivos y sesiones</a>
         <a class="btn" href="{{ url_for('auth.seguridad') }}">{{ icono('escudo') }}Verificación en dos pasos</a>
         <a class="btn" href="{{ url_for('auth.clave') }}">{{ icono('llave') }}Cambiar clave</a>
         <a class="btn" href="{{ url_for('cliente.condiciones') }}">{{ icono('documento') }}Condiciones</a>
       </div>
+    </section>
+
+    <section class="card col" id="preferencias">
+      <div class="ch" style="margin:0"><h3>Preferencias</h3></div>
+      <div class="pref"><div class="grow"><b>Moneda de la billetera</b><span class="small muted">En qué moneda ves tu patrimonio. Los saldos se llevan siempre en dólares.</span></div>
+        <form method="post" action="{{ url_for('auth.preferencias_guardar') }}" class="segmentos"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="moneda"><input type="hidden" name="volver" value="{{ url_for('cliente.perfil') }}#preferencias">
+          {% for m, t in [('USD', 'US$'), ('PYG', '₲')] %}<button type="submit" name="moneda" value="{{ m }}" aria-pressed="{{ 'true' if pref.moneda == m else 'false' }}">{{ t }}</button>{% endfor %}</form></div>
+      <div class="pref"><div class="grow"><b>Apariencia</b><span class="small muted">Tema {{ 'claro' if request.cookies.get('tema') == 'claro' else 'oscuro' }} en este dispositivo.</span></div>
+        <form method="post" action="{{ url_for('auth.tema') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="volver" value="{{ url_for('cliente.perfil') }}#preferencias"><button class="btn sm" type="submit">Cambiar a {{ 'oscuro' if request.cookies.get('tema') == 'claro' else 'claro' }}</button></form></div>
+      <div class="pref"><div class="grow"><b>Avisos</b><span class="small muted">Qué te llega por correo, además de verlo en la plataforma.</span></div><a class="btn sm" href="{{ url_for('auth.avisos') }}">Configurar</a></div>
+      <div class="pref"><div class="grow"><b>Inicio</b><span class="small muted">Qué módulos ves en tu panel y en qué orden.</span></div><a class="btn sm" href="{{ url_for('cliente.inicio') }}">Personalizar</a></div>
+      <div class="pref"><div class="grow"><b>Acceso por API</b><span class="small muted">Todavía no ofrecemos claves de API para clientes. Cuando exista, se gestionará desde aquí con permisos limitados.</span></div><span class="pill">No disponible</span></div>
     </section>
 
     <section class="card col" id="privacidad">
@@ -83,4 +123,11 @@
     </form>
   </section>
 </div>
+<section class="panel" id="actividad">
+  <header><h3>Historial de actividad</h3><a class="small" href="{{ url_for('auth.sesiones') }}">Sesiones y dispositivos</a></header>
+  <div class="list">{% for a in actividad_cuenta %}
+    <div class="item"><div class="grow"><div class="t">{{ a.detalle|detalle_txt }}</div><div class="d">{{ a.ts|fecha }}{% if a.ip %} · {{ a.ip }}{% endif %}</div></div></div>
+  {% else %}<p class="small muted vacio-sm">Todavía no hay actividad registrada.</p>{% endfor %}</div>
+  <p class="xs muted">Últimas acciones hechas con tu usuario, tomadas de la bitácora inmutable de la plataforma.</p>
+</section>
 {% endblock %}

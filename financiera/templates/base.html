@@ -59,7 +59,7 @@
 <div class="app{% if not nav %} sola{% endif %}{% block clase_app %}{% endblock %}">
   {% if nav %}
   <nav class="tabs" aria-label="Secciones">
-    {% for item in nav %}<a href="{{ item.url }}"{% if item.activo %} aria-current="page"{% endif %}>{{ icono(item.icono) }}<span>{{ item.texto }}</span>{% if item.cuenta %}<span class="badge" aria-label="{{ item.cuenta }} pendientes">{{ item.cuenta }}</span>{% endif %}</a>{% endfor %}
+    {% for item in nav %}<a href="{{ item.url }}"{% if item.sec %} class="sec"{% endif %}{% if item.activo %} aria-current="page"{% endif %}>{{ icono(item.icono) }}<span>{{ item.texto }}</span>{% if item.cuenta %}<span class="badge" aria-label="{{ item.cuenta }} pendientes">{{ item.cuenta }}</span>{% endif %}</a>{% endfor %}
     <div class="pie">{{ config.NOMBRE }} · v{{ VERSION }}</div>
   </nav>
   {% endif %}

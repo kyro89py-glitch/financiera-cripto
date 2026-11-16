@@ -895,3 +895,51 @@ def preferencias_guardar():
     flash("Preferencias guardadas.", "ok")
     destino = f.get("volver") or ""
     return redirect(destino if destino.startswith(("/cliente", "/cuenta", "/mercado", "/trading")) and "//" not in destino else url_for("inicio"))
+
+
+@bp.get("/cuenta/centro-seguridad")
+def centro_seguridad():
+    r = seguridad.exigir_sesion()
+    if r:
+        return r
+    from . import niveles
+    u = g.usuario
+    cli = _cliente_actual()
+    marcas = ",".join("?" * len(EVENTOS_SEGURIDAD))
+    eventos = db.todos(f"SELECT ts, accion, ip FROM bitacora WHERE objeto = ? AND accion IN ({marcas}) ORDER BY id DESC LIMIT 12",
+                       (f"usuario:{u['id']}", *EVENTOS_SEGURIDAD))
+    activas = db.todos("SELECT * FROM sesiones WHERE usuario_id = ? AND cerrada IS NULL ORDER BY ultima DESC LIMIT 6", (u["id"],))
+    return render_template("auth/centro_seguridad.html", p=niveles.proteccion(cli, u), eventos=eventos, nombres=EVENTOS_SEGURIDAD,
+                           activas=activas, actual=session.get("sid"), cli=cli)
+
+
+@bp.get("/academia")
+def academia():
+    r = seguridad.exigir_sesion()
+    if r:
+        return r
+    from . import academia as ac
+    from . import preferencias
+    leidas = preferencias.leer(g.usuario["id"])["lecciones"]
+    return render_template("academia.html", lecciones=ac.lista(), categorias=ac.CATEGORIAS, leidas=leidas)
+
+
+@bp.route("/academia/<slug>", methods=["GET", "POST"])
+def leccion(slug):
+    r = seguridad.exigir_sesion()
+    if r:
+        return r
+    from flask import abort
+
+    from . import academia as ac
+    from . import preferencias
+    lec = ac.leccion(slug)
+    if not lec:
+        abort(404)
+    pref = preferencias.leer(g.usuario["id"])
+    if request.method == "POST":
+        if slug not in pref["lecciones"]:
+            preferencias.guardar(g.usuario["id"], {"lecciones": pref["lecciones"] + [slug]})
+        return redirect(url_for("auth.leccion", slug=lec["siguiente"]) if lec["siguiente"] else url_for("auth.academia"))
+    return render_template("leccion.html", lec=lec, categorias=ac.CATEGORIAS, leida=slug in pref["lecciones"],
+                           es_cliente=g.usuario["rol"] == "cliente")

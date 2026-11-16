@@ -15,7 +15,8 @@ class ErrorNegocio(Exception):
 
 
 def _umbral(clave):
-    return current_app.config[clave] * 100
+    from . import niveles
+    return niveles.cent(clave) if clave in niveles.LIMITES else current_app.config[clave] * 100
 
 
 def requiere_origen(op):
@@ -233,6 +234,10 @@ def solicitar_retiro(cliente, monto, usuario, ts=None, en_guaranies=False, metod
         disponible = total - pendiente - reservado_cent(cliente["id"])
         if monto > disponible:
             raise ErrorNegocio(f"El retiro supera lo disponible en tu cartera ({fmt_usd(max(disponible, 0))}).")
+        from . import niveles
+        tope = niveles.cent("RETIRO_MAX_DIA_USD")
+        if niveles.retirado_hoy(cliente["id"]) + monto > tope:
+            raise ErrorNegocio(f"Superas el límite de retiros por día ({fmt_usd(tope)}). Si necesitas retirar más, escríbenos desde Ayuda.")
         if solo_validar:
             return {"monto": monto, "monto_pyg": monto_pyg, "cambio_pyg": cambio_pyg, "disponible": disponible}
         cur = c.execute(

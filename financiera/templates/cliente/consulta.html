@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph, pill with context %}
+{% block titulo %}Consulta #{{ q.id }}{% endblock %}
+{% block contenido %}
+{% call ph(q.asunto, "Consulta #" ~ q.id ~ " · " ~ categorias[q.categoria] ~ (" · " ~ q.nombre ~ " (" ~ q.email ~ ")" if equipo else ""), volver=url_for('equipo.soporte') if equipo else url_for('cliente.ayuda'), volver_txt="Soporte" if equipo else "Ayuda") %}{{ pill(estados[q.estado][0], estados[q.estado][1]) }}{% endcall %}
+<section class="panel hilo">
+  {% for m in mensajes %}
+  <div class="msg {{ 'equipo' if m.del_equipo else 'cliente' }}{{ ' mio' if m.autor_id == g.usuario.id }}"><div class="xs muted">{{ ('Equipo · ' ~ m.nombre) if m.del_equipo and equipo else ('Equipo de soporte' if m.del_equipo else m.nombre) }} · {{ m.ts|fecha }}</div><p>{{ m.texto }}</p></div>
+  {% endfor %}
+  {% if q.estado != 'cerrada' %}
+  <form class="col" method="post">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <label class="field" for="texto">{{ 'Respuesta al cliente' if equipo else 'Agregar un mensaje' }}<textarea id="texto" name="texto" rows="4" maxlength="2000" required></textarea></label>
+    <div class="row spread"><button class="btn ghost" type="submit" name="accion" value="cerrar" formnovalidate>{{ 'Cerrar consulta' if equipo else 'Ya está resuelto: cerrar' }}</button><button class="btn primary" type="submit">Enviar</button></div>
+  </form>
+  {% else %}<p class="small muted">Esta consulta está cerrada.{% if not equipo %} Si necesitas algo más, <a href="{{ url_for('cliente.ayuda') }}#nueva">abre una nueva</a>.{% endif %}</p>{% endif %}
+</section>
+{% endblock %}

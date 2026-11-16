@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph, pill, vacio with context %}
+{% block titulo %}Soporte{% endblock %}
+{% block contenido %}
+{{ ph("Soporte", "Consultas de los clientes. Al responder, el cliente recibe un aviso.") }}
+<nav class="chips" aria-label="Estado">
+  <a href="{{ url_for('equipo.soporte') }}" aria-current="{{ 'true' if not estado else 'false' }}">Todas</a>
+  {% for k, (c, t) in estados.items() %}<a href="{{ url_for('equipo.soporte', estado=k) }}" aria-current="{{ 'true' if estado == k else 'false' }}">{{ t }} ({{ conteo.get(k, 0) }})</a>{% endfor %}
+</nav>
+<section class="panel">
+  <div class="list">{% for c in cola %}
+    <a class="item" href="{{ url_for('equipo.soporte_consulta', cid=c.id) }}"><div class="grow"><div class="t">{{ c.asunto }}</div><div class="d">#{{ c.id }} · {{ c.nombre }} · {{ categorias[c.categoria] }} · {{ c.n }} mensaje{{ 's' if c.n != 1 }} · {{ c.actualizada|hace }}</div></div>{{ pill(estados[c.estado][0], estados[c.estado][1]) }}</a>
+  {% else %}{{ vacio('campana', 'No hay consultas en esta vista.') }}{% endfor %}</div>
+</section>
+{% endblock %}

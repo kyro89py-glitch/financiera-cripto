@@ -71,7 +71,8 @@ def evaluar(cliente_id):
     cli = db.uno("SELECT * FROM clientes WHERE id = ?", (cliente_id,))
     if not cli:
         return 0
-    umbral = current_app.config["UMBRAL_AML_USD"] * 100
+    from . import niveles
+    umbral = niveles.cent("UMBRAL_AML_USD")
     nuevas = []
     ops = db.todos("SELECT * FROM operaciones WHERE cliente_id = ? AND estado NOT IN ('rechazada', 'cancelada')"
                    " AND creado >= ? ORDER BY creado", (cliente_id, iso(ahora_dt() - timedelta(days=30))))

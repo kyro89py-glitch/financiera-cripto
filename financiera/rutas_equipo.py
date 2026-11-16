@@ -454,3 +454,34 @@ def verificar_comprobante():
                      "rastro": comprobantes.rastro(clase, fila["id"]) if fila else []}
         auditoria.registrar("comprobante.verificado", None, {"texto": f"Verificó el comprobante {datos['codigo'].upper()}: {estado}."})
     return render_template("equipo/verificar.html", resultado=resultado, datos=datos)
+
+
+# ---------- soporte ----------
+@bp.get("/soporte")
+@seguridad.requiere("soporte.atender")
+def soporte():
+    from . import soporte as sp
+    estado = request.args.get("estado") if request.args.get("estado") in sp.ESTADOS else None
+    conteo = {r["estado"]: r["n"] for r in db.todos("SELECT estado, COUNT(*) AS n FROM consultas GROUP BY estado")}
+    return render_template("equipo/soporte.html", cola=sp.cola(estado), estado=estado, estados=sp.ESTADOS, categorias=sp.CATEGORIAS, conteo=conteo)
+
+
+@bp.route("/soporte/<int:cid>", methods=["GET", "POST"])
+@seguridad.requiere("soporte.atender")
+def soporte_consulta(cid):
+    from . import soporte as sp
+    q = db.uno("SELECT q.*, u.nombre, u.email FROM consultas q JOIN usuarios u ON u.id = q.usuario_id WHERE q.id = ?", (cid,))
+    if not q:
+        abort(404)
+    if request.method == "POST":
+        try:
+            if request.form.get("accion") == "cerrar":
+                sp.cerrar(cid, g.usuario, True)
+                flash("Consulta cerrada.", "ok")
+            else:
+                sp.responder(cid, g.usuario, request.form.get("texto"), True)
+                flash("Respuesta enviada: el cliente recibe un aviso.", "ok")
+        except sp.ErrorSoporte as e:
+            flash(str(e), "error")
+        return redirect(url_for("equipo.soporte_consulta", cid=cid))
+    return render_template("cliente/consulta.html", q=q, mensajes=sp.mensajes(cid), categorias=sp.CATEGORIAS, estados=sp.ESTADOS, equipo=True)

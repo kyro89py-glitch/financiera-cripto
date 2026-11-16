@@ -63,11 +63,14 @@ ICONOS["buscar"] = '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>'
 NAV = {
     "cliente": [("cliente.inicio", "Inicio", "inicio", None), ("auth.mercado", "Mercados", "mercado", None),
                 ("auth.trading", "Trading", "trading", None), ("cliente.cartera", "Billetera", "billetera", None),
-                ("cliente.perfil", "Perfil", "perfil", None)],
+                ("cliente.perfil", "Perfil", "perfil", None),
+                ("cliente.analisis_cartera", "Análisis", "resumen", "sec"), ("auth.academia", "Academia", "documento", "sec"),
+                ("cliente.earn", "Earn", "invertir", "sec"), ("cliente.ayuda", "Ayuda", "campana", "sec")],
     "equipo": [("equipo.resumen", "Resumen", "resumen", None), ("auth.mercado", "Mercados", "mercado", None),
                ("auth.trading", "Trading", "trading", None),
                ("equipo.operaciones", "Operaciones", "operaciones", None),
                ("equipo.clientes", "Clientes", "clientes", None),
+               ("equipo.soporte", "Soporte", "campana", "soporte.atender"),
                ("equipo.cumplimiento", "Cumplimiento", "cumplimiento", "cumplimiento.ver"),
                ("admin.precios", "Ajustes", "ajustes", "precios.editar")],
 }
@@ -75,7 +78,10 @@ ACTIVO = {  # qué rutas marcan cada pestaña como activa
     "auth.mercado": ("auth.mercado", "auth.moneda"),
     "cliente.cartera": ("cliente.cartera", "cliente.invertir", "cliente.convertir", "cliente.enviar", "cliente.movimientos",
                         "cliente.estado_mensual", "cliente.movimiento", "cliente.envio", "cliente.retirar"),
-    "cliente.perfil": ("cliente.perfil", "auth.seguridad", "auth.clave", "auth.sesiones"),
+    "cliente.perfil": ("cliente.perfil", "auth.seguridad", "auth.clave", "auth.sesiones", "auth.centro_seguridad", "auth.avisos"),
+    "auth.academia": ("auth.academia", "auth.leccion"),
+    "cliente.ayuda": ("cliente.ayuda", "cliente.consulta"),
+    "equipo.soporte": ("equipo.soporte", "equipo.soporte_consulta"),
     "equipo.operaciones": ("equipo.operaciones", "equipo.operacion"),
     "equipo.clientes": ("equipo.clientes", "equipo.cliente", "equipo.cliente_nuevo", "equipo.estado_mensual"),
     "equipo.cumplimiento": ("equipo.cumplimiento", "equipo.bitacora", "equipo.documentos", "equipo.conciliacion", "equipo.antilavado",
@@ -152,14 +158,18 @@ def navegacion():
     grupo = "cliente" if u["rol"] == "cliente" else "equipo"
     out = []
     for ep, texto, ico, permiso in NAV[grupo]:
-        if permiso and not seguridad.puede(permiso):
+        sec = permiso == "sec"  # secundaria: se ve en la barra lateral de escritorio y en «Más» del perfil en el celular
+        if permiso and not sec and not seguridad.puede(permiso):
             continue
         activo = request.endpoint in ACTIVO.get(ep, (ep,))
         cuenta = 0
         if ep == "equipo.operaciones":
             from . import db
             cuenta = db.uno("SELECT COUNT(*) AS n FROM operaciones WHERE estado IN ('pendiente', 'primera_firma', 'ejecutando')")["n"]
-        out.append({"url": url_for(ep), "texto": texto, "icono": ico, "activo": activo, "cuenta": cuenta})
+        if ep == "equipo.soporte":
+            from . import db
+            cuenta = db.uno("SELECT COUNT(*) AS n FROM consultas WHERE estado = 'abierta'")["n"]
+        out.append({"url": url_for(ep), "texto": texto, "icono": ico, "activo": activo, "cuenta": cuenta, "sec": sec})
     return out
 
 
@@ -201,6 +211,14 @@ def init_app(app):
     from . import guarani
     app.jinja_env.filters["gs"] = guarani.fmt
     app.jinja_env.filters["compacto"] = compacto
+
+    def detalle_txt(d):
+        import json
+        try:
+            return json.loads(d).get("texto") or "Acción registrada"
+        except (ValueError, TypeError, AttributeError):
+            return d or "Acción registrada"
+    app.jinja_env.filters["detalle_txt"] = detalle_txt
     app.jinja_env.filters["hora_ms"] = lambda s: datetime.fromtimestamp(s, zona()).strftime("%H:%M:%S")
     app.jinja_env.filters["fecha_ms"] = lambda s: (lambda d: f"{d.day} {MESES_LARGOS[d.month - 1][:3]}")(datetime.fromtimestamp(s, zona()))
     app.jinja_env.filters["precio_f"] = lambda v: dinero.fmt_precio(Decimal(str(v))) if v is not None else "—"

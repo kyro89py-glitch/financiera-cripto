@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph with context %}
+{% block titulo %}{{ lec.titulo }}{% endblock %}
+{% block contenido %}
+{{ ph(lec.titulo, categorias[lec.categoria] ~ " · " ~ lec.minutos ~ " min de lectura", volver=url_for('auth.academia'), volver_txt="Academia") }}
+<article class="leccion">
+  <p class="leccion-resumen">{{ lec.resumen }}</p>
+  {% for sub, texto in lec.secciones %}<h3>{{ sub }}</h3><p>{{ texto }}</p>{% endfor %}
+  <aside class="claves"><span class="lab">Para recordar</span><ul>{% for c in lec.claves %}<li>{{ c }}</li>{% endfor %}</ul></aside>
+  <div class="row spread" style="flex-wrap:wrap;gap:10px">
+    {% if lec.practica and (es_cliente or not lec.practica[0].startswith('/cliente')) %}<a class="btn" href="{{ lec.practica[0] }}">{{ lec.practica[1] }}</a>{% else %}<span></span>{% endif %}
+    <form method="post"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn primary" type="submit">{{ ('Marcar como leída y seguir' if not leida else 'Siguiente lección') if lec.siguiente else 'Terminar' }}</button></form>
+  </div>
+  <p class="xs muted">Material educativo general. No es asesoramiento financiero, legal ni tributario.</p>
+</article>
+{% endblock %}

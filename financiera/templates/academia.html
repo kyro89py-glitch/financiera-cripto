@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph with context %}
+{% block titulo %}Academia{% endblock %}
+{% block contenido %}
+{% call ph("Academia", "Lecciones cortas para entender lo que haces con tu dinero. Contenido educativo, no asesoramiento.") %}<span class="pill info">{{ leidas|length }} de {{ lecciones|length }} leídas</span>{% endcall %}
+<div class="peso-barra" aria-hidden="true"><i style="width:{{ (leidas|length / lecciones|length * 100)|round }}%"></i></div>
+{% for cat, t in categorias.items() %}
+<section class="col">
+  <h3 class="acad-cat">{{ t }}</h3>
+  <div class="acad-g">{% for l in lecciones if l.categoria == cat %}
+    <a class="leccion-card{{ ' leida' if l.slug in leidas }}" href="{{ url_for('auth.leccion', slug=l.slug) }}"><span class="xs muted">{{ l.minutos }} min{% if l.slug in leidas %} · leída ✓{% endif %}</span><b>{{ l.titulo }}</b><span class="small muted">{{ l.resumen }}</span></a>
+  {% endfor %}</div>
+</section>
+{% endfor %}
+{% endblock %}

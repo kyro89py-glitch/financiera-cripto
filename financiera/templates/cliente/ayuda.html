@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph, pill, vacio with context %}
+{% block titulo %}Ayuda{% endblock %}
+{% block contenido %}
+{{ ph("Centro de ayuda", "Respuestas rápidas y consultas con seguimiento. Te respondemos dentro de la plataforma.") }}
+<form class="filtros-mercado" method="get" role="search">
+  <label class="buscador">{{ icono('buscar') }}<input type="search" name="q" value="{{ q }}" placeholder="Buscar en las preguntas frecuentes" aria-label="Buscar en la ayuda" autocomplete="off"></label>
+  <button class="btn" type="submit">Buscar</button>
+</form>
+<div class="g2 ancho-izq">
+  <section class="panel">
+    <header><h3>Preguntas frecuentes</h3>{% if q %}<a class="small" href="{{ url_for('cliente.ayuda') }}">Ver todas</a>{% endif %}</header>
+    {% for cat, t in categorias.items() %}{% set grupo = faq|selectattr(0, 'equalto', cat)|list %}{% if grupo %}
+      <span class="lab">{{ t }}</span>
+      {% for c, pregunta, respuesta in grupo %}<details class="faq"><summary>{{ pregunta }}</summary><p class="small">{{ respuesta }}</p></details>{% endfor %}
+    {% endif %}{% endfor %}
+    {% if not faq %}{{ vacio('buscar', 'No encontramos preguntas con «' ~ q ~ '». Escríbenos con el formulario.') }}{% endif %}
+    <p class="xs muted">¿Quieres aprender más? Visita la <a href="{{ url_for('auth.academia') }}">Academia</a>.</p>
+  </section>
+  <div class="col">
+    <section class="panel">
+      <header><h3>Tus consultas</h3></header>
+      <div class="list">{% for c in consultas %}
+        <a class="item" href="{{ url_for('cliente.consulta', cid=c.id) }}"><div class="grow"><div class="t">{{ c.asunto }}</div><div class="d">#{{ c.id }} · {{ categorias[c.categoria] }} · {{ c.actualizada|hace }}</div></div>{{ pill(estados[c.estado][0], estados[c.estado][1]) }}</a>
+      {% else %}<p class="small muted vacio-sm">Todavía no hiciste consultas.</p>{% endfor %}</div>
+    </section>
+    <section class="panel" id="nueva">
+      <header><h3>Nueva consulta</h3></header>
+      <form class="col" method="post">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <label class="field" for="categoria">Tema<select id="categoria" name="categoria" required>{% for k, t in categorias.items() %}<option value="{{ k }}">{{ t }}</option>{% endfor %}</select></label>
+        <label class="field" for="asunto">Asunto<input id="asunto" name="asunto" required minlength="5" maxlength="120"></label>
+        <label class="field" for="texto">Cuéntanos qué pasa<textarea id="texto" name="texto" rows="5" required minlength="10" maxlength="2000"></textarea></label>
+        <p class="xs muted">No escribas tu contraseña ni códigos de verificación: nunca los necesitamos.</p>
+        <button class="btn primary" type="submit">Enviar consulta</button>
+      </form>
+    </section>
+  </div>
+</div>
+{% endblock %}

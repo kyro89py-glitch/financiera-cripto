@@ -8,13 +8,17 @@ Plataforma de inversión en criptomonedas para operar con clientes reales, con d
 - **Red de clientes:** apertura de cuenta en línea, envíos instantáneos entre clientes por correo o cédula, resultado por moneda y app instalable en el celular.
 - **Trading en tiempo real:** 27 criptomonedas con precios que se actualizan cada pocos segundos, pantalla de trading con velas de 1 minuto a 1 semana, libro de órdenes, operaciones del mercado y órdenes de mercado, límite y stop con revisión antes de confirmar; mercados con volumen, capitalización, buscador, categorías y mapa de calor.
 - **Cuenta completa:** saldo disponible y bloqueado, movimientos con buscador y detalle, depósitos y retiros con método, comisiones y revisión, dispositivos y sesiones, avisos de seguridad y privacidad.
+- **Terminal profesional (v0.20):** órdenes OCO, toma de ganancia y corte de pérdida al comprar, gráfico con zoom y desplazamiento, indicadores configurables y análisis de cada moneda.
+- **Inicio inteligente (v0.20):** panel personalizable, rendimiento por período frente a Bitcoin y al Top 10, riesgo, alertas y observaciones informativas, centro de avisos por categoría.
+- **Más herramientas (v0.20):** comparación de monedas, alertas por variación, comprobantes verificables, historial exportable, vista en guaraníes, centro de seguridad, niveles y límites, ayuda con consultas, Academia, Earn informativo y análisis de cartera.
+- **Seguridad reforzada (v0.20):** límites de tasa, cifrado de datos sensibles, respaldos cifrados con prueba de restauración, monitoreo antilavado con listas de sanciones, recuperación de contraseña, idempotencia, `/salud` y `/metricas`.
 - **Hecho para Paraguay:** depósitos y retiros en guaraníes con el tipo de cambio de la casa, compras automáticas para ahorrar de a poco, alertas de precio y un resumen anual de criptoactivos por cliente.
 - **Panel del equipo:** aprobación de operaciones con controles de cumplimiento y doble firma, fichas de clientes con legajo, revisión de documentos, conciliación de custodia, comisiones de gestión, bitácora inalterable, precios y usuarios.
 - **Ejecución en Binance:** al aprobar, las compras y ventas se envían como órdenes de mercado a Binance (o a su red de pruebas) y el libro se asienta con las cantidades, precios y comisiones reales. Sin Binance configurado, un simulador ejecuta al precio vigente.
 
 Es un sistema propio e independiente: corre en tu servidor y guarda todo en tu base de datos. Los únicos servicios externos son opcionales: Binance para ejecutar y cotizar, CoinGecko para los precios cuando no se usa Binance (también se cargan a mano) y un servidor de correo para los avisos por email.
 
-> **Estado:** versión 0.10, lista para pruebas internas con el equipo y para operar en la red de pruebas de Binance. Antes de recibir dinero de clientes lee [Antes de operar con dinero real](#antes-de-operar-con-dinero-real).
+> **Estado:** versión 0.20, lista para pruebas internas con el equipo y para operar en la red de pruebas de Binance. Antes de recibir dinero de clientes lee [Antes de operar con dinero real](#antes-de-operar-con-dinero-real).
 
 ---
 

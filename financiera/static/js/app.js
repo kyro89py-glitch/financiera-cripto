@@ -2,9 +2,39 @@
 (function () {
   "use strict";
 
+  // Confirmaciones con un diálogo propio (no el del navegador): accesible, con foco atrapado y cierre con Escape.
+  var dlgConf = null, pendiente = null;
+  function dialogoConfirmar() {
+    if (dlgConf) return dlgConf;
+    dlgConf = document.createElement("dialog");
+    dlgConf.className = "confirmar"; dlgConf.setAttribute("aria-labelledby", "conf-t");
+    var h = document.createElement("h3"); h.id = "conf-t"; h.textContent = "Confirmar";
+    var p = document.createElement("p"); p.className = "small"; p.id = "conf-msg";
+    var fila = document.createElement("div"); fila.className = "row"; fila.style.justifyContent = "flex-end";
+    var no = document.createElement("button"); no.type = "button"; no.className = "btn"; no.textContent = "Cancelar";
+    var si = document.createElement("button"); si.type = "button"; si.className = "btn primary"; si.textContent = "Confirmar";
+    no.addEventListener("click", function () { dlgConf.close(); });
+    si.addEventListener("click", function () {
+      var x = pendiente; dlgConf.close();
+      if (!x) return;
+      x.form.setAttribute("data-confirmado", "1");
+      if (x.form.requestSubmit) x.form.requestSubmit(x.boton || undefined); else x.form.submit();
+    });
+    dlgConf.addEventListener("close", function () { pendiente = null; });
+    fila.appendChild(no); fila.appendChild(si); dlgConf.appendChild(h); dlgConf.appendChild(p); dlgConf.appendChild(fila);
+    document.body.appendChild(dlgConf);
+    return dlgConf;
+  }
   document.addEventListener("submit", function (e) {
-    var msg = e.target.getAttribute("data-confirmar");
-    if (msg && !window.confirm(msg)) e.preventDefault();
+    var f = e.target, msg = f.getAttribute("data-confirmar");
+    if (!msg) return;
+    if (f.getAttribute("data-confirmado")) { f.removeAttribute("data-confirmado"); return; }
+    e.preventDefault(); e.stopPropagation();
+    var d = dialogoConfirmar();
+    if (!d.showModal) { if (window.confirm(msg)) { f.setAttribute("data-confirmado", "1"); f.submit(); } return; }
+    pendiente = { form: f, boton: e.submitter };
+    d.querySelector("#conf-msg").textContent = msg;
+    d.showModal();
   }, true);
 
   document.addEventListener("click", function (e) {
@@ -198,11 +228,26 @@
 
   // ---- diálogos genéricos: [data-abrir="id"] abre, [data-cerrar] cierra ----
   document.addEventListener("click", function (e) {
-    if (e.target.closest("[data-imprimir]")) { window.print(); return; }
     var a = e.target.closest("[data-abrir]");
     if (a) { var d = document.getElementById(a.getAttribute("data-abrir")); if (d && d.showModal && !d.open) d.showModal(); return; }
     var c = e.target.closest("dialog [data-cerrar]");
     if (c) { var dl = c.closest("dialog"); if (dl.open) dl.close(); }
+  });
+
+  // ---- estado de carga: al enviar un formulario, el botón muestra un giro y no se puede tocar dos veces ----
+  document.addEventListener("submit", function (e) {
+    if (e.defaultPrevented) return;
+    var f = e.target, b = e.submitter || f.querySelector("button[type=submit], button:not([type])");
+    if (!b || f.method === "dialog" || f.getAttribute("method") === "get" || !f.getAttribute("method")) return;
+    setTimeout(function () { b.setAttribute("data-cargando", ""); }, 0);
+  });
+  window.addEventListener("pageshow", function () {
+    document.querySelectorAll("[data-cargando]").forEach(function (b) { b.removeAttribute("data-cargando"); });
+  });
+  // ---- la pestaña activa de las barras con desplazamiento queda a la vista ----
+  document.querySelectorAll(".subnav [aria-current='page'], .chips [aria-current='true']").forEach(function (el) {
+    var c = el.parentElement;
+    if (c.scrollWidth > c.clientWidth) c.scrollLeft = el.offsetLeft - c.clientWidth / 2 + el.clientWidth / 2;
   });
 
   var fuente = document.getElementById("datos-invertir");

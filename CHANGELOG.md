@@ -2,7 +2,7 @@
 
 Este proyecto sigue [versionado semántico](https://semver.org/lang/es/). Las fechas son de Paraguay.
 
-## [0.20.0] - en desarrollo
+## [0.20.0] - 2026-11-16
 
 Evolución completa de la plataforma, trabajada por módulos. Los servicios financieros reales siguen deshabilitados.
 
@@ -69,6 +69,13 @@ Evolución completa de la plataforma, trabajada por módulos. Los servicios fina
 - **Panel de administración:** clientes (altas, verificados, con dos pasos, activos), volumen operado en 24 horas, 7 y 30 días, depósitos, retiros y envíos, activos más utilizados, alertas de riesgo (sanciones, antilavado, ejecución, precios, respaldos, cuentas bloqueadas, consultas), mayores órdenes y últimas acciones del equipo.
 - **Límites editables** por Administración (máximo por orden, envíos y retiros por día, doble firma, umbral antilavado), con rangos válidos y registro en la bitácora.
 - **Roles y permisos:** matriz completa de qué puede cada rol y estado de dos pasos del equipo. Cumplimiento ve el panel y la matriz en solo lectura; solo Administración cambia ajustes.
+
+### Módulo 9 · Experiencia visual y móvil
+- Transiciones suaves entre pantallas, entrada animada de avisos y diálogos con fondo desenfocado; todo se desactiva con «reducir movimiento».
+- **Confirmaciones propias:** un diálogo de la aplicación reemplaza al del navegador en todas las acciones que piden confirmar.
+- **Estado de carga:** al enviar un formulario, el botón muestra un giro y no se puede tocar dos veces.
+- **Celular:** barra inferior translúcida con indicador de la sección activa y respuesta al toque, botones de 44 px, campos que no disparan el zoom al escribir, pestañas que se deslizan y dejan a la vista la activa. En el equipo, Mercados y Trading pasan a la barra lateral para no apretar la barra inferior.
+- Recorrido automático de 57 pantallas en 340 px, 390 px y 1440 px: sin desbordes horizontales, sin textos cortados y sin errores de consola.
 
 ## [0.10.0] - 2026-11-15
 

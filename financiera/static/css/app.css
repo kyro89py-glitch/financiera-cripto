@@ -806,3 +806,22 @@ nav.tabs a{transition:background-color .15s,color .15s}
 .aml-form{display:flex;gap:6px;flex-wrap:wrap}
 .aml-form input{flex:1;min-width:200px}
 .lista-simple{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+
+/* v0.20 · terminal de trading */
+#velas{touch-action:pan-y;cursor:crosshair}
+#velas.arrastrando{cursor:grabbing}
+.zoom-chips button{min-width:34px;justify-content:center;font-size:15px;padding:4px 8px}
+.g2-igual{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px}
+.proteccion{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface-2)}
+.proteccion summary{cursor:pointer;font-size:13.5px;font-weight:600;display:flex;flex-wrap:wrap;gap:6px;align-items:baseline;list-style:none}
+.proteccion summary::-webkit-details-marker{display:none}
+.proteccion summary::before{content:"＋";color:var(--accent);font-weight:700}
+.proteccion[open] summary::before{content:"−"}
+.proteccion[open] summary{margin-bottom:10px}
+.proteccion .field{font-size:12.5px}
+.analisis{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+.mini-kpis.tres{grid-template-columns:repeat(2,minmax(0,1fr))}
+.peso-barra{position:relative;height:6px;border-radius:6px;background:var(--surface-3)}
+.peso-barra i{display:block;height:100%;border-radius:6px;background:var(--accent)}
+.peso-barra b{position:absolute;top:-3px;width:2px;height:12px;background:var(--warn);border-radius:2px}
+@media (min-width:900px){.analisis{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)}.mini-kpis.tres{grid-template-columns:repeat(4,minmax(0,1fr))}}

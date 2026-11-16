@@ -60,7 +60,7 @@
   var lienzo = document.getElementById("lienzo"), canvas = document.getElementById("velas");
   var estado = document.getElementById("graf-estado"), leyenda = document.getElementById("leyenda");
   var ctx = canvas.getContext("2d");
-  var G = { velas: [], vol: false, seg: 900, i: D.intervalo, hover: -1, mouseY: null, w: 0, h: 0, dpr: 1 };
+  var G = { velas: [], vol: false, seg: 900, i: D.intervalo, hover: -1, mouseY: null, w: 0, h: 0, dpr: 1, ancho: 6, desplaz: 0, inicio: 0 };
   var MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
   function medida() {
@@ -75,27 +75,31 @@
   var IND = { ma: true, ema: false, boll: false, vol: true, rsi: false, macd: false };
   try { var guardado = JSON.parse(localStorage.getItem("fc-indicadores") || "null"); if (guardado) for (var k in IND) if (k in guardado) IND[k] = !!guardado[k]; } catch (e) { /* sin almacenamiento */ }
   var CALC = {};
+  var CLASICOS = { ma1: 7, ma2: 25, ema: 20, bb: 20, bbk: 2, rsi: 14, mf: 12, ms: 26, mg: 9 }, PAR = {};
+  for (var kk in CLASICOS) PAR[kk] = CLASICOS[kk];
+  try { var pg = JSON.parse(localStorage.getItem("fc-ind-param") || "null"); if (pg) for (var k2 in CLASICOS) if (+pg[k2] > 0) PAR[k2] = +pg[k2]; } catch (e) { /* sin almacenamiento */ }
   function sma(n) { var out = [], s = 0, v = G.velas; for (var i = 0; i < v.length; i++) { s += v[i][4]; if (i >= n) s -= v[i - n][4]; out.push(i >= n - 1 ? s / n : null); } return out; }
   function emaDe(vals, n) { var out = [], k = 2 / (n + 1), e = null, s = 0, c = 0; for (var i = 0; i < vals.length; i++) { var x = vals[i]; if (x == null) { out.push(null); continue; } if (e == null) { s += x; c++; if (c === n) e = s / n; out.push(e); } else { e = x * k + e * (1 - k); out.push(e); } } return out; }
   function calcularIndicadores() {
     var v = G.velas, cierres = v.map(function (c) { return c[4]; });
-    CALC.ma7 = sma(7); CALC.ma25 = sma(25); CALC.ema20 = emaDe(cierres, 20);
-    var m20 = sma(20); CALC.bsup = []; CALC.binf = [];
+    CALC.ma7 = sma(PAR.ma1); CALC.ma25 = sma(PAR.ma2); CALC.ema20 = emaDe(cierres, PAR.ema);
+    var nb = PAR.bb, m20 = sma(nb); CALC.bsup = []; CALC.binf = [];
     for (var i = 0; i < v.length; i++) {
       if (m20[i] == null) { CALC.bsup.push(null); CALC.binf.push(null); continue; }
-      var d = 0; for (var j = i - 19; j <= i; j++) d += Math.pow(v[j][4] - m20[i], 2);
-      d = Math.sqrt(d / 20); CALC.bsup.push(m20[i] + 2 * d); CALC.binf.push(m20[i] - 2 * d);
+      var d = 0; for (var j = i - nb + 1; j <= i; j++) d += Math.pow(v[j][4] - m20[i], 2);
+      d = Math.sqrt(d / nb); CALC.bsup.push(m20[i] + PAR.bbk * d); CALC.binf.push(m20[i] - PAR.bbk * d);
     }
     CALC.bmed = m20;
     var rsi = [null], g = 0, p = 0;
     for (i = 1; i < v.length; i++) {
       var dif = v[i][4] - v[i - 1][4], ga = Math.max(dif, 0), pe = Math.max(-dif, 0);
-      if (i <= 14) { g += ga; p += pe; rsi.push(i === 14 ? (p === 0 ? 100 : 100 - 100 / (1 + (g / 14) / (p / 14))) : null); if (i === 14) { g /= 14; p /= 14; } }
-      else { g = (g * 13 + ga) / 14; p = (p * 13 + pe) / 14; rsi.push(p === 0 ? 100 : 100 - 100 / (1 + g / p)); }
+      var nr = PAR.rsi;
+      if (i <= nr) { g += ga; p += pe; rsi.push(i === nr ? (p === 0 ? 100 : 100 - 100 / (1 + (g / nr) / (p / nr))) : null); if (i === nr) { g /= nr; p /= nr; } }
+      else { g = (g * (nr - 1) + ga) / nr; p = (p * (nr - 1) + pe) / nr; rsi.push(p === 0 ? 100 : 100 - 100 / (1 + g / p)); }
     }
     CALC.rsi = rsi;
-    var e12 = emaDe(cierres, 12), e26 = emaDe(cierres, 26), macd = e12.map(function (x, k) { return x != null && e26[k] != null ? x - e26[k] : null; });
-    CALC.macd = macd; CALC.senal = emaDe(macd, 9);
+    var e12 = emaDe(cierres, PAR.mf), e26 = emaDe(cierres, PAR.ms), macd = e12.map(function (x, k) { return x != null && e26[k] != null ? x - e26[k] : null; });
+    CALC.macd = macd; CALC.senal = emaDe(macd, PAR.mg);
     CALC.hist = macd.map(function (x, k) { return x != null && CALC.senal[k] != null ? x - CALC.senal[k] : null; });
   }
   document.querySelectorAll(".indicadores-chips [data-ind]").forEach(function (b) {
@@ -124,8 +128,14 @@
     return MESES[d.getMonth()] + " " + String(d.getFullYear()).slice(-2);
   }
   function visibles() {
-    var ejeX = 64, ancho = G.w - ejeX, cabe = Math.max(10, Math.floor(ancho / 6));
-    return G.velas.slice(-cabe);
+    var plotW = G.w - 64, cabe = Math.max(10, Math.floor(plotW / G.ancho)), n = G.velas.length;
+    G.desplaz = Math.max(0, Math.min(G.desplaz, Math.max(0, n - 10)));
+    var fin = n - G.desplaz, ini = Math.max(0, fin - cabe);
+    G.inicio = ini;
+    return G.velas.slice(ini, fin);
+  }
+  function zoom(factor) {
+    G.ancho = Math.max(3, Math.min(40, G.ancho * factor)); G.hover = -1; dibujar();
   }
   function linea(serie, base, paso, y, color, ancho) {
     ctx.strokeStyle = color; ctx.lineWidth = ancho || 1.3; ctx.beginPath();
@@ -144,7 +154,7 @@
     var v = visibles();
     if (!v.length) return;
     calcularIndicadores();
-    var base = G.velas.length - v.length;
+    var base = G.inicio;
     var ejeY = 64, ejeX = 22, plotW = W - ejeY, subH = 74, subs = (IND.rsi ? 1 : 0) + (IND.macd ? 1 : 0);
     var mainH = H - ejeX - subs * subH;
     var volH = IND.vol && G.vol ? Math.round(mainH * 0.18) : 0, plotH = mainH - 6;
@@ -213,7 +223,7 @@
       top0 += subH;
     }
     if (IND.rsi) {
-      panel("RSI 14", CALC.rsi, 0, 100, function (yy) {
+      panel("RSI " + PAR.rsi, CALC.rsi, 0, 100, function (yy) {
         ctx.fillStyle = color("--accent") + "10"; ctx.fillRect(0, yy(70), plotW, yy(30) - yy(70));
         ctx.setLineDash([2, 3]); ctx.strokeStyle = cMuted;
         [30, 70].forEach(function (l) { ctx.beginPath(); ctx.moveTo(0, yy(l)); ctx.lineTo(plotW, yy(l)); ctx.stroke(); ctx.fillStyle = cMuted; ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.fillText(String(l), plotW + 6, yy(l)); });
@@ -225,7 +235,7 @@
       var mmax = 0;
       for (var q = 0; q < v.length; q++) [CALC.macd[base + q], CALC.senal[base + q], CALC.hist[base + q]].forEach(function (x) { if (x != null) mmax = Math.max(mmax, Math.abs(x)); });
       mmax = mmax || 1;
-      panel("MACD 12 26 9", CALC.macd, -mmax, mmax, function (yy) {
+      panel("MACD " + PAR.mf + " " + PAR.ms + " " + PAR.mg, CALC.macd, -mmax, mmax, function (yy) {
         for (var h2 = 0; h2 < v.length; h2++) {
           var hv = CALC.hist[base + h2]; if (hv == null) continue;
           ctx.fillStyle = hv >= 0 ? cUp : cDown; ctx.globalAlpha = 0.55;
@@ -261,9 +271,9 @@
     var partes = [["", d.toLocaleDateString("es-PY", { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString("es-PY", { hour: "2-digit", minute: "2-digit", hour12: false })],
      ["A", num(c[1], D.dec)], ["M", num(c[2], D.dec)], ["m", num(c[3], D.dec)], ["C", num(c[4], D.dec)],
      ["", (var_ >= 0 ? "+" : "") + num(var_, 2) + " %"]];
-    if (IND.ma && CALC.ma7 && CALC.ma7[idx] != null) partes.push(["MA7", num(CALC.ma7[idx], D.dec)]);
-    if (IND.ma && CALC.ma25 && CALC.ma25[idx] != null) partes.push(["MA25", num(CALC.ma25[idx], D.dec)]);
-    if (IND.ema && CALC.ema20 && CALC.ema20[idx] != null) partes.push(["EMA20", num(CALC.ema20[idx], D.dec)]);
+    if (IND.ma && CALC.ma7 && CALC.ma7[idx] != null) partes.push(["MA" + PAR.ma1, num(CALC.ma7[idx], D.dec)]);
+    if (IND.ma && CALC.ma25 && CALC.ma25[idx] != null) partes.push(["MA" + PAR.ma2, num(CALC.ma25[idx], D.dec)]);
+    if (IND.ema && CALC.ema20 && CALC.ema20[idx] != null) partes.push(["EMA" + PAR.ema, num(CALC.ema20[idx], D.dec)]);
     partes.forEach(function (p, j) {
       var s = document.createElement("span");
       if (p[0]) { var b = document.createElement("b"); b.textContent = p[0] + " "; s.appendChild(b); }
@@ -272,12 +282,69 @@
       leyenda.appendChild(s);
     });
   }
+  // Zoom y desplazamiento: rueda o +/− para acercar, arrastre horizontal para ir al pasado, pellizco en el celular,
+  // doble toque o ⟲ para volver a las últimas velas.
+  var punteros = {}, arrastre = null, pellizco = null;
+  canvas.addEventListener("pointerdown", function (e) {
+    punteros[e.pointerId] = e.clientX;
+    var ids = Object.keys(punteros);
+    if (ids.length === 2) {
+      pellizco = { d: Math.abs(punteros[ids[0]] - punteros[ids[1]]) || 1, ancho: G.ancho }; arrastre = null;
+    } else if (e.button === 0 || e.pointerType !== "mouse") {
+      arrastre = { x: e.clientX, desplaz: G.desplaz, movio: false };
+    }
+  });
+  function soltar(e) { delete punteros[e.pointerId]; if (Object.keys(punteros).length < 2) pellizco = null; arrastre = null; canvas.classList.remove("arrastrando"); }
+  canvas.addEventListener("pointerup", soltar);
+  canvas.addEventListener("pointercancel", soltar);
   canvas.addEventListener("pointermove", function (e) {
-    var r = canvas.getBoundingClientRect(), v = visibles(), paso = (G.w - 64) / Math.max(1, v.length);
+    var r = canvas.getBoundingClientRect();
+    if (e.pointerId in punteros) punteros[e.pointerId] = e.clientX;
+    if (pellizco) {
+      var ids = Object.keys(punteros), d = Math.abs(punteros[ids[0]] - punteros[ids[1]]) || 1;
+      G.ancho = Math.max(3, Math.min(40, pellizco.ancho * d / pellizco.d)); dibujar(); return;
+    }
+    if (arrastre) {
+      var dx = e.clientX - arrastre.x;
+      if (Math.abs(dx) > 4) { arrastre.movio = true; canvas.classList.add("arrastrando"); }
+      if (arrastre.movio) { G.desplaz = arrastre.desplaz + Math.round(dx / G.ancho); G.hover = -1; dibujar(); return; }
+    }
+    var v = visibles(), paso = (G.w - 64) / Math.max(1, v.length);
     G.hover = Math.min(v.length - 1, Math.max(0, Math.floor((e.clientX - r.left) / paso)));
     G.mouseY = e.clientY - r.top; dibujar();
   });
-  canvas.addEventListener("pointerleave", function () { G.hover = -1; G.mouseY = null; dibujar(); });
+  canvas.addEventListener("pointerleave", function (e) { soltar(e); G.hover = -1; G.mouseY = null; dibujar(); });
+  canvas.addEventListener("wheel", function (e) { e.preventDefault(); zoom(e.deltaY < 0 ? 1.15 : 1 / 1.15); }, { passive: false });
+  canvas.addEventListener("dblclick", function () { G.ancho = 6; G.desplaz = 0; dibujar(); });
+  document.querySelectorAll("[data-zoom]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var z = +b.getAttribute("data-zoom");
+      if (z === 0) { G.ancho = 6; G.desplaz = 0; dibujar(); } else zoom(z > 0 ? 1.3 : 1 / 1.3);
+    });
+  });
+  // Parámetros de los indicadores
+  var dInd = document.getElementById("d-ind"), fInd = document.getElementById("f-ind");
+  function pintarParametros() {
+    document.querySelectorAll("[data-par-ind]").forEach(function (el) { el.textContent = PAR[el.getAttribute("data-par-ind")]; });
+  }
+  pintarParametros();
+  if (dInd && fInd) {
+    document.getElementById("ind-ajustes").addEventListener("click", function () {
+      for (var k in PAR) if (fInd.elements[k]) fInd.elements[k].value = PAR[k];
+      if (dInd.showModal) dInd.showModal();
+    });
+    document.getElementById("ind-reset").addEventListener("click", function () { for (var k in CLASICOS) if (fInd.elements[k]) fInd.elements[k].value = CLASICOS[k]; });
+    fInd.addEventListener("submit", function () {
+      for (var k in CLASICOS) {
+        var x = parseFloat(String(fInd.elements[k].value).replace(",", "."));
+        var mn = +fInd.elements[k].min, mx = +fInd.elements[k].max;
+        PAR[k] = isFinite(x) ? Math.max(mn, Math.min(mx, x)) : CLASICOS[k];
+      }
+      if (PAR.ms <= PAR.mf) PAR.ms = PAR.mf + 1;
+      try { localStorage.setItem("fc-ind-param", JSON.stringify(PAR)); } catch (e) { /* sin almacenamiento */ }
+      pintarParametros(); dibujar();
+    });
+  }
 
   var pedido = 0;
   function cargarVelas(mostrarCarga) {
@@ -394,24 +461,36 @@
       "limite-compra": "Queda abierta y compra cuando el precio baje al nivel que elijas.",
       "limite-venta": "Queda abierta y vende cuando el precio suba al nivel que elijas.",
       "stop-compra": "Compra si el precio sube hasta el nivel que elijas (para entrar cuando arranca una suba).",
-      "stop-venta": "Vende si el precio baja hasta el nivel que elijas (para cortar una pérdida)."
+      "stop-venta": "Vende si el precio baja hasta el nivel que elijas (para cortar una pérdida).",
+      "oco-venta": "Dos ventas enlazadas: una toma la ganancia si sube y la otra corta la pérdida si baja. Al ejecutarse una, la otra se cancela.",
+      "oco-compra": "Dos compras enlazadas: una compra si baja al precio límite y otra si sube al stop. Al ejecutarse una, la otra se cancela."
     };
+    var campoStop = document.getElementById("campo-stop"), prot = document.getElementById("proteccion");
     function elegirLado(l) {
       estadoOrden.lado = l; form.lado.value = l;
       document.querySelectorAll(".lado-tabs [data-lado]").forEach(function (b) { b.setAttribute("aria-selected", b.getAttribute("data-lado") === l ? "true" : "false"); });
       btn.className = "btn block lado-btn " + l;
       btn.textContent = (l === "compra" ? "Comprar " : "Vender ") + D.activo;
-      form.todo.value = ""; actualizarTextos();
+      form.todo.value = "";
+      if (estadoOrden.tipo === "oco") elegirTipo("oco"); else actualizarTextos();
     }
     function elegirTipo(t) {
       estadoOrden.tipo = t; form.tipo.value = t;
       document.querySelectorAll(".tipos [data-tipo]").forEach(function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-tipo") === t ? "true" : "false"); });
       campoPrecio.hidden = t === "mercado";
-      if (t !== "mercado" && !form.precio.value && D.precio) form.precio.value = num(D.precio, D.dec);
+      campoStop.hidden = t !== "oco";
+      document.getElementById("campo-precio-txt").textContent = t === "oco" ? (estadoOrden.lado === "venta" ? "Toma de ganancia: precio límite (USD)" : "Precio límite (USD)") : "Precio de activación (USD)";
+      document.getElementById("campo-stop-txt").textContent = estadoOrden.lado === "venta" ? "Corte de pérdida: precio stop (USD)" : "Precio stop (USD)";
+      if (t === "oco" && D.precio) {
+        var arriba = D.precio * 1.05, abajo = D.precio * 0.95;
+        form.precio.value = num(estadoOrden.lado === "venta" ? arriba : abajo, D.dec);
+        form.precio_stop.value = num(estadoOrden.lado === "venta" ? abajo : arriba, D.dec);
+      } else if (t !== "mercado" && !form.precio.value && D.precio) form.precio.value = num(D.precio, D.dec);
       actualizarTextos();
     }
     function actualizarTextos() {
       ayuda.textContent = AYUDAS[estadoOrden.tipo === "mercado" ? "mercado" : estadoOrden.tipo + "-" + estadoOrden.lado];
+      if (prot) prot.hidden = !(estadoOrden.tipo === "mercado" && estadoOrden.lado === "compra");
       document.getElementById("o-disp").textContent = estadoOrden.lado === "compra" ? usd(D.disp_usd / 100)
         : cant(D.disp_u / 1e8) + " " + D.activo + (D.precio ? " ≈ " + usd(D.disp_u / 1e8 * D.precio) : "");
       calcular();
@@ -433,11 +512,23 @@
         var lp = leerNum(form.precio.value);
         if (!(isFinite(lp) && lp > 0)) return "Escribe el precio de activación.";
         var actual = D.precio;
-        if (tipo === "limite" && lado === "compra" && lp >= actual) return "Una compra límite se activa cuando el precio baja: elige un precio menor al actual (" + px(actual) + ").";
-        if (tipo === "limite" && lado === "venta" && lp <= actual) return "Una venta límite se activa cuando el precio sube: elige un precio mayor al actual (" + px(actual) + ").";
-        if (tipo === "stop" && lado === "compra" && lp <= actual) return "Una compra stop se activa cuando el precio sube: elige un precio mayor al actual (" + px(actual) + ").";
-        if (tipo === "stop" && lado === "venta" && lp >= actual) return "Un stop de venta se activa cuando el precio baja: elige un precio menor al actual (" + px(actual) + ").";
-        if (form.todo.value !== "si" && m < 10) return "El mínimo de una orden límite o stop es de US$ 10.";
+        if (tipo === "oco") {
+          var sp = leerNum(form.precio_stop.value);
+          if (!(isFinite(sp) && sp > 0)) return "Escribe el precio stop.";
+          if (lado === "venta" && !(lp > actual && sp < actual)) return "En una OCO de venta, la toma de ganancia va por encima de " + px(actual) + " y el corte de pérdida por debajo.";
+          if (lado === "compra" && !(lp < actual && sp > actual)) return "En una OCO de compra, el precio límite va por debajo de " + px(actual) + " y el stop por encima.";
+        } else {
+          if (tipo === "limite" && lado === "compra" && lp >= actual) return "Una compra límite se activa cuando el precio baja: elige un precio menor al actual (" + px(actual) + ").";
+          if (tipo === "limite" && lado === "venta" && lp <= actual) return "Una venta límite se activa cuando el precio sube: elige un precio mayor al actual (" + px(actual) + ").";
+          if (tipo === "stop" && lado === "compra" && lp <= actual) return "Una compra stop se activa cuando el precio sube: elige un precio mayor al actual (" + px(actual) + ").";
+          if (tipo === "stop" && lado === "venta" && lp >= actual) return "Un stop de venta se activa cuando el precio baja: elige un precio menor al actual (" + px(actual) + ").";
+        }
+        if (form.todo.value !== "si" && m < 10) return "El mínimo de una orden límite, stop u OCO es de US$ 10.";
+      }
+      if (tipo === "mercado" && lado === "compra" && prot) {
+        var tp = leerNum(form.tp.value), sl = leerNum(form.sl.value);
+        if (form.tp.value.trim() && !(isFinite(tp) && tp > D.precio)) return "La toma de ganancia tiene que estar por encima del precio actual (" + px(D.precio) + ").";
+        if (form.sl.value.trim() && !(isFinite(sl) && sl > 0 && sl < D.precio)) return "El corte de pérdida tiene que estar por debajo del precio actual (" + px(D.precio) + ").";
       }
       if (form.todo.value !== "si") {
         if (lado === "compra" && m * 100 > D.disp_usd) return "No tienes saldo disponible suficiente (" + usd(D.disp_usd / 100) + ").";
@@ -465,23 +556,37 @@
       var err = validar();
       if (err) { errorEl.textContent = err; errorEl.hidden = false; return; }
       var m = leerNum(form.monto.value), p = precioRef(), tipo = estadoOrden.tipo, lado = estadoOrden.lado;
-      var nombres = { mercado: "Mercado", limite: "Límite", stop: "Stop" };
+      var nombres = { mercado: "Mercado", limite: "Límite", stop: "Stop", oco: "OCO (dos órdenes enlazadas)" };
       var filas = [
         ["Par", D.activo + "/USD"],
         ["Operación", (lado === "compra" ? "Compra" : "Venta") + " · " + nombres[tipo]],
-        [tipo === "mercado" ? "Precio de referencia" : "Precio de activación", "US$ " + px(tipo === "mercado" ? D.precio : leerNum(form.precio.value))],
+        [tipo === "mercado" ? "Precio de referencia" : (tipo === "oco" ? "Precio límite" : "Precio de activación"), "US$ " + px(tipo === "mercado" ? D.precio : leerNum(form.precio.value))],
         ["Monto", form.todo.value === "si" ? "Todo lo disponible (" + cant(D.disp_u / 1e8) + " " + D.activo + ")" : usd(m)],
         ["Cantidad estimada", form.todo.value === "si" ? cant(D.disp_u / 1e8) + " " + D.activo : "≈ " + cant(m / p) + " " + D.activo],
         ["Comisión estimada", (D.comision ? "≈ " + usd((form.todo.value === "si" ? D.disp_u / 1e8 * p : m) * D.comision / 100) : "Sin comisión") ]
       ];
+      if (tipo === "oco") filas.splice(3, 0, ["Precio stop", "US$ " + px(leerNum(form.precio_stop.value))]);
+      if (tipo === "mercado" && lado === "compra" && prot && (form.tp.value.trim() || form.sl.value.trim())) {
+        if (form.tp.value.trim()) filas.push(["Toma de ganancia", "US$ " + px(leerNum(form.tp.value))]);
+        if (form.sl.value.trim()) filas.push(["Corte de pérdida", "US$ " + px(leerNum(form.sl.value))]);
+      }
+      if (D.expo && D.expo.total > 0) {
+        var monto = form.todo.value === "si" ? D.disp_u / 1e8 * p : m;
+        var antes = D.expo.valor / D.expo.total * 100, despues = (D.expo.valor + (lado === "compra" ? 1 : -1) * monto * 100) / D.expo.total * 100;
+        if (tipo === "mercado") filas.push(["Tu exposición a " + D.activo, num(antes, 1) + " % → " + num(Math.max(0, despues), 1) + " %"]);
+      }
       resumen.innerHTML = "";
       filas.forEach(function (f) {
         var dt = document.createElement("dt"), dd = document.createElement("dd");
         dt.textContent = f[0]; dd.textContent = f[1]; resumen.appendChild(dt); resumen.appendChild(dd);
       });
-      document.getElementById("d-nota").textContent = tipo === "mercado"
+      var nota = tipo === "mercado"
         ? "El precio final es el que se obtenga al ejecutar la orden y puede variar un poco respecto del de referencia."
         : "La orden queda abierta y reserva el saldo hasta que se ejecute o la canceles. Se ejecuta a precio de mercado cuando se alcance el nivel.";
+      if (D.expo && D.expo.total > 0 && tipo === "mercado" && lado === "compra" && (D.expo.valor + m * 100) / D.expo.total > 0.5)
+        nota += " Atención: con esta compra más de la mitad de tu cartera quedaría en " + D.activo + ".";
+      if (D.simulador) nota += " Modo demostración: se ejecuta en el simulador, sin enviarse a ningún exchange.";
+      document.getElementById("d-nota").textContent = nota;
       var ok = document.getElementById("d-ok");
       ok.className = "btn " + (lado === "compra" ? "primary compra" : "primary venta");
       ok.textContent = "Confirmar " + (lado === "compra" ? "compra" : "venta");
@@ -489,6 +594,7 @@
     });
     function enviar() {
       form.action = estadoOrden.tipo === "mercado" ? form.getAttribute("data-mercado") : form.getAttribute("data-prog");
+      if (!(estadoOrden.tipo === "mercado" && estadoOrden.lado === "compra") && prot) { form.tp.value = ""; form.sl.value = ""; }
       if (estadoOrden.tipo !== "mercado" && form.todo.value === "si") form.monto.value = "";
       document.getElementById("d-ok").disabled = true;
       HTMLFormElement.prototype.submit.call(form);

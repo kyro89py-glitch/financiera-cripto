@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros.html" import pill with context %}
 {% block titulo %}{{ a.codigo }}/USD · Trading{% endblock %}
 {% block clase_app %} ancha{% endblock %}
 {% block cabeza %}<script src="{{ url_for('static', filename='js/trading.js') }}?v={{ VERSION }}" defer></script>{% endblock %}
@@ -57,6 +58,12 @@
       <div class="chips intervalos" role="group" aria-label="Temporalidad">
         {% for k, (seg, et, n) in intervalos.items() %}<button type="button" data-i="{{ k }}" aria-pressed="{{ 'true' if k == intervalo else 'false' }}">{{ et }}</button>{% endfor %}
       </div>
+      <div class="chips zoom-chips" role="group" aria-label="Zoom del gráfico">
+        <button type="button" data-zoom="-1" aria-label="Alejar" title="Alejar (o rueda del ratón / pellizco)">−</button>
+        <button type="button" data-zoom="1" aria-label="Acercar" title="Acercar">+</button>
+        <button type="button" data-zoom="0" aria-label="Volver a las últimas velas" title="Volver a las últimas velas">⟲</button>
+        <button type="button" id="ind-ajustes" aria-label="Configurar indicadores" title="Configurar indicadores">⚙</button>
+      </div>
       <div class="chips indicadores-chips" role="group" aria-label="Indicadores técnicos">
         <button type="button" data-ind="ma" title="Medias móviles simples de 7 y 25 velas">MA</button>
         <button type="button" data-ind="ema" title="Media móvil exponencial de 20 velas">EMA</button>
@@ -71,7 +78,24 @@
       <canvas id="velas" role="img" aria-label="Gráfico de velas de {{ a.codigo }}/USD"></canvas>
       <div class="cargando" id="graf-estado">Cargando velas…</div>
     </div>
-    <div class="graf-pie small muted"><span><i class="ma ma7"></i>MA 7</span><span><i class="ma ma25"></i>MA 25</span><span><i class="ma ema"></i>EMA 20</span><span id="graf-fuente"></span></div>
+    <div class="graf-pie small muted"><span><i class="ma ma7"></i>MA <span data-par-ind="ma1">7</span></span><span><i class="ma ma25"></i>MA <span data-par-ind="ma2">25</span></span><span><i class="ma ema"></i>EMA <span data-par-ind="ema">20</span></span><span id="graf-fuente"></span><span class="xs">Arrastra para desplazarte, usa la rueda o pellizca para acercar.</span></div>
+    <dialog class="confirmar" id="d-ind" aria-labelledby="d-ind-t">
+      <h3 id="d-ind-t">Configurar indicadores</h3>
+      <form class="col" method="dialog" id="f-ind">
+        <div class="g2 g2-igual">
+          <label class="field">Media móvil corta<input type="number" name="ma1" min="2" max="200" step="1"></label>
+          <label class="field">Media móvil larga<input type="number" name="ma2" min="2" max="300" step="1"></label>
+          <label class="field">Media exponencial<input type="number" name="ema" min="2" max="200" step="1"></label>
+          <label class="field">Bollinger: velas<input type="number" name="bb" min="5" max="100" step="1"></label>
+          <label class="field">Bollinger: desvíos<input type="number" name="bbk" min="1" max="4" step="0.5"></label>
+          <label class="field">RSI: velas<input type="number" name="rsi" min="2" max="50" step="1"></label>
+          <label class="field">MACD rápida<input type="number" name="mf" min="2" max="50" step="1"></label>
+          <label class="field">MACD lenta<input type="number" name="ms" min="3" max="100" step="1"></label>
+          <label class="field">MACD señal<input type="number" name="mg" min="2" max="50" step="1"></label>
+        </div>
+        <div class="row"><button class="btn" type="button" id="ind-reset">Valores clásicos</button><button class="btn primary" type="submit">Aplicar</button></div>
+      </form>
+    </dialog>
   </section>
 
   <section class="card tr-libro" aria-label="Libro de órdenes">
@@ -98,6 +122,7 @@
       <button type="button" data-tipo="mercado" aria-pressed="true">Mercado</button>
       <button type="button" data-tipo="limite" aria-pressed="false">Límite</button>
       <button type="button" data-tipo="stop" aria-pressed="false">Stop</button>
+      <button type="button" data-tipo="oco" aria-pressed="false" title="Dos órdenes enlazadas: cuando se ejecuta una, la otra se cancela">OCO</button>
     </div>
     <form id="f-orden" method="post" action="{{ url_for('cliente.operar') }}" data-mercado="{{ url_for('cliente.operar') }}" data-prog="{{ url_for('cliente.programada_crear') }}" novalidate>
       <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="idem" value="{{ idem() }}">
@@ -107,12 +132,23 @@
       <input type="hidden" name="todo" value="">
       <input type="hidden" name="volver" value="{{ url_for('auth.trading', codigo=a.codigo, i=intervalo) }}">
       <p class="small muted" id="tipo-ayuda">Se ejecuta ahora, al mejor precio disponible.</p>
-      <label class="field" id="campo-precio" hidden>Precio de activación (USD)
+      <label class="field" id="campo-precio" hidden><span id="campo-precio-txt">Precio de activación (USD)</span>
         <input name="precio" inputmode="decimal" autocomplete="off" placeholder="0,00">
+      </label>
+      <label class="field" id="campo-stop" hidden><span id="campo-stop-txt">Precio stop (USD)</span>
+        <input name="precio_stop" inputmode="decimal" autocomplete="off" placeholder="0,00">
       </label>
       <label class="field">Monto en dólares
         <input name="monto" inputmode="decimal" autocomplete="off" placeholder="0,00" required>
       </label>
+      <details class="proteccion" id="proteccion">
+        <summary>Proteger esta compra <span class="xs muted">toma de ganancia y corte de pérdida</span></summary>
+        <div class="g2 g2-igual">
+          <label class="field">Toma de ganancia (USD)<input name="tp" inputmode="decimal" autocomplete="off" placeholder="mayor al actual"></label>
+          <label class="field">Corte de pérdida (USD)<input name="sl" inputmode="decimal" autocomplete="off" placeholder="menor al actual"></label>
+        </div>
+        <p class="xs muted" id="proteccion-txt">Opcional. Se programan solas al comprar y venden lo que compraste. Si pones las dos, forman una OCO: al activarse una, la otra se cancela.</p>
+      </details>
       <div class="pcts" role="group" aria-label="Porcentaje del disponible">{% for n in [25, 50, 75, 100] %}<button type="button" data-pct="{{ n }}">{{ n }} %</button>{% endfor %}</div>
       <dl class="estim">
         <div><dt>Disponible</dt><dd class="num" id="o-disp">{{ disp_usd|usd }}</dd></div>
@@ -150,7 +186,8 @@
 <section class="card flush tr-mias">
   <div class="tabs-sec" role="tablist" aria-label="Mis órdenes">
     <button type="button" role="tab" aria-selected="true" aria-controls="t-abiertas" id="tab-abiertas">Órdenes abiertas ({{ abiertas|length }})</button>
-    <button type="button" role="tab" aria-selected="false" aria-controls="t-historial" id="tab-historial">Historial de operaciones</button>
+    <button type="button" role="tab" aria-selected="false" aria-controls="t-historial" id="tab-historial">Ejecutadas</button>
+    <button type="button" role="tab" aria-selected="false" aria-controls="t-canceladas" id="tab-canceladas">Canceladas ({{ canceladas|length }})</button>
   </div>
   <div id="t-abiertas" role="tabpanel" aria-labelledby="tab-abiertas">
     {% if abiertas %}
@@ -158,8 +195,8 @@
       <thead><tr><th>Creada</th><th>Par</th><th>Tipo</th><th class="r">Precio de activación</th><th class="r">Monto</th><th></th></tr></thead>
       <tbody>{% for o in abiertas %}
       <tr><td>{{ o.creado|fecha }}</td><td><a href="{{ url_for('auth.trading', codigo=o.activo) }}">{{ o.activo }}/USD</a></td>
-        <td class="{{ 'up' if o.lado == 'compra' else 'down' }}">{{ nombre_prog(o) }}</td>
-        <td class="r num">{{ Decimal(o.precio)|precio }}</td><td class="r num">{{ "Todo" if o.todo else o.monto_cent|usd }}</td>
+        <td class="{{ 'up' if o.lado == 'compra' else 'down' }}">{{ nombre_prog(o) }}{% if o.grupo %} <span class="pill info" title="Se cancela sola si se ejecuta la otra orden del grupo">OCO</span>{% endif %}</td>
+        <td class="r num">{{ Decimal(o.precio)|precio }}</td><td class="r num">{{ "Todo" if o.todo else (o.cantidad|unidades(o.activo) if o.cantidad else o.monto_cent|usd) }}</td>
         <td class="r"><form method="post" action="{{ url_for('cliente.programada_cancelar', oid=o.id) }}" data-confirmar="¿Cancelar esta orden?">
           <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="volver" value="{{ request.full_path.rstrip('?') }}">
           <button class="btn sm" type="submit">Cancelar</button></form></td></tr>
@@ -180,8 +217,51 @@
     </table></div>
     {% else %}<p class="small muted vacio-sm">Todavía no compraste ni vendiste.</p>{% endif %}
   </div>
+  <div id="t-canceladas" role="tabpanel" aria-labelledby="tab-canceladas" hidden>
+    {% if canceladas %}
+    <div class="tablewrap"><table class="tabla resp">
+      <thead><tr><th>Cerrada</th><th>Par</th><th>Tipo</th><th class="r">Precio</th><th>Estado</th><th>Motivo</th></tr></thead>
+      <tbody>{% for o in canceladas %}
+      <tr><td>{{ (o.resuelta_ts or o.creado)|fecha }}</td><td>{{ o.activo }}/USD</td><td>{{ nombre_prog(o) }}{% if o.grupo %} <span class="pill info">OCO</span>{% endif %}</td>
+        <td class="r num">{{ Decimal(o.precio)|precio }}</td><td>{{ pill(estados_prog[o.estado][0], estados_prog[o.estado][1]) }}</td><td class="small muted">{{ o.nota or ("Cancelada por ti" if o.estado == "cancelada" else "") }}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% else %}<p class="small muted vacio-sm">No hay órdenes canceladas ni fallidas.</p>{% endif %}
+  </div>
 </section>
 {% endif %}
+
+<section class="analisis" aria-label="Análisis de {{ a.codigo }}">
+  <div class="panel">
+    <header><h3>Análisis de {{ a.codigo }}</h3><span class="meta">{% if analisis %}con {{ analisis.dias }} días de historia{% endif %}</span></header>
+    {% if analisis %}
+    <dl class="mini-kpis tres">
+      {% for k, v in analisis.rend.items() %}<div><dt>Rendimiento {{ k }}</dt><dd class="num {{ 'up' if v >= 0 else 'down' }}">{{ "+" if v >= 0 }}{{ v|round(2) }} %</dd></div>{% endfor %}
+      {% if analisis.volatilidad is defined %}<div><dt>Volatilidad anual (30 días)</dt><dd class="num">{{ analisis.volatilidad|round(1) }} %</dd></div>{% endif %}
+      <div><dt>Máximo del período</dt><dd class="num">{{ Decimal(analisis.maximo|string)|precio }}</dd></div>
+      <div><dt>Distancia al máximo</dt><dd class="num {{ 'down' if analisis.desde_maximo < 0 else 'up' }}">{{ analisis.desde_maximo|round(1) }} %</dd></div>
+      {% if analisis.rsi is not none %}<div><dt>RSI 14 diario</dt><dd class="num">{{ analisis.rsi|round(0)|int }}</dd><span class="xs muted">{{ analisis.rsi_texto }}</span></div>{% endif %}
+    </dl>
+    {% if analisis.tendencia %}<p class="small"><span class="pill {{ 'ok' if analisis.tendencia[0] == 'alcista' else ('bad' if analisis.tendencia[0] == 'bajista' else '') }}">Tendencia {{ analisis.tendencia[0] }}</span> {{ analisis.tendencia[1] }}</p>{% endif %}
+    <p class="xs muted">Estadísticas descriptivas calculadas con las velas diarias ({{ 'simuladas' if precios_sim else 'de la fuente de precios' }}). Describen lo que pasó; no son una recomendación de compra o venta.</p>
+    {% else %}<p class="small muted">Todavía no hay historia diaria suficiente para calcular estadísticas.</p>{% endif %}
+  </div>
+  {% if expo %}
+  <div class="panel">
+    <header><h3>Tu posición y riesgo</h3><a class="small" href="{{ url_for('cliente.cartera') }}">Billetera</a></header>
+    <dl class="mini-kpis">
+      <div><dt>Tienes</dt><dd class="num">{{ expo.unidades|unidades(a.codigo) }}</dd></div>
+      <div><dt>Valor</dt><dd class="num">{{ expo.valor|usd }}</dd></div>
+      <div><dt>Peso en tu cartera</dt><dd class="num {{ 'warn-txt' if expo.peso > 50 }}">{{ expo.peso|round(1) }} %</dd></div>
+      <div><dt>Costo promedio</dt><dd class="num">{{ expo.promedio|precio if expo.promedio else "—" }}</dd></div>
+      <div><dt>Resultado sin realizar</dt><dd class="num {{ 'up' if (expo.resultado or 0) >= 0 else 'down' }}">{% if expo.resultado is not none %}{{ "+" if expo.resultado >= 0 }}{{ expo.resultado|usd }}{% else %}—{% endif %}</dd></div>
+      <div><dt>Reservado en órdenes</dt><dd class="num">{{ bloq_u|unidades(a.codigo) if bloq_u else "—" }}</dd></div>
+    </dl>
+    <div class="peso-barra" aria-hidden="true"><i style="width:{{ [expo.peso, 100]|min }}%"></i><b style="left:50%"></b></div>
+    <p class="xs muted">{% if expo.peso > 50 %}Más de la mitad de tu cartera está en {{ a.codigo }}: una caída fuerte de esta moneda afectaría a casi todo tu patrimonio.{% else %}La marca indica el 50 % de tu cartera. Antes de confirmar, el resumen te muestra cómo cambiaría tu exposición.{% endif %}</p>
+  </div>
+  {% endif %}
+</section>
 <p class="note">Las criptomonedas son inversiones de alto riesgo: su precio puede bajar con fuerza y puedes perder parte o todo lo invertido. El precio de cada orden es el que se obtiene al ejecutarla.</p>
 <script type="application/json" id="datos-trading">{{ datos|tojson }}</script>
 {% endblock %}

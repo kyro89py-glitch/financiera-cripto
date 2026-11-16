@@ -15,8 +15,8 @@ from . import db, precios
 from .tiempo import ahora_dt, iso, leer
 
 # código: (segundos, etiqueta, velas a mostrar)
-INTERVALOS = {"1m": (60, "1m", 120), "15m": (900, "15m", 120), "1h": (3600, "1h", 120), "4h": (14400, "4h", 120),
-              "1d": (86400, "1D", 120), "1w": (604800, "1S", 60)}
+INTERVALOS = {"1m": (60, "1m", 300), "15m": (900, "15m", 300), "1h": (3600, "1h", 300), "4h": (14400, "4h", 300),
+              "1d": (86400, "1D", 365), "1w": (604800, "1S", 156)}
 _CACHE = {}
 LUNES = 4 * 86400  # el 1/1/1970 fue jueves: las velas semanales empiezan el lunes, como en los exchanges
 

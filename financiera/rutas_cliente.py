@@ -114,16 +114,47 @@ def operar():
     except ValueError:
         flash("Escribe el monto en dólares, por ejemplo 250 o 250,50.", "error")
         return redirect(destino)
+    # Toma de ganancia y corte de pérdida opcionales para una compra a mercado: se validan ANTES de comprar, para que
+    # nunca quede una compra sin la protección que la persona pidió.
+    from .dinero import leer_precio
+    tp = sl = None
+    try:
+        if lado == "compra" and (request.form.get("tp") or "").strip():
+            tp = leer_precio(request.form.get("tp"))
+        if lado == "compra" and (request.form.get("sl") or "").strip():
+            sl = leer_precio(request.form.get("sl"))
+    except ValueError:
+        flash("Escribe los precios de toma de ganancia y corte de pérdida como números, por ejemplo 72000.", "error")
+        return redirect(destino)
+    vig = precios.vigentes().get(activo)
+    if vig and tp is not None and tp <= vig["precio"]:
+        flash("La toma de ganancia tiene que estar por encima del precio actual.", "error")
+        return redirect(destino)
+    if vig and sl is not None and not (0 < sl < vig["precio"]):
+        flash("El corte de pérdida tiene que estar por debajo del precio actual.", "error")
+        return redirect(destino)
     try:
         opid, r = operaciones.operar(g.cliente, activo, lado, monto, g.usuario, todo=todo)
     except operaciones.ErrorNegocio as e:
         flash(str(e), "error")
         return redirect(destino)
+    proteccion = ""
+    if r == "liquidada" and (tp or sl):
+        neto = db.uno("SELECT COALESCE(SUM(cantidad), 0) AS u FROM libro WHERE operacion_id = ? AND activo = ?", (opid, activo))["u"]
+        try:
+            if tp and sl:
+                programadas.crear_oco(g.cliente, activo, "venta", tp, sl, 0, g.usuario, cantidad=neto, proteccion=True)
+                proteccion = " Quedaron programadas la toma de ganancia y el corte de pérdida (OCO): cuando se active una, la otra se cancela."
+            else:
+                programadas.crear(g.cliente, activo, "venta", tp or sl, 0, g.usuario, cantidad=neto, origen="tp" if tp else "sl")
+                proteccion = " Quedó programada la " + ("toma de ganancia." if tp else "orden de corte de pérdida.")
+        except operaciones.ErrorNegocio as e:
+            proteccion = f" Atención: no se pudo programar la protección ({e}). Prográmala desde Órdenes abiertas."
     if r == "liquidada":
         o = db.uno("SELECT * FROM ordenes WHERE operacion_id = ?", (opid,))
         from .dinero import fmt_precio, fmt_unidades, fmt_usd
         flash(f"{'Compraste' if lado == 'compra' else 'Vendiste'} {fmt_unidades(o['cantidad'], activo)} a {fmt_precio(Decimal(o['precio']))} "
-              f"por {fmt_usd(o['importe_cent'])}.", "ok")
+              f"por {fmt_usd(o['importe_cent'])}." + proteccion, "warn" if "Atención" in proteccion else "ok")
     else:
         flash("Tu orden quedó en proceso: el equipo ya fue avisado y la vas a ver en Movimientos.", "warn")
     return redirect(destino)
@@ -154,6 +185,11 @@ def programada_crear():
         from .dinero import leer_precio
         monto = 0 if todo else leer_monto(request.form.get("monto"))
         precio = leer_precio(request.form.get("precio"))
+        if request.form.get("tipo") == "oco":
+            stop = leer_precio(request.form.get("precio_stop"))
+            programadas.crear_oco(g.cliente, activo, request.form.get("lado"), precio, stop, monto, g.usuario, todo=todo)
+            flash("OCO programada: dos órdenes enlazadas. Cuando se active una, la otra se cancela sola.", "ok")
+            return redirect(_volver(activo) + ("" if request.form.get("volver") else "#programadas"))
         regla = TIPOS_ORDEN.get((request.form.get("tipo"), request.form.get("lado")))
         vig = precios.vigentes().get(activo)
         if regla and vig and ((regla[0] == "menor" and precio >= vig["precio"]) or (regla[0] == "mayor" and precio <= vig["precio"])):

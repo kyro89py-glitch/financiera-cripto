@@ -535,25 +535,33 @@ def trading(codigo):
               "cambio": vig[x["codigo"]]["cambio"] if x["codigo"] in vig else None}
              for x in precios.activos(solo_habilitados=True)]
     cli = _cliente_actual()
-    ctx = {"disp_usd": 0, "disp_u": 0, "bloq_usd": 0, "bloq_u": 0, "abiertas": [], "historial": [], "tengo_usd": 0}
+    from . import analisis
+    ctx = {"disp_usd": 0, "disp_u": 0, "bloq_usd": 0, "bloq_u": 0, "abiertas": [], "historial": [], "tengo_usd": 0,
+           "canceladas": [], "expo": None}
     if cli:
         ten = cartera.tenencias(cli["id"])
         bloq = cartera.bloqueado(cli["id"], ten=ten)
         ctx.update(disp_usd=ten.get("USD", 0) - bloq.get("USD", 0), disp_u=ten.get(codigo, 0) - bloq.get(codigo, 0),
                    bloq_usd=bloq.get("USD", 0), bloq_u=bloq.get(codigo, 0),
                    abiertas=programadas.del_cliente(cli["id"], solo_abiertas=True, limite=20),
-                   historial=db.todos("SELECT * FROM ordenes WHERE cliente_id = ? ORDER BY id DESC LIMIT 20", (cli["id"],)))
+                   historial=db.todos("SELECT * FROM ordenes WHERE cliente_id = ? ORDER BY id DESC LIMIT 20", (cli["id"],)),
+                   canceladas=db.todos("SELECT * FROM programadas WHERE cliente_id = ? AND estado IN ('cancelada', 'fallida')"
+                                       " ORDER BY COALESCE(resuelta_ts, creado) DESC LIMIT 20", (cli["id"],)))
         if p:
             ctx["tengo_usd"] = valor_cent(codigo, ctx["disp_u"], p["precio"])
+            ctx["expo"] = analisis.exposicion(cli["id"], codigo, vig)
     datos = {"activo": codigo, "intervalo": intervalo, "dec": decimales_precio(p["precio"]) if p else 2,
              "precio": float(p["precio"]) if p else None, "disp_usd": ctx["disp_usd"], "disp_u": ctx["disp_u"],
              "comision": float(operaciones.comision_operacion_pct()), "maximo": current_app.config["ORDEN_MAXIMA_USD"] * 100,
-             "cliente": bool(cli) and cli["kyc_estado"] == "verificado"}
+             "cliente": bool(cli) and cli["kyc_estado"] == "verificado",
+             "simulador": exchange.modo() != "binance",
+             "expo": {"valor": ctx["expo"]["valor"], "total": ctx["expo"]["total"]} if ctx["expo"] else None}
     resp = current_app.make_response(render_template(
         "trading.html", a=a, vig=p, pares=pares, intervalo=intervalo, intervalos=velas.INTERVALOS, cli=cli, datos=datos,
         favorito=codigo in _favoritos(), nombre_prog=programadas.nombre, simulador=exchange.modo() != "binance",
         precios_sim=precios.fuente() != "Binance" or (p and p["fuente"] in ("Simulado", "Datos de ejemplo")),
-        comision=operaciones.comision_operacion_pct(), Decimal=Decimal, **ctx))
+        comision=operaciones.comision_operacion_pct(), Decimal=Decimal, analisis=analisis.activo(codigo, p["precio"] if p else None),
+        estados_prog=programadas.ESTADOS, **ctx))
     resp.set_cookie("par", codigo, max_age=60 * 60 * 24 * 180, samesite="Lax", secure=current_app.config["SESSION_COOKIE_SECURE"])
     return resp
 

@@ -23,14 +23,21 @@ def bloqueado(cliente_id, excepto_programada=None, ten=None):
     dólares; una venta, la cantidad equivalente al precio elegido. «Vender todo» no reserva: vende lo que haya."""
     from .dinero import unidades_por
     ten = ten if ten is not None else tenencias(cliente_id)
-    out = defaultdict(int)
+    out, grupos = defaultdict(int), {}
     for o in db.todos("SELECT * FROM programadas WHERE cliente_id = ? AND estado = 'abierta'", (cliente_id,)):
         if o["id"] == excepto_programada or o["todo"]:
             continue
         if o["lado"] == "compra":
-            out["USD"] += o["monto_cent"]
+            activo, u = "USD", o["monto_cent"]
         else:
-            out[o["activo"]] += unidades_por(o["monto_cent"], Decimal(o["precio"]))
+            activo, u = o["activo"], o["cantidad"] if o["cantidad"] else unidades_por(o["monto_cent"], Decimal(o["precio"]))
+        if o["grupo"]:
+            # Una OCO reserva una sola vez: lo que pida la pata más exigente, porque solo una se va a ejecutar.
+            grupos[(o["grupo"], activo)] = max(grupos.get((o["grupo"], activo), 0), u)
+        else:
+            out[activo] += u
+    for (_, activo), u in grupos.items():
+        out[activo] += u
     return {a: min(u, max(ten.get(a, 0), 0)) for a, u in out.items() if u}
 
 

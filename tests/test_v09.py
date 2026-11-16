@@ -187,7 +187,7 @@ def test_datos_de_mercado_desde_binance(bx, ctx):
     v = precios.vigentes()["BTC"]
     assert v["fuente"] == "Binance" and v["volumen"] == 123456789.5 and v["max"] == Decimal("71400.00")
     filas, con_volumen = velas.velas("BTC", "1m")
-    assert con_volumen and filas[0][4] == 70000.0 and len(filas) == 120
+    assert con_volumen and filas[0][4] == 70000.0 and len(filas) == velas.INTERVALOS["1m"][2]
     compras, ventas, sim = velas.libro("BTC")
     assert not sim and compras[0][0] == Decimal("69999") and ventas[0][0] == Decimal("70001")
     ops, sim = velas.operaciones_mercado("BTC")

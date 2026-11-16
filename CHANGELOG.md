@@ -18,6 +18,15 @@ Evolución completa de la plataforma, trabajada por módulos. Los servicios fina
 - **Idempotencia:** cada formulario que mueve dinero lleva una clave única; un doble clic o un reenvío del navegador no duplica la operación.
 - **Observabilidad y recuperación:** identificador por solicitud (X-Request-ID) visible en las páginas de error, registro estructurado, `/salud` para monitores, `/metricas` para Prometheus con token y `flask recuperar` para retomar ejecuciones cortadas.
 
+### Módulo 2 · Terminal de trading
+- **Órdenes OCO:** dos órdenes enlazadas (toma de ganancia arriba y corte de pérdida abajo, o compra si baja y si sube); al ejecutarse una, la otra se cancela sola. Reserva el saldo una sola vez y cancelar una pata cancela el grupo.
+- **Proteger una compra:** al comprar a mercado se puede fijar toma de ganancia y corte de pérdida; se validan en el servidor antes de comprar, se programan por la cantidad exacta comprada y forman una OCO si van las dos.
+- **Gráfico:** zoom con rueda, botones o pellizco; desplazamiento arrastrando hacia el pasado; doble toque para volver; hasta 365 velas diarias y 300 intradiarias. Parámetros configurables de MA, EMA, Bollinger, RSI y MACD, guardados en el dispositivo.
+- **Órdenes:** pestañas Abiertas, Ejecutadas y Canceladas (con el motivo, por ejemplo «OCO: se activó la orden #12»).
+- **Confirmación:** muestra cómo cambiaría tu exposición a la moneda, advierte si pasaría del 50 % de tu cartera y aclara cuando la orden va al simulador.
+- **Análisis del activo:** rendimiento a 7, 30 y 90 días y 1 año, volatilidad anual, máximo y distancia al máximo, RSI diario y tendencia respecto de sus medias de 20 y 50 días, con la aclaración de que no son recomendaciones. **Tu posición y riesgo:** cantidad, valor, peso, costo promedio, resultado sin realizar y lo reservado.
+- **Validación en el servidor:** toda orden revisa identidad, revisión de cumplimiento, moneda habilitada, pausa de seguridad, precio vigente y saldo disponible.
+
 ## [0.10.0] - 2026-11-15
 
 Etapa 2 del plan (rediseño visual) más las dos correcciones críticas de la auditoría técnica.

@@ -117,6 +117,8 @@ def operar(cliente, activo, lado, monto_cent, usuario, todo=False, ts=None, prec
     from . import antilavado
     if antilavado.bloqueado(cliente["id"]):
         raise ErrorNegocio("Tu cuenta está en revisión de cumplimiento. Escríbenos desde Ayuda si necesitas más información.")
+    if ejecucion.pausada():
+        raise ErrorNegocio("Las operaciones están en pausa por un control de seguridad. Vuelve a intentar más tarde.")
     maximo = _umbral("ORDEN_MAXIMA_USD")
     ten = cartera.tenencias(cliente["id"])
     bloq = cartera.bloqueado(cliente["id"], excepto_programada, ten)

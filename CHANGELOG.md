@@ -44,6 +44,13 @@ Evolución completa de la plataforma, trabajada por módulos. Los servicios fina
 - **Ficha de cada moneda:** qué es, año de lanzamiento, cómo funciona y categoría (texto descriptivo, no datos de mercado), ranking, estadísticas con su fuente y hora, rendimientos a 7, 30 y 90 días y 1 año, volatilidad y RSI, actividad del mercado (mejor compra y venta, diferencia y últimas operaciones, marcadas como simuladas cuando lo son), cotizaciones diarias y exportación del último año a CSV con fuente y zona horaria. Rangos nuevos de 90 días y 1 año.
 - **Gráficos de línea en tiempo real:** el eje horizontal ahora respeta las fechas; antes, las últimas horas (que tienen más puntos) se estiraban y deformaban la curva.
 
+### Módulo 5 · Billetera, historial y comprobantes
+- **Identificador único** de cada movimiento (OP-000123 para operaciones, EN-000045 para envíos), visible en el detalle, el historial exportado y el comprobante.
+- **Comprobantes** imprimibles o guardables en PDF, con una huella de verificación (HMAC-SHA256 de los datos del movimiento) y el rastro de la bitácora encadenada. El equipo comprueba que no fue alterado en Cumplimiento › Verificar comprobante; cada verificación queda registrada.
+- **Historial:** filtros por fecha, moneda y tipo combinables con el buscador, y exportación a CSV con los mismos filtros, código y huella de cada movimiento.
+- **Saldo pendiente de acreditar** (depósitos en revisión), además de disponible, reservado y en retiros.
+- **Vista en dólares o guaraníes:** se elige en la billetera y se guarda en la cuenta. Indica el tipo de cambio usado, de dónde sale y cuándo se cargó, y aclara que los saldos se llevan en dólares.
+
 ## [0.10.0] - 2026-11-15
 
 Etapa 2 del plan (rediseño visual) más las dos correcciones críticas de la auditoría técnica.

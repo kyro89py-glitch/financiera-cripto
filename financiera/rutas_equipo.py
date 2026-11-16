@@ -438,3 +438,19 @@ def diligencia(cid):
     n = aml.evaluar(cid)
     flash("Debida diligencia guardada." + (f" Se generaron {n} alertas." if n else ""), "ok")
     return redirect(url_for("equipo.cliente", cid=cid) + "#diligencia")
+
+
+@bp.route("/verificar-comprobante", methods=["GET", "POST"])
+@seguridad.requiere("equipo.ver")
+def verificar_comprobante():
+    """Comprueba que un comprobante impreso o en PDF no fue alterado: recalcula la huella con los datos del sistema."""
+    from . import comprobantes
+    resultado = None
+    datos = {"codigo": "", "huella": ""}
+    if request.method == "POST":
+        datos = {"codigo": (request.form.get("codigo") or "").strip()[:20], "huella": (request.form.get("huella") or "").strip()[:40]}
+        estado, fila, clase = comprobantes.verificar(datos["codigo"], datos["huella"])
+        resultado = {"estado": estado, "fila": fila, "clase": clase,
+                     "rastro": comprobantes.rastro(clase, fila["id"]) if fila else []}
+        auditoria.registrar("comprobante.verificado", None, {"texto": f"Verificó el comprobante {datos['codigo'].upper()}: {estado}."})
+    return render_template("equipo/verificar.html", resultado=resultado, datos=datos)

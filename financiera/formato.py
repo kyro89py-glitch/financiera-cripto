@@ -78,7 +78,8 @@ ACTIVO = {  # qué rutas marcan cada pestaña como activa
     "cliente.perfil": ("cliente.perfil", "auth.seguridad", "auth.clave", "auth.sesiones"),
     "equipo.operaciones": ("equipo.operaciones", "equipo.operacion"),
     "equipo.clientes": ("equipo.clientes", "equipo.cliente", "equipo.cliente_nuevo", "equipo.estado_mensual"),
-    "equipo.cumplimiento": ("equipo.cumplimiento", "equipo.bitacora", "equipo.documentos", "equipo.conciliacion", "equipo.antilavado"),
+    "equipo.cumplimiento": ("equipo.cumplimiento", "equipo.bitacora", "equipo.documentos", "equipo.conciliacion", "equipo.antilavado",
+                            "equipo.verificar_comprobante"),
     "admin.precios": ("admin.precios", "admin.usuarios", "admin.comisiones", "admin.ejecucion", "admin.guaranies", "admin.respaldos"),
 }
 

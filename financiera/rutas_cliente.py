@@ -5,9 +5,9 @@ from decimal import Decimal
 
 from flask import Blueprint, Response, abort, current_app, flash, g, redirect, render_template, request, url_for
 
-from . import alertas, cartera, programadas, cuentas, db, documentos, graficos, guarani, operaciones, planes, precios, seguridad, limites
+from . import alertas, cartera, programadas, cuentas, db, documentos, graficos, guarani, operaciones, planes, precios, seguridad, limites, comprobantes, dinero
 from .dinero import fmt_num, leer_monto, valor_cent
-from .formato import f_fecha
+from .formato import ESTADOS, f_fecha
 
 bp = Blueprint("cliente", __name__, url_prefix="/cliente")
 
@@ -342,9 +342,13 @@ def ver_cartera():
     ten = cartera.tenencias(c["id"])
     bloq = cartera.bloqueado(c["id"], ten=ten)
     pend_retiro = sum(o["monto_cent"] for o in _abiertas(c["id"]) if o["tipo"] == "retiro")
+    pend_aporte = sum(o["monto_cent"] for o in _abiertas(c["id"]) if o["tipo"] == "aporte")
+    from . import preferencias
+    moneda_ver = preferencias.leer(g.usuario["id"])["moneda"]
     realizado = sum(x["realizado"] for x in costos.values())
     no_realizado = sum(f["valor"] - costos[f["activo"]]["costo"] for f in filas if f["activo"] in costos and costos[f["activo"]]["cantidad"])
-    return render_template("cliente/cartera.html", filas=filas, total=total, desvio=desv, mayor_desvio=mayor, modelo=modelo,
+    return render_template("cliente/cartera.html", pend_aporte=pend_aporte, moneda_ver=moneda_ver, cambio_ref=guarani.referencia(),
+                           filas=filas, total=total, desvio=desv, mayor_desvio=mayor, modelo=modelo,
                            costos=costos, realizado=realizado, no_realizado=no_realizado, bloq=bloq,
                            disp_usd=ten.get("USD", 0) - bloq.get("USD", 0), reservado=operaciones.reservado_cent(c["id"]),
                            pend_retiro=pend_retiro, ultimos=_movimientos(c)[:5],
@@ -458,7 +462,7 @@ FILTROS_MOV = {"todos": "Todos", "depositos": "Depósitos", "retiros": "Retiros"
                "envios": "Envíos", "abiertos": "En curso"}
 
 
-def _movimientos(c, filtro="todos", q=""):
+def _movimientos(c, filtro="todos", q="", desde=None, hasta=None, activo=None):
     """Movimientos del cliente en una sola lista (operaciones y envíos), del más nuevo al más viejo."""
     from .formato import TIPOS_OP
     from .transferencias import del_cliente as envios
@@ -473,12 +477,14 @@ def _movimientos(c, filtro="todos", q=""):
         texto = " ".join(str(x) for x in (o["id"], TIPOS_OP[o["tipo"]], o["activo"] or "", o["referencia"] or "",
                                            o["estado"], monto / 100)).lower()
         out.append({"clase": "op", "o": o, "ts": o["creado"], "grupo": grupo, "abierto": o["estado"] in ("pendiente", "primera_firma", "ejecutando"),
+                    "activo": o["activo"] or "USD", "codigo": comprobantes.codigo("op", o["id"]),
                     "ordenes": ordenes.get(o["id"], []), "monto": monto, "buscar": texto,
                     "url": url_for("cliente.movimiento", opid=o["id"])})
     for t in envios(c["id"], 200):
         sale = t["de_cliente"] == c["id"]
         otro = t["a_nombre"] if sale else t["de_nombre"]
         out.append({"clase": "envio", "t": t, "ts": t["ts"], "grupo": "envios", "abierto": False, "sale": sale,
+                    "activo": t["activo"], "codigo": comprobantes.codigo("envio", t["id"]),
                     "otro": otro, "monto": t["valor_cent"], "url": url_for("cliente.envio", tid=t["id"]),
                     "buscar": f"e{t['id']} envío {'enviaste' if sale else 'recibiste'} {otro} {t['activo']} {t['nota'] or ''} {t['valor_cent'] / 100}".lower()})
     out.sort(key=lambda m: m["ts"], reverse=True)
@@ -486,23 +492,101 @@ def _movimientos(c, filtro="todos", q=""):
         out = [m for m in out if m["abierto"]]
     elif filtro in FILTROS_MOV and filtro != "todos":
         out = [m for m in out if m["grupo"] == filtro]
+    if activo:
+        out = [m for m in out if m["activo"] == activo]
+    if desde or hasta:
+        from .formato import zona
+        from .tiempo import leer
+        dia = lambda m: leer(m["ts"]).astimezone(zona()).date().isoformat()  # noqa: E731  fecha local de Paraguay
+        out = [m for m in out if (not desde or dia(m) >= desde) and (not hasta or dia(m) <= hasta)]
     if q:
         qq = q.lower().replace("#", "").strip()
-        out = [m for m in out if qq in m["buscar"]]
+        out = [m for m in out if qq in m["buscar"] or qq.upper() == m["codigo"]]
     return out
+
+
+def _filtros_mov():
+    """Lee y valida los filtros del historial desde la dirección."""
+    import re as _re
+    filtro = request.args.get("ver", "todos")
+    if filtro not in FILTROS_MOV:
+        filtro = "todos"
+    q = (request.args.get("q") or "").strip()[:40]
+    fecha = lambda k: request.args.get(k) if _re.fullmatch(r"\d{4}-\d{2}-\d{2}", request.args.get(k) or "") else None  # noqa: E731
+    activo = (request.args.get("moneda") or "").upper()
+    activo = activo if activo == "USD" or db.uno("SELECT 1 FROM activos WHERE codigo = ?", (activo,)) else None
+    return {"filtro": filtro, "q": q, "desde": fecha("desde"), "hasta": fecha("hasta"), "activo": activo}
 
 
 @bp.get("/movimientos")
 def movimientos():
     c = g.cliente
-    filtro = request.args.get("ver", "todos")
-    if filtro not in FILTROS_MOV:
-        filtro = "todos"
-    q = (request.args.get("q") or "").strip()[:40]
-    movs = _movimientos(c, filtro, q)
+    f = _filtros_mov()
+    movs = _movimientos(c, f["filtro"], f["q"], f["desde"], f["hasta"], f["activo"])
     modelos = {m["codigo"]: m["nombre"] for m in db.todos("SELECT codigo, nombre FROM modelos")}
-    return render_template("cliente/movimientos.html", movs=movs[:150], filtro=filtro, filtros=FILTROS_MOV, q=q,
+    monedas = ["USD"] + [a["codigo"] for a in precios.activos()]
+    return render_template("cliente/movimientos.html", movs=movs[:150], filtro=f["filtro"], filtros=FILTROS_MOV, q=f["q"],
+                           desde=f["desde"], hasta=f["hasta"], moneda=f["activo"], monedas=monedas,
                            modelos=modelos, periodos=cartera.periodos_cliente(c), total=len(movs))
+
+
+@bp.get("/movimientos.csv")
+def movimientos_csv():
+    """Exporta el historial con los mismos filtros de la pantalla, con identificador único y huella de cada movimiento."""
+    import csv
+    import io
+    from datetime import datetime
+
+    from .formato import TIPOS_OP, zona
+    from .tiempo import leer
+    limites.exigir(("datos", f"u{g.usuario['id']}"))
+    c = g.cliente
+    f = _filtros_mov()
+    movs = _movimientos(c, f["filtro"], f["q"], f["desde"], f["hasta"], f["activo"])
+    buf = io.StringIO()
+    w = csv.writer(buf, delimiter=";")
+    w.writerow([f"Movimientos de {c['nombre']}", f"generado: {datetime.now(zona()).strftime('%Y-%m-%d %H:%M')} (hora de Paraguay)",
+                "montos en dólares estadounidenses"])
+    w.writerow(["codigo", "fecha", "tipo", "estado", "moneda", "cantidad", "monto_usd", "referencia", "huella"])
+    for m in movs:
+        fecha = leer(m["ts"]).astimezone(zona()).strftime("%Y-%m-%d %H:%M:%S")
+        if m["clase"] == "op":
+            o = m["o"]
+            cant = sum(r["cantidad"] for r in m["ordenes"]) if m["ordenes"] else ""
+            w.writerow([m["codigo"], fecha, TIPOS_OP[o["tipo"]], ESTADOS[o["estado"]][1], m["activo"],
+                        dinero.fmt_unidades(cant, o["activo"]).split(" ")[0] if cant != "" and o["activo"] else "",
+                        f"{m['monto'] / 100:.2f}", o["referencia"] or "", comprobantes.huella("op", o)])
+        else:
+            t = m["t"]
+            w.writerow([m["codigo"], fecha, "Envío enviado" if m["sale"] else "Envío recibido", "Hecho", t["activo"],
+                        dinero.fmt_unidades(t["cantidad"], t["activo"]).split(" ")[0] if t["activo"] != "USD" else "",
+                        f"{(-1 if m['sale'] else 1) * t['valor_cent'] / 100:.2f}", t["nota"] or "", comprobantes.huella("envio", t)])
+    resp = current_app.response_class("\ufeff" + buf.getvalue(), mimetype="text/csv; charset=utf-8")
+    resp.headers["Content-Disposition"] = 'attachment; filename="movimientos.csv"'
+    return resp
+
+
+@bp.get("/movimientos/<int:opid>/comprobante")
+def comprobante_op(opid):
+    from flask import abort
+    o = db.uno("SELECT * FROM operaciones WHERE id = ? AND cliente_id = ?", (opid, g.cliente["id"]))
+    if not o:
+        abort(404)
+    return render_template("cliente/comprobante.html", clase="op", o=o, codigo=comprobantes.codigo("op", opid),
+                           huella=comprobantes.huella("op", o), rastro=comprobantes.rastro("op", opid),
+                           ordenes=db.todos("SELECT * FROM ordenes WHERE operacion_id = ? ORDER BY id", (opid,)),
+                           libro=db.todos("SELECT * FROM libro WHERE operacion_id = ? AND cliente_id = ? ORDER BY id", (opid, g.cliente["id"])))
+
+
+@bp.get("/envios/<int:tid>/comprobante")
+def comprobante_envio(tid):
+    from flask import abort
+    t = comprobantes.fila("envio", tid)
+    if not t or g.cliente["id"] not in (t["de_cliente"], t["a_cliente"]):
+        abort(404)
+    return render_template("cliente/comprobante.html", clase="envio", t=t, sale=t["de_cliente"] == g.cliente["id"],
+                           codigo=comprobantes.codigo("envio", tid), huella=comprobantes.huella("envio", t),
+                           rastro=comprobantes.rastro("envio", tid))
 
 
 @bp.get("/movimientos/<int:opid>")

@@ -905,3 +905,34 @@ nav.tabs a{transition:background-color .15s,color .15s}
 .trades span:nth-child(3n){color:var(--muted);text-align:right}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .panel.elegir-monedas{flex-direction:row;flex-wrap:wrap;align-items:center}
+
+/* v0.20 · billetera: comprobantes y filtros */
+.comprobante{max-width:720px;margin:0 auto;background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:28px;display:flex;flex-direction:column;gap:18px}
+.comp-cab{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-bottom:16px;border-bottom:1px solid var(--line)}
+.comp-codigo{font-size:18px;font-weight:700;letter-spacing:.04em}
+.comp-monto{font-family:var(--display);font-size:38px;font-weight:700;letter-spacing:-.03em}
+.comp-huella{background:var(--surface-2);border:1px dashed var(--line-strong);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:6px}
+.comp-huella .mono{font-size:16px;font-weight:600;letter-spacing:.06em;overflow-wrap:anywhere}
+.comp-rastro{list-style:none;margin:6px 0;padding:0;font-size:12.5px}
+.comp-rastro li{display:grid;grid-template-columns:auto 1fr auto;gap:10px;padding:5px 0;border-bottom:1px solid var(--line)}
+.comp-tabla{font-size:13px}
+.filtros-mas{position:relative}
+.filtros-mas summary{list-style:none;cursor:pointer}
+.filtros-mas summary::-webkit-details-marker{display:none}
+.filtros-mas[open]{flex-basis:100%;order:5}
+.filtros-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:10px;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+@media print{
+  .top,nav.tabs,.cinta,.no-imprimir,.flash,footer.pie,.aviso-demo{display:none!important}
+  body{background:#fff;color:#000}
+  .comprobante{border:1px solid #999;background:#fff;color:#000;max-width:none}
+  .comprobante *{color:#000!important}
+  .comp-huella{background:#f3f3f3}
+  main{padding:0!important;margin:0!important}
+}
+.segmentos form,form.segmentos{margin:0}.pat-saldos .oc{display:block}
+.comprobante > *{min-width:0}
+.comp-tabla .oc{display:table-cell}
+@media (max-width:600px){.comprobante{padding:18px}.comp-monto{font-size:30px}.comp-rastro li{grid-template-columns:1fr auto}.comp-rastro li span:first-child{grid-column:1 / -1;color:var(--muted)}.comp-cab{flex-wrap:wrap}}
+.comprobante{width:100%;min-width:0;box-sizing:border-box}.comprobante .detalle dd{overflow-wrap:anywhere;min-width:0}.comprobante .tablewrap{max-width:100%}
+.comprobante .tablewrap{overflow-x:auto;margin:0;width:100%}
+@media (max-width:600px){.comp-tabla{font-size:11.5px}.comp-tabla td.num,.comp-tabla td{white-space:normal}.comp-tabla th + th,.comp-tabla td + td{padding-left:6px}}

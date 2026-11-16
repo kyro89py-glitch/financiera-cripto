@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph, pill with context %}
+{% block titulo %}Verificar comprobante{% endblock %}
+{% block contenido %}
+{{ ph("Verificar comprobante", "Comprueba que un comprobante que te muestran no fue alterado. Cada verificación queda en la bitácora.") }}
+{% include "equipo/_subnav.html" %}
+<div class="g2 ancho-izq">
+  <section class="panel">
+    <form class="col" method="post">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <label class="field" for="codigo">Código del comprobante<input id="codigo" name="codigo" required placeholder="OP-000123 o EN-000045" value="{{ datos.codigo }}" autocomplete="off"></label>
+      <label class="field" for="huella">Huella de verificación<input id="huella" name="huella" required placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX" value="{{ datos.huella }}" autocomplete="off" class="mono"></label>
+      <button class="btn primary" type="submit">Verificar</button>
+    </form>
+  </section>
+  <section class="panel">
+    {% if resultado %}
+      {% if resultado.estado == 'valido' %}<div class="flash ok">Comprobante válido: coincide con los datos actuales del sistema.</div>
+      {% elif resultado.estado == 'no_coincide' %}<div class="flash error">La huella no coincide. El comprobante fue alterado o se emitió cuando el movimiento tenía otro estado: compara con los datos de abajo.</div>
+      {% else %}<div class="flash error">No existe un movimiento con ese código.</div>{% endif %}
+      {% if resultado.fila %}{% set f = resultado.fila %}
+      <dl class="detalle">
+        {% if resultado.clase == 'op' %}
+        <div><dt>Operación</dt><dd>#{{ f.id }} · {{ TIPOS_OP[f.tipo] }}{% if f.activo %} de {{ f.activo }}{% endif %}</dd></div>
+        <div><dt>Estado actual</dt><dd>{{ ESTADOS[f.estado][1] }}</dd></div>
+        <div><dt>Monto</dt><dd class="num">{{ (f.liquidado_cent if f.liquidado_cent is not none else f.monto_cent)|usd }}</dd></div>
+        <div><dt>Cliente</dt><dd><a href="{{ url_for('equipo.cliente', cid=f.cliente_id) }}">Ver cliente #{{ f.cliente_id }}</a></dd></div>
+        <div><dt>Fecha</dt><dd>{{ f.creado|fecha }}</dd></div>
+        {% else %}
+        <div><dt>Envío</dt><dd>#{{ f.id }} · {{ f.de_nombre }} → {{ f.a_nombre }}</dd></div>
+        <div><dt>Valor</dt><dd class="num">{{ f.valor_cent|usd }}</dd></div>
+        <div><dt>Fecha</dt><dd>{{ f.ts|fecha }}</dd></div>
+        {% endif %}
+      </dl>
+      {% if resultado.rastro %}<ol class="comp-rastro">{% for r in resultado.rastro %}<li><span>{{ r.ts|fecha }}</span><span>{{ r.accion }}</span><span class="mono xs">{{ r.hash[:16] }}…</span></li>{% endfor %}</ol>{% endif %}
+      {% endif %}
+    {% else %}<p class="small muted">El código y la huella están en la parte inferior de cada comprobante que emite la plataforma.</p>{% endif %}
+  </section>
+</div>
+{% endblock %}

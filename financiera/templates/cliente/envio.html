@@ -3,7 +3,7 @@
 {% block titulo %}Envío #{{ t.id }}{% endblock %}
 {% block contenido %}
 <a class="volver" href="{{ url_for('cliente.movimientos', ver='envios') }}">← Movimientos</a>
-{% call ph(("Enviaste a " if sale else "Recibiste de ") ~ ocultar(t.a_nombre if sale else t.de_nombre), t.ts|fecha) %}<span class="pill ok">Completado</span>{% endcall %}
+{% call ph(("Enviaste a " if sale else "Recibiste de ") ~ ocultar(t.a_nombre if sale else t.de_nombre), t.ts|fecha ~ " · " ~ "EN-%06d"|format(t.id)) %}<span class="pill ok">Completado</span><a class="btn" href="{{ url_for('cliente.comprobante_envio', tid=t.id) }}">{{ icono('documento') }}Comprobante</a>{% endcall %}
 <section class="card col privado" style="max-width:640px">
   <div class="detalle-monto num {{ 'down' if sale else 'up' }}">{{ '−' if sale else '+' }}{{ t.valor_cent|usd }}</div>
   <dl class="detalle">

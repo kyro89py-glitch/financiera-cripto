@@ -17,18 +17,29 @@
 </nav>
 <section class="patrimonio billetera">
   <div class="pat-info privado">
-    <span class="lab">Patrimonio total</span>
+    <div class="row spread" style="align-items:center"><span class="lab">Patrimonio total</span>
+      {% if cambio_ref %}<form method="post" action="{{ url_for('auth.preferencias_guardar') }}" class="segmentos" role="group" aria-label="Moneda en que se muestra">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="moneda"><input type="hidden" name="volver" value="{{ url_for('cliente.cartera') }}">
+        {% for m, t in [('USD', 'US$'), ('PYG', '₲')] %}<button type="submit" name="moneda" value="{{ m }}" aria-pressed="{{ 'true' if moneda_ver == m else 'false' }}">{{ t }}</button>{% endfor %}
+      </form>{% endif %}</div>
+    {% if moneda_ver == 'PYG' and cambio_ref %}
+    <div class="cifra-mayor num">{{ en_gs(total) }}</div>
+    <div class="num muted small">= {{ total|usd }}</div>
+    {% else %}
     <div class="cifra-mayor num">{{ total|usd }}</div>
     {% if en_gs(total) %}<div class="num muted small">≈ {{ en_gs(total) }}</div>{% endif %}
+    {% endif %}
+    {% if cambio_ref %}{% set cp = cambios_pyg() %}<p class="fuente-dato" style="margin:0">Conversión a guaraníes solo de referencia: {{ cambio_ref|gs }} por dólar, promedio de las cotizaciones de depósito y retiro que cargó Administración{% if cp.ts %} el {{ cp.ts|fecha }}{% endif %}. Tus saldos se llevan en dólares.</p>{% endif %}
     <dl class="pat-saldos">
       <div><dt>Disponible</dt><dd class="num">{{ disp_usd|usd }}</dd></div>
       <div><dt>Reservado en órdenes</dt><dd class="num">{{ reservado|usd }}</dd></div>
       <div><dt>En retiros</dt><dd class="num">{{ pend_retiro|usd }}</dd></div>
+      <div><dt>Pendiente de acreditar</dt><dd class="num">{{ pend_aporte|usd }}</dd></div>
       <div><dt>Aportado neto</dt><dd class="num">{{ aportado|usd }}</dd></div>
       <div><dt>No realizado</dt><dd class="num {{ 'up' if no_realizado >= 0 else 'down' }}">{{ "+" if no_realizado >= 0 }}{{ no_realizado|usd }}</dd></div>
       <div><dt>Realizado</dt><dd class="num {{ 'up' if realizado >= 0 else 'down' }}">{{ "+" if realizado >= 0 }}{{ realizado|usd }}</dd></div>
       <div><dt>Rentabilidad</dt><dd class="num {{ 'up' if rend and rend.twr >= 0 else ('down' if rend else '') }}">{{ rend.twr|pct if rend else "—" }}</dd></div>
-      <div><dt>Resultado total</dt><dd class="num {{ 'up' if total - aportado >= 0 else 'down' }}">{{ "+" if total - aportado >= 0 }}{{ (total - aportado)|usd }}</dd></div>
+      <div class="oc"><dt>Resultado total</dt><dd class="num {{ 'up' if total - aportado >= 0 else 'down' }}">{{ "+" if total - aportado >= 0 }}{{ (total - aportado)|usd }}</dd></div>
     </dl>
   </div>
   <div class="pat-graf">{{ escena3d(datos3d, heroe=true) }}<span class="xs muted" style="text-align:center">Arrastra para girar y toca un grupo para ver cuánto vale.</span></div>

@@ -198,6 +198,7 @@
 
   // ---- diálogos genéricos: [data-abrir="id"] abre, [data-cerrar] cierra ----
   document.addEventListener("click", function (e) {
+    if (e.target.closest("[data-imprimir]")) { window.print(); return; }
     var a = e.target.closest("[data-abrir]");
     if (a) { var d = document.getElementById(a.getAttribute("data-abrir")); if (d && d.showModal && !d.open) d.showModal(); return; }
     var c = e.target.closest("dialog [data-cerrar]");

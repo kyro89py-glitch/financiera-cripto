@@ -3,7 +3,7 @@
 {% block titulo %}{{ tipo_op(o) }}{% endblock %}
 {% block contenido %}
 <a class="volver" href="{{ url_for('cliente.movimientos') }}">← Movimientos</a>
-{% call ph(tipo_op(o), o.creado|fecha) %}{{ estado(o) }}{% endcall %}
+{% call ph(tipo_op(o), o.creado|fecha ~ " · " ~ "OP-%06d"|format(o.id)) %}{{ estado(o) }}<a class="btn" href="{{ url_for('cliente.comprobante_op', opid=o.id) }}">{{ icono('documento') }}Comprobante</a>{% endcall %}
 <div class="g2">
   <section class="card col privado">
     <div class="detalle-monto num {{ 'up' if o.tipo == 'aporte' else ('' if o.tipo in ('compra', 'venta') else 'down') }}">{{ signo(o) }}{{ (o.liquidado_cent if o.liquidado_cent is not none else o.monto_cent)|usd }}</div>

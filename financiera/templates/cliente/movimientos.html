@@ -17,11 +17,21 @@
     <form class="filtros-mercado" method="get" action="{{ url_for('cliente.movimientos') }}" role="search">
       <label class="buscador">{{ icono('buscar') }}<input type="search" name="q" value="{{ q }}" placeholder="Buscar por número, moneda, comprobante, persona o monto" aria-label="Buscar movimientos" autocomplete="off"></label>
       <input type="hidden" name="ver" value="{{ filtro }}">
+      <details class="filtros-mas"{% if desde or hasta or moneda %} open{% endif %}>
+        <summary class="btn">{{ icono('ajustes') }}Filtros{% if desde or hasta or moneda %} <span class="badge-in">{{ [desde, hasta, moneda]|select|list|length }}</span>{% endif %}</summary>
+        <div class="filtros-grid">
+          <label class="field">Desde<input type="date" name="desde" value="{{ desde or '' }}"></label>
+          <label class="field">Hasta<input type="date" name="hasta" value="{{ hasta or '' }}"></label>
+          <label class="field">Moneda<select name="moneda"><option value="">Todas</option>{% for m in monedas %}<option value="{{ m }}"{% if moneda == m %} selected{% endif %}>{{ m }}</option>{% endfor %}</select></label>
+          <div class="row" style="align-self:end;gap:6px"><button class="btn primary" type="submit">Aplicar</button>{% if desde or hasta or moneda %}<a class="btn ghost" href="{{ url_for('cliente.movimientos', ver=filtro if filtro != 'todos' else none, q=q or none) }}">Quitar</a>{% endif %}</div>
+        </div>
+      </details>
       <button class="btn" type="submit">Buscar</button>
+      <a class="btn" href="{{ url_for('cliente.movimientos_csv', ver=filtro if filtro != 'todos' else none, q=q or none, desde=desde, hasta=hasta, moneda=moneda) }}">{{ icono('descargar') }}Exportar</a>
     </form>
 
     <section class="card flush privado">
-      {% if q or filtro != 'todos' %}<div class="ch"><span class="meta">{{ total }} resultado{{ 's' if total != 1 }}{% if q %} para «{{ q }}»{% endif %}</span>{% if q %}<a class="small" href="{{ url_for('cliente.movimientos', ver=filtro if filtro != 'todos' else none) }}">Limpiar búsqueda</a>{% endif %}</div>{% endif %}
+      {% if q or filtro != 'todos' or desde or hasta or moneda %}<div class="ch"><span class="meta">{{ total }} resultado{{ 's' if total != 1 }}{% if q %} para «{{ q }}»{% endif %}</span>{% if q %}<a class="small" href="{{ url_for('cliente.movimientos', ver=filtro if filtro != 'todos' else none) }}">Limpiar búsqueda</a>{% endif %}</div>{% endif %}
       <div class="list">
       {% for m in movs %}
         {% if m.clase == 'op' %}{% set o = m.o %}

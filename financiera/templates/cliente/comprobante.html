@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% from "macros.html" import estado, tipo_op, signo with context %}
+{% block titulo %}Comprobante {{ codigo }}{% endblock %}
+{% block contenido %}
+<div class="no-imprimir row spread">
+  <a class="volver" href="{{ url_for('cliente.movimiento', opid=o.id) if clase == 'op' else url_for('cliente.envio', tid=t.id) }}">← Volver al movimiento</a>
+  <button class="btn primary" type="button" data-imprimir>{{ icono('descargar') }}Imprimir o guardar en PDF</button>
+</div>
+<article class="comprobante">
+  <header class="comp-cab">
+    <div class="row" style="gap:10px"><svg class="marca" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="var(--accent)"/><circle cx="16" cy="16" r="7.2" fill="none" stroke="var(--accent-ink)" stroke-width="2.6"/><ellipse cx="16" cy="16" rx="12.6" ry="4.4" fill="none" stroke="var(--gold)" stroke-width="1.6" transform="rotate(-28 16 16)"/><circle cx="21.3" cy="10.7" r="2.1" fill="var(--accent-ink)"/></svg>
+      <div><b>{{ config.NOMBRE }}</b><div class="xs muted">Comprobante de movimiento</div></div></div>
+    <div class="r"><div class="lab">Código</div><div class="comp-codigo mono">{{ codigo }}</div></div>
+  </header>
+  {% if clase == 'op' %}
+  <div class="comp-monto num">{{ signo(o) }}{{ (o.liquidado_cent if o.liquidado_cent is not none else o.monto_cent)|usd }}</div>
+  <dl class="detalle">
+    <div><dt>Tipo</dt><dd>{{ TIPOS_OP[o.tipo] }}{% if o.activo %} de {{ o.activo }}{% endif %}</dd></div>
+    <div><dt>Estado</dt><dd>{{ estado(o) }}</dd></div>
+    <div><dt>Titular</dt><dd>{{ g.cliente.nombre }} · {{ g.cliente.documento }}</dd></div>
+    <div><dt>Solicitada</dt><dd>{{ o.creado|fecha }}</dd></div>
+    {% if o.resuelto_ts %}<div><dt>Resuelta</dt><dd>{{ o.resuelto_ts|fecha }}</dd></div>{% endif %}
+    <div><dt>Monto solicitado</dt><dd class="num">{{ o.monto_cent|usd }}</dd></div>
+    {% if o.liquidado_cent is not none %}<div><dt>Monto liquidado</dt><dd class="num">{{ o.liquidado_cent|usd }}</dd></div>{% endif %}
+    {% if o.monto_pyg %}<div><dt>En guaraníes</dt><dd class="num">{{ o.monto_pyg|gs }} a {{ o.cambio_pyg|gs }} por dólar</dd></div>{% endif %}
+    {% if o.referencia %}<div><dt>Referencia</dt><dd>{{ o.referencia }}</dd></div>{% endif %}
+  </dl>
+  {% if ordenes %}
+  <div class="tablewrap"><table class="tabla-activos comp-tabla"><thead><tr><th>Ejecución</th><th class="r">Precio</th><th class="r">Cantidad</th><th class="r">Importe</th><th class="r">Comisión</th></tr></thead>
+    <tbody>{% for r in ordenes %}<tr><td>{{ r.ts|fecha }} · {{ {'binance': 'Binance', 'simulado': 'Simulador', 'interno': 'Conversión interna'}.get(r.venue, r.venue) }}</td><td class="r num">{{ r.precio|precio }}</td><td class="r num">{{ r.cantidad|unidades(r.activo) }}</td><td class="r num">{{ r.importe_cent|usd }}</td><td class="r num">{{ (r.comision ~ " " ~ r.comision_activo) if r.comision_activo else "—" }}</td></tr>{% endfor %}</tbody></table></div>
+  {% endif %}
+  {% if libro %}<p class="small"><b>Asientos en tu cuenta:</b> {% for l in libro %}{{ '+' if l.cantidad > 0 }}{{ l.cantidad|unidades(l.activo) }}{{ ' · ' if not loop.last }}{% endfor %}</p>{% endif %}
+  {% else %}
+  <div class="comp-monto num">{{ '−' if sale else '+' }}{{ t.cantidad|unidades(t.activo) if t.activo != 'USD' else t.valor_cent|usd }}</div>
+  <dl class="detalle">
+    <div><dt>Tipo</dt><dd>{{ 'Envío enviado' if sale else 'Envío recibido' }}</dd></div>
+    <div><dt>Estado</dt><dd><span class="pill ok">Hecho</span></dd></div>
+    <div><dt>De</dt><dd>{{ t.de_nombre if sale else ocultar(t.de_nombre) }}</dd></div>
+    <div><dt>Para</dt><dd>{{ ocultar(t.a_nombre) if sale else t.a_nombre }}</dd></div>
+    <div><dt>Fecha</dt><dd>{{ t.ts|fecha }}</dd></div>
+    <div><dt>Valor al enviar</dt><dd class="num">{{ t.valor_cent|usd }}</dd></div>
+    {% if t.nota %}<div><dt>Nota</dt><dd>{{ t.nota }}</dd></div>{% endif %}
+  </dl>
+  {% endif %}
+  <section class="comp-huella">
+    <div><span class="lab">Huella de verificación</span><div class="mono">{{ huella }}</div></div>
+    <p class="xs muted">Calculada con los datos de este movimiento en el momento de emitir el comprobante. Si se altera cualquier dato, deja de coincidir. Para verificarlo, el equipo de {{ config.NOMBRE }} ingresa el código y la huella en su sistema.</p>
+  </section>
+  {% if rastro %}
+  <section>
+    <span class="lab">Rastro de auditoría</span>
+    <ol class="comp-rastro">{% for r in rastro %}<li><span>{{ r.ts|fecha }}</span><span>{{ r.accion }}</span><span class="mono xs">{{ r.hash[:16] }}…</span></li>{% endfor %}</ol>
+    <p class="xs muted">Registros de la bitácora inmutable y encadenada de la plataforma que corresponden a este movimiento.</p>
+  </section>
+  {% endif %}
+  <footer class="xs muted">Emitido el {{ ahora_local().strftime('%d/%m/%Y %H:%M') }} (hora de Paraguay). {% if config.ENTORNO != 'produccion' %}Entorno de {{ config.ENTORNO }}: este comprobante no corresponde a dinero real.{% endif %}</footer>
+</article>
+{% endblock %}

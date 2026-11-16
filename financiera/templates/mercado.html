@@ -56,6 +56,12 @@
 <form class="filtros-mercado" method="get" action="{{ url_for('auth.mercado') }}" role="search">
   <label class="buscador">{{ icono('buscar') }}<input type="search" name="q" value="{{ q }}" placeholder="Buscar por nombre o símbolo" aria-label="Buscar moneda" autocomplete="off" data-filtro-tabla="tabla-mercado"></label>
   <input type="hidden" name="ver" value="{{ ver }}"><input type="hidden" name="cat" value="{{ cat }}">
+  <label class="orden-sel">Variación
+    <select name="var" data-autoenvio>{% for v, t in [('', 'Todas'), ('suben', 'Suben'), ('bajan', 'Bajan')] %}<option value="{{ v }}"{% if var_f == v %} selected{% endif %}>{{ t }}</option>{% endfor %}</select>
+  </label>
+  <label class="orden-sel">Capitalización
+    <select name="tam" data-autoenvio>{% for v, t in [('', 'Todas'), ('grande', 'Más de US$ 10 mil M'), ('mediana', 'US$ 1 a 10 mil M'), ('chica', 'Menos de US$ 1 mil M')] %}<option value="{{ v }}"{% if tam == v %} selected{% endif %}>{{ t }}</option>{% endfor %}</select>
+  </label>
   <label class="orden-sel">Ordenar
     <select name="orden" data-autoenvio>
       {% for v, t in [('', 'Capitalización'), ('volumen', 'Volumen'), ('suben', 'Más suben'), ('bajan', 'Más bajan'), ('nombre', 'Nombre')] %}
@@ -67,11 +73,11 @@
 <div class="row spread filtros-chips">
   <div class="chips" aria-label="Vista">
     {% for v, t in [('todos', 'Todas'), ('favoritos', '★ Favoritas'), ('cartera', 'En mi billetera' if usuario.rol == 'cliente' else 'Bajo gestión')] %}
-    <a href="{{ url_for('auth.mercado', ver=v, orden=orden or none, cat=cat or none, q=q or none) }}" aria-current="{{ 'true' if ver == v else 'false' }}">{{ t }}</a>{% endfor %}
+    <a href="{{ url_for('auth.mercado', ver=v, orden=orden or none, cat=cat or none, q=q or none, var=var_f or none, tam=tam or none) }}" aria-current="{{ 'true' if ver == v else 'false' }}">{{ t }}</a>{% endfor %}
   </div>
   <div class="chips" aria-label="Categoría">
-    <a href="{{ url_for('auth.mercado', ver=ver, orden=orden or none, q=q or none) }}" aria-current="{{ 'true' if not cat else 'false' }}">Todas las categorías</a>
-    {% for k, t in categorias.items() %}<a href="{{ url_for('auth.mercado', ver=ver, orden=orden or none, cat=k, q=q or none) }}" aria-current="{{ 'true' if cat == k else 'false' }}">{{ t }}</a>{% endfor %}
+    <a href="{{ url_for('auth.mercado', ver=ver, orden=orden or none, q=q or none, var=var_f or none, tam=tam or none) }}" aria-current="{{ 'true' if not cat else 'false' }}">Todas las categorías</a>
+    {% for k, t in categorias.items() %}<a href="{{ url_for('auth.mercado', ver=ver, orden=orden or none, cat=k, q=q or none, var=var_f or none, tam=tam or none) }}" aria-current="{{ 'true' if cat == k else 'false' }}">{{ t }}</a>{% endfor %}
   </div>
 </div>
 

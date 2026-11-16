@@ -57,13 +57,21 @@
       <div class="chips intervalos" role="group" aria-label="Temporalidad">
         {% for k, (seg, et, n) in intervalos.items() %}<button type="button" data-i="{{ k }}" aria-pressed="{{ 'true' if k == intervalo else 'false' }}">{{ et }}</button>{% endfor %}
       </div>
-      <div class="leyenda num" id="leyenda" aria-live="off"></div>
+      <div class="chips indicadores-chips" role="group" aria-label="Indicadores técnicos">
+        <button type="button" data-ind="ma" title="Medias móviles simples de 7 y 25 velas">MA</button>
+        <button type="button" data-ind="ema" title="Media móvil exponencial de 20 velas">EMA</button>
+        <button type="button" data-ind="boll" title="Bandas de Bollinger 20 y 2 desvíos">BOLL</button>
+        <button type="button" data-ind="vol" title="Volumen negociado">VOL</button>
+        <button type="button" data-ind="rsi" title="Índice de fuerza relativa de 14 velas">RSI</button>
+        <button type="button" data-ind="macd" title="Convergencia y divergencia de medias 12, 26 y 9">MACD</button>
+      </div>
     </div>
+    <div class="leyenda num" id="leyenda" aria-live="off"></div>
     <div class="lienzo" id="lienzo">
       <canvas id="velas" role="img" aria-label="Gráfico de velas de {{ a.codigo }}/USD"></canvas>
       <div class="cargando" id="graf-estado">Cargando velas…</div>
     </div>
-    <div class="graf-pie small muted"><span><i class="ma ma7"></i>Media 7</span><span><i class="ma ma25"></i>Media 25</span><span id="graf-fuente"></span></div>
+    <div class="graf-pie small muted"><span><i class="ma ma7"></i>MA 7</span><span><i class="ma ma25"></i>MA 25</span><span><i class="ma ema"></i>EMA 20</span><span id="graf-fuente"></span></div>
   </section>
 
   <section class="card tr-libro" aria-label="Libro de órdenes">
@@ -72,6 +80,11 @@
     <div class="libro-lado ventas" id="ventas"></div>
     <div class="libro-medio"><span class="num px-medio" data-px="{{ a.codigo }}" data-tick>{{ vig.precio|precio if vig else "—" }}</span><span class="small muted num" id="spread"></span></div>
     <div class="libro-lado compras" id="compras"></div>
+    <div class="liquidez" id="liquidez" aria-label="Liquidez cerca del precio">
+      <div class="row spread xs"><span class="muted">Profundidad ±1 %</span><span class="muted">niveles visibles</span></div>
+      <div class="liq-barra" aria-hidden="true"><i></i></div>
+      <div class="row spread small num"><span class="up" data-liq-compra>—</span><span class="down" data-liq-venta>—</span></div>
+    </div>
     <p class="xs muted libro-nota">Toca un precio para usarlo en una orden límite.</p>
   </section>
 

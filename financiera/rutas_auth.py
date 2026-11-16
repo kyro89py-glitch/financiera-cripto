@@ -384,6 +384,20 @@ def mercado():
     if q:
         qq = q.lower()
         filas = [m for m in filas if qq in m["codigo"].lower() or qq in m["nombre"].lower()]
+    var_f = request.args.get("var", "")
+    if var_f == "suben":
+        filas = [m for m in filas if (m["cambio"] or 0) > 0]
+    elif var_f == "bajan":
+        filas = [m for m in filas if (m["cambio"] or 0) < 0]
+    else:
+        var_f = ""
+    tam = request.args.get("tam", "")
+    rangos_cap = {"grande": (10e9, float("inf")), "mediana": (1e9, 10e9), "chica": (0, 1e9)}
+    if tam in rangos_cap:
+        lo, hi = rangos_cap[tam]
+        filas = [m for m in filas if m["cap"] is not None and lo <= m["cap"] < hi]
+    else:
+        tam = ""
     claves = {"suben": lambda m: -(m["cambio"] or 0), "bajan": lambda m: (m["cambio"] or 0),
               "volumen": lambda m: -(m["volumen"] or 0), "nombre": lambda m: m["nombre"].lower()}
     if orden in claves:
@@ -405,7 +419,7 @@ def mercado():
     datos = {"titulo": titulo, "grupos": [{"label": p["activo"] if p["activo"] != "USD" else "Saldo USD", "value": p["valor"],
                                            "col": p["color"]} for p in pos if p["valor"] > 0]}
     return render_template("mercado.html", filas=filas, tengo=tengo, datos3d=datos, fuente=precios.fuente(), favs=favs,
-                           ver=ver, orden=orden, cat=cat, q=q, categorias=precios.CATEGORIAS, destacados=destacados,
+                           ver=ver, orden=orden, cat=cat, q=q, var_f=var_f, tam=tam, categorias=precios.CATEGORIAS, destacados=destacados,
                            resumen=resumen, mapa=mapa, total=len(todas), vivo=precios.vivo())
 
 

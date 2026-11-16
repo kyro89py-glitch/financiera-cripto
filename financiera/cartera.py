@@ -338,3 +338,78 @@ def costos(cliente_id):
             e["costo"] -= base
             e["cantidad"] = max(0, e["cantidad"] - cant)
     return out
+
+
+RANGOS_PATRIMONIO = {"7D": (7, 84), "1M": (30, 90), "3M": (90, 90), "1A": (365, 122)}
+
+
+def serie_patrimonio(cliente_id, dias, puntos):
+    """Patrimonio real del cliente en el tiempo: lo que tenía en cada momento (según el libro) por los precios de ese
+    momento. Incluye depósitos y retiros, a diferencia de serie_tenencias. Devuelve [(ts, valor_cent)]."""
+    fin = ahora_dt()
+    primero = db.uno("SELECT MIN(ts) AS ts FROM libro WHERE cliente_id = ?", (cliente_id,))["ts"]
+    if not primero:
+        return []
+    from .tiempo import leer
+    ini = max(fin - timedelta(days=dias), leer(primero) - timedelta(hours=1)) if dias else leer(primero) - timedelta(hours=1)
+    asientos = db.todos("SELECT ts, activo, cantidad FROM libro WHERE cliente_id = ? ORDER BY ts, id", (cliente_id,))
+    activos = sorted({a["activo"] for a in asientos if a["activo"] != "USD"})
+    hist = precios_mod.historial(activos, iso(ini - timedelta(days=2))) if activos else {}
+    ten, i, ptr, out = defaultdict(int), 0, defaultdict(int), []
+    for k in range(puntos):
+        t = iso(ini + (fin - ini) * k / (puntos - 1))
+        while i < len(asientos) and asientos[i]["ts"] <= t:
+            ten[asientos[i]["activo"]] += asientos[i]["cantidad"]
+            i += 1
+        total = ten.get("USD", 0)
+        for a in activos:
+            if not ten.get(a):
+                continue
+            h = hist.get(a) or []
+            while ptr[a] + 1 < len(h) and h[ptr[a] + 1][0] <= t:
+                ptr[a] += 1
+            p = h[ptr[a]][1] if h else precio_en(a, t)
+            if p is not None:
+                total += valor_cent(a, ten[a], p)
+        out.append((t, total))
+    return out
+
+
+def indicadores(cliente_id, filas, total, ten=None):
+    """Indicadores del panel de inicio, todos calculados con datos propios (nada se inventa):
+    resultado de mercado en 24 h, exposición a cripto, mayor posición y volatilidad anualizada de 30 días de la
+    composición actual."""
+    import math
+    ten = ten if ten is not None else tenencias(cliente_id)
+    vig = precios_mod.vigentes()
+    hace24 = iso(ahora_dt() - timedelta(hours=24))
+    estables = {a["codigo"] for a in db.todos("SELECT codigo FROM activos WHERE estable = 1")}
+    mercado24 = 0
+    for a, u in ten.items():
+        if a == "USD" or not u or a not in vig:
+            continue
+        p0 = precio_en(a, hace24)
+        if p0:
+            mercado24 += valor_cent(a, u, vig[a]["precio"]) - valor_cent(a, u, p0)
+    cripto = sum(f["valor"] for f in filas if f["activo"] != "USD" and f["activo"] not in estables)
+    mayor = max((f for f in filas if f["valor"] > 0), key=lambda f: f["valor"], default=None)
+    vol = None
+    pesos = {f["activo"]: f["valor"] / total for f in filas if total and f["activo"] not in ("USD", *estables) and f["valor"] > 0}
+    if pesos:
+        dias = [iso(ahora_dt() - timedelta(days=d)) for d in range(30, -1, -1)]
+        series = {a: [precio_en(a, t) for t in dias] for a in pesos}
+        rets = []
+        for k in range(1, len(dias)):
+            r = 0.0
+            for a, w in pesos.items():
+                p0, p1 = series[a][k - 1], series[a][k]
+                if p0 and p1:
+                    r += w * (float(p1) / float(p0) - 1)
+            rets.append(r)
+        if len(rets) > 2:
+            media = sum(rets) / len(rets)
+            vol = math.sqrt(sum((x - media) ** 2 for x in rets) / (len(rets) - 1)) * math.sqrt(365) * 100
+    return {"mercado24": mercado24, "base24": total - mercado24,
+            "exposicion": cripto / total * 100 if total else 0,
+            "mayor": (mayor["activo"], mayor["valor"] / total * 100) if mayor and total else None,
+            "volatilidad": vol}

@@ -52,4 +52,4 @@ def test_mercado_y_minigraficos(nav, ctx):
         r = nav(quien).get("/mercado")
         assert r.status_code == 200 and b"data-escena3d" in r.data
     r = nav("laura@x.com").get("/cliente/")
-    assert r.status_code == 200 and b"hero3d" in r.data
+    assert r.status_code == 200 and b'class="patrimonio"' in r.data and b"Accesos r" in r.data

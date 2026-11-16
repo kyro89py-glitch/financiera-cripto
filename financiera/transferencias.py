@@ -74,6 +74,11 @@ def enviar(cliente, destino_texto, activo, monto_cent, usuario, clave, codigo=No
     activo = (activo or "").upper()
     if activo != "USD" and not db.uno("SELECT 1 FROM activos WHERE codigo = ?", (activo,)):
         raise ErrorEnvio("Elige qué moneda enviar.")
+    if activo != "USD":  # el valor del envío (límite diario, avisos) usa el precio vigente: tiene que estar al día
+        try:
+            precios.exigir_frescura([activo])
+        except precios.ErrorPrecio as e:
+            raise ErrorEnvio(str(e)) from None
     ten = cartera.disponible(cliente["id"])
     tengo = ten.get(activo, 0)
     if tengo <= 0:

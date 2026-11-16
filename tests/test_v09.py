@@ -244,7 +244,7 @@ def test_movimientos_busqueda_y_detalle(nav, ctx):
     r = n.get(f"/cliente/movimientos/{op}")
     assert r.status_code == 200 and "Órdenes ejecutadas".encode() in r.data and b"Simulador" in r.data
     assert nav("pedro@x.com").get(f"/cliente/movimientos/{op}").status_code == 404
-    assert n.get("/cliente/").status_code == 200 and "Actividad de".encode() in n.get("/cliente/").data
+    assert n.get("/cliente/").status_code == 200 and "Actividad reciente".encode() in n.get("/cliente/").data
 
 
 def test_sesiones_por_dispositivo(app, ctx, nav):

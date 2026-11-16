@@ -1,11 +1,17 @@
 {% extends "base.html" %}
 {% from "macros.html" import estado, ph, tipo_op, signo, vacio with context %}
 {% block titulo %}Movimientos{% endblock %}
+{% block clase_app %} ancha{% endblock %}
 {% block contenido %}
-<a class="volver" href="{{ url_for('cliente.cartera') }}">← Billetera</a>
+
 {% call ph("Movimientos", "Depósitos, retiros, compras, ventas, envíos y comisiones. Toca uno para ver el detalle y su estado.") %}
   <a class="btn" href="{{ url_for('cliente.estado_cuenta') }}">{{ icono('descargar') }}CSV completo</a>
 {% endcall %}
+<nav class="subnav" aria-label="Billetera">
+  <a href="{{ url_for('cliente.cartera') }}">Activos</a>
+  {% for k, t in [('todos', 'Historial'), ('depositos', 'Depósitos'), ('retiros', 'Retiros'), ('envios', 'Transferencias'), ('operaciones', 'Compras y ventas'), ('abiertos', 'En curso')] %}
+  <a href="{{ url_for('cliente.movimientos', ver=k if k != 'todos' else none, q=q or none) }}"{% if filtro == k %} aria-current="page"{% endif %}>{{ t }}</a>{% endfor %}
+</nav>
 <div class="g2 mov-g">
   <div class="col">
     <form class="filtros-mercado" method="get" action="{{ url_for('cliente.movimientos') }}" role="search">
@@ -13,9 +19,7 @@
       <input type="hidden" name="ver" value="{{ filtro }}">
       <button class="btn" type="submit">Buscar</button>
     </form>
-    <div class="chips" aria-label="Tipo de movimiento">
-      {% for k, t in filtros.items() %}<a href="{{ url_for('cliente.movimientos', ver=k if k != 'todos' else none, q=q or none) }}" aria-current="{{ 'true' if filtro == k else 'false' }}">{{ t }}</a>{% endfor %}
-    </div>
+
     <section class="card flush privado">
       {% if q or filtro != 'todos' %}<div class="ch"><span class="meta">{{ total }} resultado{{ 's' if total != 1 }}{% if q %} para «{{ q }}»{% endif %}</span>{% if q %}<a class="small" href="{{ url_for('cliente.movimientos', ver=filtro if filtro != 'todos' else none) }}">Limpiar búsqueda</a>{% endif %}</div>{% endif %}
       <div class="list">

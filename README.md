@@ -14,7 +14,7 @@ Plataforma de inversión en criptomonedas para operar con clientes reales, con d
 
 Es un sistema propio e independiente: corre en tu servidor y guarda todo en tu base de datos. Los únicos servicios externos son opcionales: Binance para ejecutar y cotizar, CoinGecko para los precios cuando no se usa Binance (también se cargan a mano) y un servidor de correo para los avisos por email.
 
-> **Estado:** versión 0.9, lista para pruebas internas con el equipo y para operar en la red de pruebas de Binance. Antes de recibir dinero de clientes lee [Antes de operar con dinero real](#antes-de-operar-con-dinero-real).
+> **Estado:** versión 0.10, lista para pruebas internas con el equipo y para operar en la red de pruebas de Binance. Antes de recibir dinero de clientes lee [Antes de operar con dinero real](#antes-de-operar-con-dinero-real).
 
 ---
 
@@ -252,3 +252,7 @@ El sistema registra y controla las operaciones, pero hay piezas del negocio que 
 5. **Contrato y textos legales.** El texto de condiciones y el aviso de riesgos del portal es un punto de partida: un abogado tiene que adaptarlo a tu figura legal antes de usarlo.
 6. **Escala.** SQLite rinde bien con un solo servidor y miles de clientes. Para más servidores conviene migrar a PostgreSQL.
 7. **Revisión externa.** Antes de lanzar, una auditoría de seguridad hecha por terceros, como una prueba de penetración.
+
+## Créditos
+
+La tipografía es [Inter](https://rsms.me/inter/), de Rasmus Andersson, con licencia SIL Open Font License 1.1 (ver `financiera/static/fonts/LICENCIA-Inter.txt`). Va incluida en la aplicación para no depender de servicios externos.

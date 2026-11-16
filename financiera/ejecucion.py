@@ -211,8 +211,12 @@ def planificar(op, cliente, pr):
     return tramos
 
 
-def registrar_plan(c, op, tramos, usuario, ts):
-    """Dentro de una transacción: guarda los tramos y deja la operación 'ejecutando'."""
+def registrar_plan(c, op, tramos, usuario, ts, usd_reservado=0):
+    """Dentro de una transacción: guarda los tramos y deja la operación 'ejecutando'.
+
+    En una compra vuelve a controlar los dólares aquí adentro, descontando las otras compras del cliente que siguen en
+    curso y lo reservado por órdenes programadas (usd_reservado): así dos pedidos simultáneos no pueden mandar al
+    exchange más de lo que el cliente tiene."""
     otra = c.execute("SELECT id FROM operaciones WHERE cliente_id = ? AND estado = 'ejecutando' AND id != ?",
                      (op["cliente_id"], op["id"])).fetchone()
     if otra and op["tipo"] not in ("aporte", "compra"):
@@ -223,6 +227,17 @@ def registrar_plan(c, op, tramos, usuario, ts):
         for t in tramos:
             if (t["cantidad_pedida"] or 0) > ten.get(t["activo"], 0):
                 raise ErrorEjecucion("Las tenencias del cliente cambiaron mientras se preparaba la operación; vuelve a intentarlo.")
+    if op["tipo"] == "compra":
+        usd = c.execute("SELECT COALESCE(SUM(cantidad), 0) AS u FROM libro WHERE cliente_id = ? AND activo = 'USD'",
+                        (op["cliente_id"],)).fetchone()["u"]
+        en_curso = c.execute(
+            "SELECT COALESCE(SUM(e.importe_pedido_cent), 0) AS u FROM ejecuciones e JOIN operaciones o ON o.id = e.operacion_id"
+            " WHERE o.cliente_id = ? AND o.estado = 'ejecutando' AND o.tipo = 'compra' AND o.id != ? AND e.lado = 'compra'",
+            (op["cliente_id"], op["id"])).fetchone()["u"]
+        pide = sum(t["importe_pedido_cent"] or 0 for t in tramos if t["lado"] == "compra")
+        if pide > usd - en_curso - usd_reservado:
+            raise ErrorEjecucion("No tienes saldo disponible suficiente: otra compra tuya se está procesando en este momento. "
+                                 "Espera unos segundos y vuelve a intentarlo.")
     for t in tramos:
         c.execute("INSERT INTO ejecuciones (operacion_id, activo, lado, venue, id_orden, importe_pedido_cent, cantidad_pedida,"
                   " estado, nota, creado, actualizado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",

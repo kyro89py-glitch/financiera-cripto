@@ -71,6 +71,46 @@
     canvas.style.width = G.w + "px"; canvas.style.height = G.h + "px";
     dibujar();
   }
+  // ---- indicadores técnicos (sobre la serie completa) ----
+  var IND = { ma: true, ema: false, boll: false, vol: true, rsi: false, macd: false };
+  try { var guardado = JSON.parse(localStorage.getItem("fc-indicadores") || "null"); if (guardado) for (var k in IND) if (k in guardado) IND[k] = !!guardado[k]; } catch (e) { /* sin almacenamiento */ }
+  var CALC = {};
+  function sma(n) { var out = [], s = 0, v = G.velas; for (var i = 0; i < v.length; i++) { s += v[i][4]; if (i >= n) s -= v[i - n][4]; out.push(i >= n - 1 ? s / n : null); } return out; }
+  function emaDe(vals, n) { var out = [], k = 2 / (n + 1), e = null, s = 0, c = 0; for (var i = 0; i < vals.length; i++) { var x = vals[i]; if (x == null) { out.push(null); continue; } if (e == null) { s += x; c++; if (c === n) e = s / n; out.push(e); } else { e = x * k + e * (1 - k); out.push(e); } } return out; }
+  function calcularIndicadores() {
+    var v = G.velas, cierres = v.map(function (c) { return c[4]; });
+    CALC.ma7 = sma(7); CALC.ma25 = sma(25); CALC.ema20 = emaDe(cierres, 20);
+    var m20 = sma(20); CALC.bsup = []; CALC.binf = [];
+    for (var i = 0; i < v.length; i++) {
+      if (m20[i] == null) { CALC.bsup.push(null); CALC.binf.push(null); continue; }
+      var d = 0; for (var j = i - 19; j <= i; j++) d += Math.pow(v[j][4] - m20[i], 2);
+      d = Math.sqrt(d / 20); CALC.bsup.push(m20[i] + 2 * d); CALC.binf.push(m20[i] - 2 * d);
+    }
+    CALC.bmed = m20;
+    var rsi = [null], g = 0, p = 0;
+    for (i = 1; i < v.length; i++) {
+      var dif = v[i][4] - v[i - 1][4], ga = Math.max(dif, 0), pe = Math.max(-dif, 0);
+      if (i <= 14) { g += ga; p += pe; rsi.push(i === 14 ? (p === 0 ? 100 : 100 - 100 / (1 + (g / 14) / (p / 14))) : null); if (i === 14) { g /= 14; p /= 14; } }
+      else { g = (g * 13 + ga) / 14; p = (p * 13 + pe) / 14; rsi.push(p === 0 ? 100 : 100 - 100 / (1 + g / p)); }
+    }
+    CALC.rsi = rsi;
+    var e12 = emaDe(cierres, 12), e26 = emaDe(cierres, 26), macd = e12.map(function (x, k) { return x != null && e26[k] != null ? x - e26[k] : null; });
+    CALC.macd = macd; CALC.senal = emaDe(macd, 9);
+    CALC.hist = macd.map(function (x, k) { return x != null && CALC.senal[k] != null ? x - CALC.senal[k] : null; });
+  }
+  document.querySelectorAll(".indicadores-chips [data-ind]").forEach(function (b) {
+    var k = b.getAttribute("data-ind"); b.setAttribute("aria-pressed", IND[k] ? "true" : "false");
+    b.addEventListener("click", function () {
+      IND[k] = !IND[k]; b.setAttribute("aria-pressed", IND[k] ? "true" : "false");
+      try { localStorage.setItem("fc-indicadores", JSON.stringify(IND)); } catch (e) { /* sin almacenamiento */ }
+      alturaPaneles(); medida();
+    });
+  });
+  function alturaPaneles() {
+    var n = (IND.rsi ? 1 : 0) + (IND.macd ? 1 : 0);
+    lienzo.classList.toggle("subs-1", n === 1); lienzo.classList.toggle("subs-2", n === 2);
+  }
+  alturaPaneles();
   function media(arr, n, k) {
     if (k < n - 1) return null;
     var s = 0; for (var j = k - n + 1; j <= k; j++) s += arr[j][4];
@@ -87,98 +127,144 @@
     var ejeX = 64, ancho = G.w - ejeX, cabe = Math.max(10, Math.floor(ancho / 6));
     return G.velas.slice(-cabe);
   }
+  function linea(serie, base, paso, y, color, ancho) {
+    ctx.strokeStyle = color; ctx.lineWidth = ancho || 1.3; ctx.beginPath();
+    var empezo = false;
+    for (var j = 0; j < paso.n; j++) {
+      var val = serie[base + j]; if (val == null) continue;
+      var mx = j * paso.w + paso.w / 2;
+      if (empezo) ctx.lineTo(mx, y(val)); else { ctx.moveTo(mx, y(val)); empezo = true; }
+    }
+    ctx.stroke();
+  }
   function dibujar() {
     var W = G.w, H = G.h, dpr = G.dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
     var v = visibles();
     if (!v.length) return;
-    var ejeY = 64, ejeX = 22, plotW = W - ejeY, volH = G.vol ? Math.round((H - ejeX) * 0.18) : 0, plotH = H - ejeX - volH - 6;
+    calcularIndicadores();
+    var base = G.velas.length - v.length;
+    var ejeY = 64, ejeX = 22, plotW = W - ejeY, subH = 74, subs = (IND.rsi ? 1 : 0) + (IND.macd ? 1 : 0);
+    var mainH = H - ejeX - subs * subH;
+    var volH = IND.vol && G.vol ? Math.round(mainH * 0.18) : 0, plotH = mainH - 6;
     var hi = -Infinity, lo = Infinity, vmax = 0;
-    v.forEach(function (c) { hi = Math.max(hi, c[2]); lo = Math.min(lo, c[3]); vmax = Math.max(vmax, c[5]); });
+    v.forEach(function (c, j) {
+      hi = Math.max(hi, c[2]); lo = Math.min(lo, c[3]); vmax = Math.max(vmax, c[5]);
+      if (IND.boll && CALC.bsup[base + j] != null) { hi = Math.max(hi, CALC.bsup[base + j]); lo = Math.min(lo, CALC.binf[base + j]); }
+    });
     if (hi === lo) { hi *= 1.001; lo *= 0.999; }
     var pad = (hi - lo) * 0.08; hi += pad; lo -= pad;
-    var y = function (p) { return 8 + (hi - p) / (hi - lo) * (plotH - 8); };
-    var paso = plotW / v.length, cuerpo = Math.max(1, Math.min(14, paso * 0.68));
+    var y = function (p) { return 8 + (hi - p) / (hi - lo) * (plotH - 8 - volH * 0.6); };
+    var paso = { w: plotW / v.length, n: v.length }, cuerpo = Math.max(1, Math.min(14, paso.w * 0.68));
     var cUp = color("--up"), cDown = color("--down"), cLine = color("--line"), cMuted = color("--muted"), cInk = color("--ink");
-    ctx.font = "11px " + color("--mono");
+    ctx.font = "11px " + color("--sans");
     ctx.lineWidth = 1;
-    // cuadrícula y eje de precios
     ctx.fillStyle = cMuted; ctx.textBaseline = "middle"; ctx.textAlign = "left";
     for (var k = 0; k <= 4; k++) {
-      var py = 8 + k * (plotH - 8) / 4, valor = hi - k * (hi - lo) / 4;
+      var py = 8 + k * (plotH - 8 - volH * 0.6) / 4, valor = hi - k * (hi - lo) / 4;
       ctx.strokeStyle = cLine; ctx.beginPath(); ctx.moveTo(0, Math.round(py) + 0.5); ctx.lineTo(plotW, Math.round(py) + 0.5); ctx.stroke();
       ctx.fillText(num(valor, D.dec), plotW + 6, py);
     }
-    // eje de tiempo
     ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
     var cada = Math.max(1, Math.round(v.length / Math.max(2, Math.floor(plotW / 90))));
     for (var t = v.length - 1; t >= 0; t -= cada) {
-      var tx = t * paso + paso / 2;
+      var tx = t * paso.w + paso.w / 2;
       if (tx < 24) break;
       ctx.fillText(etiquetaTiempo(v[t][0]), tx, H - 6);
     }
-    // volumen
-    if (G.vol && vmax > 0) {
+    if (IND.boll) {
+      ctx.beginPath(); var emp = false;
+      for (var b1 = 0; b1 < v.length; b1++) { var su = CALC.bsup[base + b1]; if (su == null) continue; var bx = b1 * paso.w + paso.w / 2; if (emp) ctx.lineTo(bx, y(su)); else { ctx.moveTo(bx, y(su)); emp = true; } }
+      for (var b2 = v.length - 1; b2 >= 0; b2--) { var inf = CALC.binf[base + b2]; if (inf == null) continue; ctx.lineTo(b2 * paso.w + paso.w / 2, y(inf)); }
+      ctx.closePath(); ctx.fillStyle = color("--accent") + "14"; ctx.fill();
+      linea(CALC.bsup, base, paso, y, color("--accent") + "99", 1); linea(CALC.binf, base, paso, y, color("--accent") + "99", 1);
+    }
+    if (volH && vmax > 0) {
       v.forEach(function (c, j) {
-        var vh = c[5] / vmax * volH, vx = j * paso + (paso - cuerpo) / 2;
-        ctx.fillStyle = (c[4] >= c[1] ? cUp : cDown); ctx.globalAlpha = 0.28;
-        ctx.fillRect(vx, H - ejeX - vh, cuerpo, vh);
+        var vh = c[5] / vmax * volH, vx = j * paso.w + (paso.w - cuerpo) / 2;
+        ctx.fillStyle = (c[4] >= c[1] ? cUp : cDown); ctx.globalAlpha = 0.25;
+        ctx.fillRect(vx, mainH - vh, cuerpo, vh);
       });
       ctx.globalAlpha = 1;
     }
-    // velas
     v.forEach(function (c, j) {
-      var cx = j * paso + paso / 2, sube = c[4] >= c[1];
+      var cx = j * paso.w + paso.w / 2, sube = c[4] >= c[1];
       ctx.strokeStyle = ctx.fillStyle = sube ? cUp : cDown;
       ctx.beginPath(); ctx.moveTo(Math.round(cx) + 0.5, y(c[2])); ctx.lineTo(Math.round(cx) + 0.5, y(c[3])); ctx.stroke();
       var top = y(Math.max(c[1], c[4])), alto = Math.max(1, Math.abs(y(c[1]) - y(c[4])));
       ctx.fillRect(Math.round(cx - cuerpo / 2), top, Math.round(cuerpo), alto);
     });
-    // medias móviles sobre la serie completa
-    var base = G.velas.length - v.length;
-    [[7, color("--warn")], [25, color("--accent")]].forEach(function (m) {
-      ctx.strokeStyle = m[1]; ctx.lineWidth = 1.4; ctx.beginPath();
-      var empezo = false;
-      v.forEach(function (c, j) {
-        var mv = media(G.velas, m[0], base + j); if (mv == null) return;
-        var mx = j * paso + paso / 2;
-        if (empezo) ctx.lineTo(mx, y(mv)); else { ctx.moveTo(mx, y(mv)); empezo = true; }
-      });
-      ctx.stroke();
-    });
+    if (IND.ma) { linea(CALC.ma7, base, paso, y, color("--warn")); linea(CALC.ma25, base, paso, y, color("--accent")); }
+    if (IND.ema) linea(CALC.ema20, base, paso, y, "#B67CFF", 1.5);
     ctx.lineWidth = 1;
-    // último precio
     var ult = v[v.length - 1], uy = y(ult[4]), cUlt = ult[4] >= ult[1] ? cUp : cDown;
     ctx.setLineDash([3, 3]); ctx.strokeStyle = cUlt; ctx.beginPath(); ctx.moveTo(0, uy); ctx.lineTo(plotW, uy); ctx.stroke(); ctx.setLineDash([]);
     etiqueta(num(ult[4], D.dec), plotW, uy, cUlt, "#fff");
-    // cruz
+    // paneles inferiores
+    var top0 = mainH;
+    function panel(titulo, valores, minimo, maximo, dibujo) {
+      ctx.strokeStyle = cLine; ctx.beginPath(); ctx.moveTo(0, top0 + 0.5); ctx.lineTo(W, top0 + 0.5); ctx.stroke();
+      var yy = function (val) { return top0 + 14 + (maximo - val) / (maximo - minimo) * (subH - 22); };
+      dibujo(yy);
+      ctx.fillStyle = cMuted; ctx.textAlign = "left"; ctx.textBaseline = "top"; ctx.font = "11px " + color("--sans");
+      var idx = G.hover >= 0 ? base + G.hover : G.velas.length - 1, val = valores[idx];
+      ctx.fillText(titulo + (val != null ? "  " + num(val, Math.abs(val) >= 100 ? 1 : (Math.abs(val) >= 1 ? 2 : D.dec)) : ""), 6, top0 + 3);
+      top0 += subH;
+    }
+    if (IND.rsi) {
+      panel("RSI 14", CALC.rsi, 0, 100, function (yy) {
+        ctx.fillStyle = color("--accent") + "10"; ctx.fillRect(0, yy(70), plotW, yy(30) - yy(70));
+        ctx.setLineDash([2, 3]); ctx.strokeStyle = cMuted;
+        [30, 70].forEach(function (l) { ctx.beginPath(); ctx.moveTo(0, yy(l)); ctx.lineTo(plotW, yy(l)); ctx.stroke(); ctx.fillStyle = cMuted; ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.fillText(String(l), plotW + 6, yy(l)); });
+        ctx.setLineDash([]);
+        linea(CALC.rsi, base, paso, yy, color("--accent"), 1.4);
+      });
+    }
+    if (IND.macd) {
+      var mmax = 0;
+      for (var q = 0; q < v.length; q++) [CALC.macd[base + q], CALC.senal[base + q], CALC.hist[base + q]].forEach(function (x) { if (x != null) mmax = Math.max(mmax, Math.abs(x)); });
+      mmax = mmax || 1;
+      panel("MACD 12 26 9", CALC.macd, -mmax, mmax, function (yy) {
+        for (var h2 = 0; h2 < v.length; h2++) {
+          var hv = CALC.hist[base + h2]; if (hv == null) continue;
+          ctx.fillStyle = hv >= 0 ? cUp : cDown; ctx.globalAlpha = 0.55;
+          var y0 = yy(0), y1 = yy(hv); ctx.fillRect(h2 * paso.w + (paso.w - cuerpo) / 2, Math.min(y0, y1), cuerpo, Math.max(1, Math.abs(y1 - y0)));
+        }
+        ctx.globalAlpha = 1;
+        linea(CALC.macd, base, paso, yy, color("--accent"), 1.3); linea(CALC.senal, base, paso, yy, color("--warn"), 1.2);
+      });
+    }
     if (G.hover >= 0 && G.hover < v.length) {
-      var hx = G.hover * paso + paso / 2;
+      var hx = G.hover * paso.w + paso.w / 2;
       ctx.strokeStyle = cMuted; ctx.setLineDash([4, 4]);
       ctx.beginPath(); ctx.moveTo(hx, 0); ctx.lineTo(hx, H - ejeX); ctx.stroke();
       if (G.mouseY != null && G.mouseY < plotH) {
         ctx.beginPath(); ctx.moveTo(0, G.mouseY); ctx.lineTo(plotW, G.mouseY); ctx.stroke();
         ctx.setLineDash([]);
-        etiqueta(num(hi - (G.mouseY - 8) / (plotH - 8) * (hi - lo), D.dec), plotW, G.mouseY, color("--surface-3"), cInk);
+        etiqueta(num(hi - (G.mouseY - 8) / (plotH - 8 - volH * 0.6) * (hi - lo), D.dec), plotW, G.mouseY, color("--surface-3"), cInk);
       }
       ctx.setLineDash([]);
-      escribirLeyenda(v[G.hover]);
+      escribirLeyenda(v[G.hover], base + G.hover);
     } else {
-      escribirLeyenda(ult);
+      escribirLeyenda(ult, G.velas.length - 1);
     }
   }
   function etiqueta(texto, x, yy, fondo, tinta) {
     ctx.fillStyle = fondo; ctx.fillRect(x + 1, yy - 9, 62, 18);
     ctx.fillStyle = tinta; ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.fillText(texto, x + 5, yy);
   }
-  function escribirLeyenda(c) {
+  function escribirLeyenda(c, idx) {
     if (!c) { leyenda.textContent = ""; return; }
     var var_ = c[1] ? (c[4] / c[1] - 1) * 100 : 0, d = new Date(c[0]);
     leyenda.innerHTML = "";
-    [["", d.toLocaleDateString("es-PY", { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString("es-PY", { hour: "2-digit", minute: "2-digit", hour12: false })],
+    var partes = [["", d.toLocaleDateString("es-PY", { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString("es-PY", { hour: "2-digit", minute: "2-digit", hour12: false })],
      ["A", num(c[1], D.dec)], ["M", num(c[2], D.dec)], ["m", num(c[3], D.dec)], ["C", num(c[4], D.dec)],
-     ["", (var_ >= 0 ? "+" : "") + num(var_, 2) + " %"]].forEach(function (p, j) {
+     ["", (var_ >= 0 ? "+" : "") + num(var_, 2) + " %"]];
+    if (IND.ma && CALC.ma7 && CALC.ma7[idx] != null) partes.push(["MA7", num(CALC.ma7[idx], D.dec)]);
+    if (IND.ma && CALC.ma25 && CALC.ma25[idx] != null) partes.push(["MA25", num(CALC.ma25[idx], D.dec)]);
+    if (IND.ema && CALC.ema20 && CALC.ema20[idx] != null) partes.push(["EMA20", num(CALC.ema20[idx], D.dec)]);
+    partes.forEach(function (p, j) {
       var s = document.createElement("span");
       if (p[0]) { var b = document.createElement("b"); b.textContent = p[0] + " "; s.appendChild(b); }
       s.appendChild(document.createTextNode(p[1]));
@@ -265,6 +351,16 @@
       opsEl.appendChild(f);
     });
     ["libro-sim", "ops-sim"].forEach(function (id) { var e = document.getElementById(id); if (e) e.hidden = !j.simulado; });
+    var liq = document.getElementById("liquidez");
+    if (liq && j.ventas.length && j.compras.length) {
+      var medio = (j.ventas[0][0] + j.compras[0][0]) / 2, dc = 0, dv = 0;
+      j.compras.forEach(function (x) { if (x[0] >= medio * 0.99) dc += x[0] * x[1]; });
+      j.ventas.forEach(function (x) { if (x[0] <= medio * 1.01) dv += x[0] * x[1]; });
+      var tot = dc + dv || 1;
+      liq.querySelector("[data-liq-compra]").textContent = usd(dc);
+      liq.querySelector("[data-liq-venta]").textContent = usd(dv);
+      liq.querySelector(".liq-barra i").style.width = (dc / tot * 100).toFixed(1) + "%";
+    }
   }
   function cargarLibro() {
     if (document.hidden) return;

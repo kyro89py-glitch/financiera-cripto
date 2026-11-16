@@ -6,7 +6,7 @@ from decimal import Decimal
 from flask import Blueprint, Response, abort, current_app, flash, g, redirect, render_template, request, url_for
 
 from . import alertas, cartera, programadas, cuentas, db, documentos, graficos, guarani, operaciones, planes, precios, seguridad
-from .dinero import fmt_num, leer_monto
+from .dinero import fmt_num, leer_monto, valor_cent
 from .formato import f_fecha
 
 bp = Blueprint("cliente", __name__, url_prefix="/cliente")
@@ -48,9 +48,6 @@ def inicio():
     pr = precios.vigentes()
     ten = cartera.tenencias(c["id"])
     filas, total = cartera.posiciones(c["id"], pr, ten)
-    serie = cartera.serie_tenencias(ten)
-    graf = graficos.linea(serie) if total else None
-    var7 = (graf["fin_valor"] - graf["inicio_valor"]) if graf else 0
     aportado = cartera.aportado_neto(c["id"])
     modelo = db.uno("SELECT * FROM modelos WHERE codigo = ?", (c["modelo"],))
     faltan = documentos.faltantes(c) if c["kyc_estado"] != "verificado" else []
@@ -60,11 +57,29 @@ def inicio():
     movibles = [m for m in mercado if m["cambio"] is not None and not m["estable"]]
     destacados = {"suben": sorted(movibles, key=lambda m: -m["cambio"])[:4], "bajan": sorted(movibles, key=lambda m: m["cambio"])[:4],
                   "principales": mercado[:4]}
-    return render_template("cliente/inicio.html", filas=filas, total=total, graf=graf, var7=var7, aportado=aportado,
-                           modelo=modelo, abiertas=_abiertas(c["id"]), faltan=faltan, rend=cartera.rendimiento(c["id"], total),
-                           datos3d=datos3d(filas, ""), destacados=destacados, mayor_desvio=mayor,
-                           disp_usd=ten.get("USD", 0) - bloq.get("USD", 0), ultimos=_movimientos(c)[:6],
-                           actividad=_actividad_mes(c["id"]))
+    from .tiempo import leer
+    rangos = {}
+    for k, (dias, puntos) in list(cartera.RANGOS_PATRIMONIO.items()) + [("Todo", (None, 120))]:
+        serie = cartera.serie_patrimonio(c["id"], dias, puntos)
+        if serie:
+            rangos[k] = [[int(leer(t).timestamp() * 1000), v] for t, v in serie]
+    abiertas = _abiertas(c["id"])
+    cap = sum(m["cap"] or 0 for m in mercado)
+    resumen = {"cap": cap, "volumen": sum(m["volumen"] or 0 for m in mercado),
+               "dominancia": next((m["cap"] for m in mercado if m["codigo"] == "BTC"), 0) / cap * 100 if cap else None,
+               "suben": sum(1 for m in movibles if m["cambio"] > 0), "bajan": sum(1 for m in movibles if m["cambio"] < 0)}
+    costos = cartera.costos(c["id"])
+    pr_v = precios.vigentes()
+    no_realizado = sum(valor_cent(a, k["cantidad"], pr_v[a]["precio"]) - k["costo"] for a, k in costos.items()
+                       if a in pr_v and k["cantidad"] > 0)
+    return render_template("cliente/inicio.html", filas=filas, total=total, aportado=aportado, modelo=modelo,
+                           abiertas=abiertas, faltan=faltan, rend=cartera.rendimiento(c["id"], total),
+                           datos3d=datos3d(filas, ""), destacados=destacados, mayor_desvio=mayor, resumen=resumen,
+                           disp_usd=ten.get("USD", 0) - bloq.get("USD", 0), reservado=operaciones.reservado_cent(c["id"]),
+                           en_retiros=sum(o["monto_cent"] for o in abiertas if o["tipo"] == "retiro"),
+                           ultimos=_movimientos(c)[:6], actividad=_actividad_mes(c["id"]),
+                           ind=cartera.indicadores(c["id"], filas, total, ten), no_realizado=no_realizado,
+                           realizado=sum(k["realizado"] for k in costos.values()), rangos=rangos)
 
 
 def _actividad_mes(cliente_id):

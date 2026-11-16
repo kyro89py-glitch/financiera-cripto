@@ -42,7 +42,7 @@ def create_app(config=None):
         DEPOSITO_USDT_RED=_env("DEPOSITO_USDT_RED", "TRON (TRC-20)"),
         COMISION_EXCHANGE_PCT=_env("COMISION_EXCHANGE_PCT", "0.1"),
         ENVIO_AVISO_USD=int(_env("ENVIO_AVISO_USD", "2000")),
-        PRECIO_MAX_MINUTOS=int(_env("PRECIO_MAX_MINUTOS", "60" if prod else "1440")),
+        PRECIO_MAX_MINUTOS=int(_env("PRECIO_MAX_MINUTOS", "2" if prod else "1440")),
         COINGECKO_API_KEY=_env("COINGECKO_API_KEY", ""),
         INSTRUCCIONES_DEPOSITO=_env(
             "INSTRUCCIONES_DEPOSITO",

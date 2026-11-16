@@ -2,6 +2,21 @@
 
 Este proyecto sigue [versionado semántico](https://semver.org/lang/es/). Las fechas son de Paraguay.
 
+## [0.10.0] - 2026-11-15
+
+Etapa 2 del plan (rediseño visual) más las dos correcciones críticas de la auditoría técnica.
+
+### Seguridad y exactitud
+- **Compras simultáneas (S-01, crítico):** dos compras pedidas al mismo tiempo podían aprobarse con el mismo saldo. Ahora, dentro de la transacción que registra el plan, se descuenta lo que otras compras en curso y las órdenes abiertas ya comprometieron; si no alcanza, la segunda se rechaza con un mensaje claro. Nueva prueba de concurrencia con hilos que falla sin la corrección.
+- **Frescura de precios (S-02):** en producción una operación o un envío de cripto exige un precio de hace 2 minutos como máximo (antes 60). Configurable con `PRECIO_MAX_MINUTOS`.
+
+### Diseño
+- Identidad nueva: tipografía Inter e Inter Display incluida en la aplicación (sin depender de servicios externos, licencia OFL), cifras tabulares, marca propia en SVG (también como ícono de la pestaña), paleta oscura más profunda con un solo acento cobalto y un detalle dorado, paneles separados por líneas finas, entrada suave del contenido y respuesta al tocar botones. Respeta «reducir movimiento» del sistema.
+- **Inicio** rehecho como panel financiero: patrimonio total con resultado de las últimas 24 h, disponible, reservado en órdenes, en retiros y aportado neto; **gráfico interactivo de la evolución del patrimonio** (7 días, 1 mes, 3 meses, 1 año y todo) calculado con tus tenencias reales y los precios de cada momento; accesos rápidos (depositar, comprar, vender, convertir, enviar, retirar); indicadores (rentabilidad frente a Bitcoin, resultado realizado y no realizado, exposición a cripto, mayor posición, volatilidad anual de 30 días); tabla de activos con precio en vivo, variación y peso; composición 3D; resumen del mercado con ganadoras y perdedoras; actividad reciente y movimientos del mes.
+- **Trading:** indicadores técnicos que se prenden y apagan y se recuerdan en el dispositivo: medias móviles 7 y 25, media exponencial 20, bandas de Bollinger (20, 2), volumen, RSI 14 y MACD (12, 26, 9) en paneles propios. Barra de liquidez con la profundidad de compra y venta a ±1 % del precio medio.
+- **Mercados:** filtros por variación (suben o bajan) y por capitalización (grande, mediana, chica), combinables con categoría, buscador y orden.
+- **Billetera:** totales completos (patrimonio, disponible, reservado, en retiros, resultado realizado y no realizado, rentabilidad), pestañas Activos, Historial, Depósitos, Retiros, Transferencias y Compras y ventas, y tabla por activo con total, disponible, reservado, precio, valor, resultado con costo promedio y acciones.
+
 ## [0.9.0] - 2026-11-15
 
 ### Nuevo

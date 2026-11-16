@@ -1,7 +1,8 @@
 /* Financiera Cripto: service worker. Guarda solo archivos públicos (estilos, scripts, íconos) y la página sin conexión.
    Nunca guarda páginas con datos de la cuenta: la navegación siempre va a la red. */
-var VERSION = "fc-v1";
-var ESTATICOS = ["/sin-conexion", "/static/css/app.css", "/static/js/app.js", "/static/js/escena3d.js",
+var VERSION = "fc-v2";
+var ESTATICOS = ["/sin-conexion", "/static/css/app.css", "/static/js/app.js", "/static/js/escena3d.js", "/static/js/graficos.js",
+                 "/static/fonts/inter-400.woff", "/static/fonts/inter-600.woff", "/static/fonts/inter-display-700.woff", "/static/img/marca.svg",
                  "/static/img/icono-192.png", "/static/manifest.webmanifest"];
 
 self.addEventListener("install", function (e) {

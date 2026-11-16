@@ -152,7 +152,7 @@ def operar(cliente, activo, lado, monto_cent, usuario, todo=False, ts=None, prec
                             " VALUES (?, ?, ?, ?, ?, 'pendiente', ?, ?)",
                             (cliente["id"], lado, monto_cent, activo, cantidad, ts, usuario["id"] if usuario else None))
             op = c.execute("SELECT * FROM operaciones WHERE id = ?", (cur.lastrowid,)).fetchone()
-            ejecucion.registrar_plan(c, op, plan, usuario, ts)
+            ejecucion.registrar_plan(c, op, plan, usuario, ts, usd_reservado=bloq.get("USD", 0) if lado == "compra" else 0)
         resultado = ejecucion.continuar(op["id"], usuario, ts, precios_usar)
     except ejecucion.ErrorEjecucion as e:
         raise ErrorNegocio(str(e)) from None

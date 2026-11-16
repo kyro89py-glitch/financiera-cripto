@@ -116,6 +116,21 @@
     </section>
     {% endif %}
 
+    {% if puede('clientes.kyc') %}
+    <section class="card col" id="diligencia">
+      <div class="row spread"><h3>Debida diligencia</h3>{% if cli.riesgo_aml == 'alto' %}<span class="pill bad">Riesgo alto</span>{% elif cli.pep %}<span class="pill warn">PEP</span>{% else %}<span class="pill ok">Riesgo normal</span>{% endif %}</div>
+      <form class="col" method="post" action="{{ url_for('equipo.diligencia', cid=cli.id) }}">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <label class="check"><input type="checkbox" name="pep" value="si" {{ 'checked' if cli.pep }}> Persona expuesta políticamente (o familiar o allegado)</label>
+        <label class="field" for="pep_cargo">Cargo o vínculo<input id="pep_cargo" name="pep_cargo" maxlength="120" value="{{ cli.pep_cargo or '' }}"></label>
+        <div class="g2"><label class="field" for="nacionalidad">Nacionalidad<input id="nacionalidad" name="nacionalidad" maxlength="60" value="{{ cli.nacionalidad or '' }}"></label>
+        <label class="field" for="domicilio_fiscal">Domicilio fiscal<input id="domicilio_fiscal" name="domicilio_fiscal" maxlength="200" value="{{ cli.domicilio_fiscal or '' }}"></label></div>
+        <p class="xs muted">Nacionalidad y domicilio fiscal son datos que pide el informe por operación de la DNIT (RG 47/2026).</p>
+        <button class="btn" type="submit">Guardar y revisar alertas</button>
+      </form>
+    </section>
+    {% endif %}
+
     {% if puede('clientes.origen') %}
     <section class="card col">
       <h3>Origen de los fondos</h3>

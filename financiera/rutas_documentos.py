@@ -21,7 +21,8 @@ def ver(did):
     if not propio:
         auditoria.registrar("documento.consultado", f"documento:{did}",
                             {"texto": f"Abrió «{documentos.nombre_tipo(d['tipo_cliente'], d['tipo'])}» de {d['nombre']}."})
-    resp = send_file(documentos.ruta(d), mimetype=d["mime"], download_name=d["nombre_original"], as_attachment=False,
+    import io
+    resp = send_file(io.BytesIO(documentos.leer(d)), mimetype=d["mime"], download_name=d["nombre_original"], as_attachment=False,
                      max_age=0, conditional=False)
     resp.headers["Content-Security-Policy"] = "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none'"
     resp.headers["Cache-Control"] = "private, no-store"

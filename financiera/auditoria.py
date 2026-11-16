@@ -41,9 +41,9 @@ def registrar(accion, objeto=None, detalle=None, usuario=None, ts=None, actor=No
         )
 
 
-def verificar():
+def verificar(conexion=None):
     prev, n = GENESIS, 0
-    for f in db.conexion().execute("SELECT * FROM bitacora ORDER BY id"):
+    for f in (conexion or db.conexion()).execute("SELECT * FROM bitacora ORDER BY id"):
         n += 1
         esperado = _huella(prev, f["ts"], f["usuario_id"], f["actor"], f["accion"], f["objeto"], f["detalle"], f["ip"])
         if f["hash_prev"] != prev or f["hash"] != esperado:

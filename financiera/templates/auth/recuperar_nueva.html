@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block titulo %}Contraseña nueva{% endblock %}
+{% block layout %}
+<div class="login sola">
+  <section class="form-lado">
+    <div class="auth">
+      {% if invalido %}
+        <div class="col" style="gap:4px"><h2>El enlace ya no sirve</h2>
+          <p class="muted">Venció o ya se usó. Por seguridad, cada enlace funciona una sola vez y por tiempo limitado.</p></div>
+        <a class="btn primary block" href="{{ url_for('auth.recuperar') }}">Pedir un enlace nuevo</a>
+      {% else %}
+        <div class="col" style="gap:4px"><h2>Elige una contraseña nueva</h2>
+          <p class="muted">Al menos 10 caracteres, con letras y números.</p></div>
+        {% if error %}<div class="flash error" role="alert">{{ error }}</div>{% endif %}
+        <form class="card col" method="post" autocomplete="off">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <label class="field" for="nueva">Contraseña nueva
+            <input id="nueva" name="nueva" type="password" autocomplete="new-password" required minlength="10" autofocus>
+          </label>
+          <label class="field" for="repetir">Repítela
+            <input id="repetir" name="repetir" type="password" autocomplete="new-password" required minlength="10">
+          </label>
+          {% if dos_pasos %}<label class="field" for="codigo">Código de tu aplicación de verificación
+            <input id="codigo" name="codigo" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,7}" required>
+          </label>{% endif %}
+          <button class="btn primary block" type="submit">Guardar contraseña</button>
+        </form>
+      {% endif %}
+    </div>
+  </section>
+</div>
+{% endblock %}

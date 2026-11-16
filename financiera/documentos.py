@@ -40,6 +40,13 @@ def ruta(doc):
     return os.path.join(carpeta(), doc["archivo"])
 
 
+def leer(doc):
+    """Contenido original del documento (en disco está cifrado; S-04)."""
+    from . import cifrado
+    with open(ruta(doc), "rb") as f:
+        return cifrado.descifrar_bytes(f.read())
+
+
 def guardar(cliente, tipo, nombre, datos, usuario, ts=None):
     """Guarda un archivo del legajo. Solo acepta PDF, JPG o PNG reales (se revisa el contenido, no la extensión)."""
     if tipo not in dict(TIPOS[cliente["tipo"]]):
@@ -56,8 +63,9 @@ def guardar(cliente, tipo, nombre, datos, usuario, ts=None):
     original = re.sub(r"[^\w.\- ()áéíóúñÁÉÍÓÚÑ]", "_", os.path.basename(nombre or "documento"))[:120] or "documento"
     archivo = f"{uuid.uuid4().hex}.{ext}"
     destino = os.path.join(carpeta(), archivo)
+    from . import cifrado
     with open(destino, "xb") as f:
-        f.write(datos)
+        f.write(cifrado.cifrar_bytes(datos))
     ts = ts or ahora()
     try:
         with db.transaccion() as c:

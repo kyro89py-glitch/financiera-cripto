@@ -3,7 +3,7 @@ import csv
 import io
 from decimal import Decimal
 
-from flask import Blueprint, Response, abort, flash, g, redirect, render_template, request, url_for
+from flask import Blueprint, Response, abort, current_app, flash, g, redirect, render_template, request, url_for
 
 from datetime import timedelta
 
@@ -399,3 +399,42 @@ def estado_mensual(cid, periodo):
     return render_template("estado_cuenta.html", cli=cli, ec=cartera.estado_cuenta(cli, periodo), periodos=periodos,
                            url_periodo=lambda p: url_for("equipo.estado_mensual", cid=cid, periodo=p),
                            url_csv=None, volver=url_for("equipo.cliente", cid=cid))
+
+
+# ---------- antilavado (S-06) ----------
+@bp.route("/antilavado", methods=["GET", "POST"])
+@seguridad.requiere("cumplimiento.ver")
+def antilavado():
+    from . import antilavado as aml
+    if request.method == "POST":
+        if not seguridad.puede("antilavado.resolver"):
+            abort(403)
+        try:
+            aml.resolver(request.form.get("alerta", type=int), request.form.get("estado"), request.form.get("nota"), g.usuario)
+            flash("Alerta resuelta y registrada en la bitácora.", "ok")
+        except ValueError as e:
+            flash(str(e), "error")
+        return redirect(url_for("equipo.antilavado"))
+    listas = db.todos("SELECT lista, COUNT(*) AS n, MAX(cargada) AS cargada FROM listas_sanciones GROUP BY lista")
+    return render_template("equipo/antilavado.html", abiertas=aml.abiertas(), resueltas=aml.resueltas(30), reglas=aml.REGLAS,
+                           niveles=aml.NIVELES, listas=listas, umbral=current_app.config["UMBRAL_AML_USD"])
+
+
+@bp.post("/clientes/<int:cid>/diligencia")
+@seguridad.requiere("clientes.kyc")
+def diligencia(cid):
+    from . import antilavado as aml
+    cli = db.uno("SELECT * FROM clientes WHERE id = ?", (cid,))
+    if not cli:
+        abort(404)
+    f = request.form
+    pep = 1 if f.get("pep") == "si" else 0
+    datos = (pep, (f.get("pep_cargo") or "").strip()[:120] or None, (f.get("nacionalidad") or "").strip()[:60] or None,
+             (f.get("domicilio_fiscal") or "").strip()[:200] or None)
+    db.ejecutar("UPDATE clientes SET pep = ?, pep_cargo = ?, nacionalidad = ?, domicilio_fiscal = ? WHERE id = ?", (*datos, cid))
+    auditoria.registrar("cliente.diligencia", f"cliente:{cid}",
+                        {"texto": f"Actualizó la debida diligencia de {cli['nombre']}: {'PEP' if pep else 'no PEP'}"
+                                  f"{', ' + datos[1] if datos[1] else ''}."})
+    n = aml.evaluar(cid)
+    flash("Debida diligencia guardada." + (f" Se generaron {n} alertas." if n else ""), "ok")
+    return redirect(url_for("equipo.cliente", cid=cid) + "#diligencia")

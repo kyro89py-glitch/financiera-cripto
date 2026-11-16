@@ -7,7 +7,7 @@
 {% if error %}<div class="flash error" role="alert">{{ error }}</div>{% endif %}
 <div class="g2">
   <form class="card col" method="post" action="{{ url_for('cliente.retirar') }}">
-    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="idem" value="{{ idem() }}">
     <div class="privado"><span class="lab small muted">Disponible para retirar</span><div class="detalle-monto num">{{ disponible|usd }}</div>
       <p class="xs muted">Valor de tu billetera {{ total|usd }}{% if pend %} · {{ pend|usd }} en retiros en curso{% endif %}{% if reservado %} · {{ reservado|usd }} reservado en órdenes{% endif %}.</p></div>
     <fieldset class="pregunta"><legend>1. Cómo quieres cobrar</legend>

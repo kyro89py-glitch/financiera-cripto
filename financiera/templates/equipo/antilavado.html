@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph, pill, vacio with context %}
+{% block titulo %}Antilavado{% endblock %}
+{% block contenido %}
+{{ ph("Antilavado", "Alertas automáticas para el oficial de cumplimiento. Cada decisión queda en la bitácora con su justificación.") }}
+{% include "equipo/_subnav.html" %}
+<div class="g2 ancho-izq">
+  <section class="panel">
+    <header><h3>Alertas abiertas</h3>{{ pill('warn' if abiertas else 'ok', abiertas|length ~ ' abiertas') }}</header>
+    {% for a in abiertas %}
+    <article class="aml {{ a.nivel }}">
+      <div class="row spread"><span class="row" style="gap:8px"><span class="pill {{ 'bad' if a.nivel == 'critica' else 'warn' }}">{{ niveles[a.nivel] }}</span><b>{{ reglas.get(a.regla, a.regla) }}</b></span>
+        <span class="xs muted">#{{ a.id }} · {{ a.creada|fecha }}</span></div>
+      <p class="small"><a href="{{ url_for('equipo.cliente', cid=a.cliente_id) }}#diligencia">{{ a.nombre }}</a> · {{ a.detalle }}</p>
+      {% if puede('antilavado.resolver') %}
+      <form class="aml-form" method="post">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="alerta" value="{{ a.id }}">
+        <input name="nota" required minlength="5" maxlength="500" placeholder="Justificación (queda en la bitácora)" aria-label="Justificación">
+        <button class="btn sm" name="estado" value="descartada" type="submit">Descartar</button>
+        <button class="btn sm danger" name="estado" value="reportada" type="submit">Marcar como reportada (ROS)</button>
+      </form>
+      {% endif %}
+    </article>
+    {% else %}{{ vacio('escudo', 'Sin alertas abiertas.') }}{% endfor %}
+  </section>
+  <div class="col">
+    <section class="panel">
+      <header><h3>Reglas activas</h3></header>
+      <ul class="lista-simple small">
+        <li><b>Monto alto:</b> depósito o retiro desde US$ {{ '{:,}'.format(umbral).replace(',', '.') }}.</li>
+        <li><b>Fraccionamiento:</b> 3 o más depósitos en 7 días, cada uno bajo el umbral y que juntos lo superan.</li>
+        <li><b>Entrada y salida rápida:</b> sale el 80 % o más de un depósito en menos de 72 horas.</li>
+        <li><b>Envíos múltiples:</b> envíos a 5 o más clientes distintos en 24 horas.</li>
+        <li><b>PEP:</b> cliente declarado como persona expuesta políticamente.</li>
+        <li><b>Listas de sanciones:</b> coincidencia de documento o de nombre (similitud de 88 % o más). Bloquea las aprobaciones hasta resolverla.</li>
+      </ul>
+    </section>
+    <section class="panel">
+      <header><h3>Listas de sanciones</h3></header>
+      {% for l in listas %}<div class="row spread small"><b>{{ l.lista }}</b><span class="muted">{{ l.n }} registros · {{ l.cargada|fecha }}</span></div>
+      {% else %}<p class="small warn-txt">No hay listas cargadas. Cárgalas con <span class="mono">flask antilavado importar-lista archivo.csv --lista ONU</span> y repite cuando se actualicen.</p>{% endfor %}
+    </section>
+    <section class="panel">
+      <header><h3>Resueltas recientemente</h3></header>
+      <div class="list">{% for a in resueltas %}
+        <div class="item"><div class="grow"><div class="t">{{ reglas.get(a.regla, a.regla) }} · {{ a.nombre }}</div><div class="d">{{ 'Reportada' if a.estado == 'reportada' else 'Descartada' }} por {{ a.por }} · {{ a.resuelta|fecha }} · {{ a.nota }}</div></div></div>
+      {% else %}<p class="small muted vacio-sm">Todavía no hay alertas resueltas.</p>{% endfor %}</div>
+    </section>
+  </div>
+</div>
+{% endblock %}

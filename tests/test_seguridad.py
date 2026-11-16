@@ -1,6 +1,6 @@
 import time
 
-from financiera import auditoria, db, seguridad
+from financiera import auditoria, db, seguridad, cifrado
 
 from .conftest import CLAVE, usuario
 
@@ -66,10 +66,12 @@ def test_cambio_de_clave_cierra_otras_sesiones(nav):
 def test_verificacion_en_dos_pasos(nav, ctx):
     n = nav("op@x.com")
     n.get("/cuenta/seguridad")
-    secreto = usuario("op@x.com")["totp_pendiente"]
+    guardado = usuario("op@x.com")["totp_pendiente"]
+    assert cifrado.esta_cifrado(guardado), "el secreto de dos pasos se guarda cifrado (S-04)"
+    secreto = cifrado.descifrar_texto(guardado)
     codigo = seguridad.totp_codigo(secreto, int(time.time() // 30))
     r = n.post("/cuenta/seguridad", {"accion": "activar", "codigo": codigo})
-    assert r.status_code == 302 and usuario("op@x.com")["totp_secreto"] == secreto
+    assert r.status_code == 302 and cifrado.descifrar_texto(usuario("op@x.com")["totp_secreto"]) == secreto
 
     m = nav()
     r = m.ingresar("op@x.com")

@@ -48,7 +48,7 @@
     </div>
     {% if cli.kyc_estado != 'verificado' %}<div class="flash warn">Para operar primero tenemos que verificar tu identidad. <a href="{{ url_for('cliente.perfil') }}#legajo">Ver qué falta</a></div>{% endif %}
     <form class="col" method="post" action="{{ url_for('cliente.operar') }}" data-confirmar="¿Confirmar la orden al precio de mercado?">
-      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="activo" value="{{ a.codigo }}">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="idem" value="{{ idem() }}"><input type="hidden" name="activo" value="{{ a.codigo }}">
       <input type="hidden" name="lado" value="compra"><input type="hidden" name="todo" value="">
       <div class="row spread small"><span class="muted" data-rotulo>Saldo disponible</span><b class="num" data-disponible>{{ caja|usd }}</b></div>
       <label class="field" for="op-monto">Monto en dólares<input id="op-monto" name="monto" inputmode="decimal" autocomplete="off" placeholder="0,00" required></label>
@@ -70,7 +70,7 @@
   <div class="ch" style="margin:0"><h3>Órdenes por precio</h3><span class="meta">límite y stop</span></div>
   <p class="small muted">Deja programada una compra o una venta para cuando {{ a.codigo }} llegue al precio que elijas. Sirve para comprar más barato, vender con ganancia o limitar una pérdida (stop). Se ejecuta sola, a precio de mercado, y te avisamos.</p>
   <form class="form prog" method="post" action="{{ url_for('cliente.programada_crear') }}">
-    <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="activo" value="{{ a.codigo }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="idem" value="{{ idem() }}"><input type="hidden" name="activo" value="{{ a.codigo }}">
     <label class="field" for="prog-lado">Qué hacer<select id="prog-lado" name="lado"><option value="compra">Comprar</option><option value="venta" {{ 'disabled' if not tengo_u }}>Vender</option></select></label>
     <label class="field" for="prog-precio">Cuando el precio llegue a (US$)<input id="prog-precio" name="precio" inputmode="decimal" autocomplete="off" required placeholder="{{ vig.precio|precio|replace('US$ ', '') if vig }}"></label>
     <label class="field" for="prog-monto">Monto en dólares<input id="prog-monto" name="monto" inputmode="decimal" autocomplete="off" placeholder="Desde 10"></label>
@@ -99,7 +99,7 @@
       <form method="post" action="{{ url_for('cliente.plan_cancelar', pid=p.id) }}" data-confirmar="¿Cancelar esta compra automática?"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="volver" value="{{ request.path }}"><button class="btn sm" type="submit">Cancelar</button></form></div>
     {% endfor %}
     <form class="row" method="post" action="{{ url_for('cliente.plan_crear') }}" style="align-items:flex-end">
-      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="activo" value="{{ a.codigo }}">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="idem" value="{{ idem() }}"><input type="hidden" name="activo" value="{{ a.codigo }}">
       <label class="field" for="plan-monto" style="flex:1;min-width:120px">Monto en dólares<input id="plan-monto" name="monto" inputmode="decimal" autocomplete="off" placeholder="Desde 10" required></label>
       <label class="field" for="plan-frec" style="flex:1;min-width:140px">Frecuencia<select id="plan-frec" name="frecuencia">{% for k, v in frecuencias.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></label>
       <button class="btn primary" type="submit">Programar</button>

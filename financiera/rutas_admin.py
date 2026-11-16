@@ -1,5 +1,5 @@
 """Administración: precios, comisiones, ejecución en el exchange y usuarios del equipo."""
-from flask import Blueprint, abort, flash, g, redirect, render_template, request, url_for
+from flask import Blueprint, abort, current_app, flash, g, redirect, render_template, request, url_for
 
 from . import auditoria, cartera, comisiones, conciliacion, cuentas, db, ejecucion, exchange, precios, seguridad
 from .dinero import leer_precio
@@ -180,3 +180,24 @@ def guaranies():
     recientes = db.todos("SELECT o.*, c.nombre FROM operaciones o JOIN clientes c ON c.id = o.cliente_id WHERE o.cambio_pyg IS NOT NULL"
                          " ORDER BY o.id DESC LIMIT 15")
     return render_template("admin/guaranies.html", cambios=guarani.cambios(), recientes=recientes)
+
+
+@bp.route("/respaldos", methods=["GET", "POST"])
+@seguridad.requiere("respaldos.gestionar")
+def respaldos():
+    import os
+
+    from . import respaldos as resp_mod
+    if request.method == "POST":
+        try:
+            ruta = resp_mod.crear()
+            r = resp_mod.probar(ruta)
+            flash(f"Respaldo creado y verificado ({os.path.basename(ruta)})." if r["ok"]
+                  else "El respaldo se creó pero la prueba de restauración falló: revisa el detalle.", "ok" if r["ok"] else "error")
+        except Exception as e:  # noqa: BLE001 - se informa a la persona y queda en el registro
+            current_app.logger.exception("respaldo")
+            flash(f"No se pudo crear el respaldo: {e.__class__.__name__}.", "error")
+        return redirect(url_for("admin.respaldos"))
+    filas = db.todos("SELECT * FROM respaldos ORDER BY id DESC LIMIT 30")
+    return render_template("admin/respaldos.html", filas=filas, carpeta=current_app.config["RESPALDOS_DIR"],
+                           conservar=current_app.config["RESPALDOS_CONSERVAR"], externo=bool(current_app.config["RESPALDO_COMANDO"]))

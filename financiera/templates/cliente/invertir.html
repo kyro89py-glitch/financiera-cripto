@@ -10,7 +10,7 @@
 {% if error %}<div class="flash error" role="alert">{{ error }}</div>{% endif %}
 
 <form class="col" method="post" action="{{ url_for('cliente.invertir') }}" style="gap:16px">
-  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="idem" value="{{ idem() }}">
   <section class="card col">
     <div class="ch" style="margin:0"><h3>1. Elige qué hacer con el depósito</h3><span class="meta">Tu perfil: {{ PERFILES[g.cliente.perfil_riesgo]|lower }}</span></div>
     <div class="models" role="radiogroup" aria-label="Cartera">

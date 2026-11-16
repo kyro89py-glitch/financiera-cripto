@@ -33,6 +33,10 @@ PERMISOS = {
     "ejecucion.reanudar": {"admin"},
     "precios.editar": {"admin"},
     "usuarios.gestionar": {"admin"},
+    "antilavado.resolver": {"cumplimiento", "admin"},
+    "respaldos.gestionar": {"admin"},
+    "limites.editar": {"admin"},
+    "soporte.atender": {"operador", "cumplimiento", "admin"},
 }
 
 # Versión vigente de las condiciones y la información de riesgos que acepta cada cliente.
@@ -44,7 +48,7 @@ SIN_FORZAR = {"auth.clave", "auth.seguridad", "auth.salir", "cliente.condiciones
 
 # ---------- contraseñas ----------
 def hash_clave(clave):
-    n, r, p = current_app.config["SCRYPT_N"], 8, 1
+    n, r, p = current_app.config["SCRYPT_N"], 8, current_app.config.get("SCRYPT_P", 1)
     sal = os.urandom(16)
     h = hashlib.scrypt(clave.encode("utf-8"), salt=sal, n=n, r=r, p=p, dklen=32, maxmem=64 * 1024 * 1024)
     return f"scrypt${n}${r}${p}${sal.hex()}${h.hex()}"
@@ -58,6 +62,16 @@ def verificar_clave(guardado, clave):
     except (ValueError, TypeError):
         return False
     return hmac.compare_digest(calc.hex(), h)
+
+
+def necesita_rehash(guardado):
+    """True si la contraseña se guardó con un costo menor al vigente (se actualiza al próximo ingreso)."""
+    try:
+        _, n, r, p, _, _ = guardado.split("$")
+    except (ValueError, AttributeError):
+        return True
+    cfg = current_app.config
+    return int(n) * int(p) < cfg["SCRYPT_N"] * cfg.get("SCRYPT_P", 1) or int(r) < 8
 
 
 _FICTICIO = {}
@@ -103,6 +117,8 @@ def totp_verificar(secreto, codigo, ultimo=None, momento=None):
     codigo = "".join(ch for ch in str(codigo or "") if ch.isdigit())
     if len(codigo) != 6 or not secreto:
         return None
+    from . import cifrado
+    secreto = cifrado.descifrar_texto(secreto)
     actual = int((momento or time.time()) // 30)
     for d in (0, -1, 1):
         c = actual + d

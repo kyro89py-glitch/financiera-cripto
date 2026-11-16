@@ -41,7 +41,8 @@
         <button class="btn primary block" type="submit">Ingresar</button>
       </form>
       <p class="small muted" style="text-align:center;margin-top:14px">¿No tienes cuenta? <a href="{{ url_for('auth.abrir_cuenta') }}">Ábrela en minutos</a></p>
-      <p class="note">¿Olvidaste tu contraseña? Pide una temporal a la empresa. Por seguridad, la cuenta se bloquea unos minutos tras {{ config.INTENTOS_LOGIN }} intentos fallidos.</p>
+      <p class="small" style="text-align:center"><a href="{{ url_for('auth.recuperar') }}">¿Olvidaste tu contraseña?</a></p>
+      <p class="note">Por seguridad, la cuenta se bloquea unos minutos tras {{ config.INTENTOS_LOGIN }} intentos fallidos.</p>
     </div>
   </section>
 </div>

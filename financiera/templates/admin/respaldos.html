@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph, pill, vacio with context %}
+{% block titulo %}Respaldos{% endblock %}
+{% block contenido %}
+{% call ph("Respaldos", "Copias cifradas de la base y los documentos, con prueba de restauración automática.") %}
+  <form method="post"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn primary" type="submit">Crear y probar respaldo ahora</button></form>
+{% endcall %}
+{% include "admin/_subnav.html" %}
+<div class="g2 ancho-izq">
+  <section class="panel">
+    <header><h3>Historial</h3><span class="meta">se conservan los últimos {{ conservar }}</span></header>
+    <div class="tablewrap"><table class="tabla-activos">
+      <thead><tr><th>Archivo</th><th>Creado</th><th class="r">Tamaño</th><th>Prueba</th></tr></thead>
+      <tbody>{% for f in filas %}
+        <tr><td><span class="mono small">{{ f.archivo }}</span>{% if f.detalle %}<span class="sec">{{ f.detalle }}</span>{% endif %}</td><td>{{ f.creado|fecha }}</td>
+          <td class="r num">{{ ((f.bytes or 0) / 1024)|round|int }} KB</td>
+          <td>{% if f.prueba_ok is none %}{{ pill('', 'Sin probar') }}{% elif f.prueba_ok %}{{ pill('ok', 'Restaurable') }}{% else %}{{ pill('bad', 'Falló') }}{% endif %}</td></tr>
+      {% else %}<tr><td colspan="4">{{ vacio('documento', 'Todavía no hay respaldos.') }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+  <section class="panel">
+    <header><h3>Cómo funciona</h3></header>
+    <ul class="lista-simple small">
+      <li>Copia consistente de la base en caliente más los documentos de identidad, que ya están cifrados.</li>
+      <li>El paquete se cifra con la clave de cifrado de la plataforma; sin esa clave no se puede leer.</li>
+      <li>La prueba lo restaura en una carpeta temporal y comprueba integridad de SQLite, cadena de la bitácora, conteos, saldos y documentos.</li>
+      <li>Copia fuera del servidor: {% if externo %}<b class="up">configurada</b> (RESPALDO_COMANDO).{% else %}<b class="warn-txt">sin configurar</b>. Define RESPALDO_COMANDO, por ejemplo <span class="mono">rclone copy {archivo} remoto:financiera</span>.{% endif %}</li>
+      <li>Programación: el servicio <span class="mono">respaldos</span> de docker-compose crea uno por día; el estado aparece en <span class="mono">/salud</span>.</li>
+    </ul>
+    <p class="xs muted">Carpeta local: <span class="mono">{{ carpeta }}</span></p>
+  </section>
+</div>
+{% endblock %}

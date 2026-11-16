@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from flask import Blueprint, Response, abort, current_app, flash, g, redirect, render_template, request, url_for
 
-from . import alertas, cartera, programadas, cuentas, db, documentos, graficos, guarani, operaciones, planes, precios, seguridad
+from . import alertas, cartera, programadas, cuentas, db, documentos, graficos, guarani, operaciones, planes, precios, seguridad, limites
 from .dinero import fmt_num, leer_monto, valor_cent
 from .formato import f_fecha
 
@@ -103,6 +103,7 @@ def _actividad_mes(cliente_id):
 
 
 @bp.post("/operar")
+@limites.idempotente("operar")
 def operar():
     activo = (request.form.get("activo") or "").upper()
     lado = request.form.get("lado")
@@ -124,7 +125,7 @@ def operar():
         flash(f"{'Compraste' if lado == 'compra' else 'Vendiste'} {fmt_unidades(o['cantidad'], activo)} a {fmt_precio(Decimal(o['precio']))} "
               f"por {fmt_usd(o['importe_cent'])}.", "ok")
     else:
-        flash("Tu orden quedó en proceso: el equipo ya fue avisado y la vas a ver en Movimientos.", "error")
+        flash("Tu orden quedó en proceso: el equipo ya fue avisado y la vas a ver en Movimientos.", "warn")
     return redirect(destino)
 
 
@@ -145,6 +146,7 @@ TIPOS_ORDEN = {  # tipo elegido en Trading -> (lado, condición que tiene que cu
 
 
 @bp.post("/programadas")
+@limites.idempotente("programada")
 def programada_crear():
     activo = (request.form.get("activo") or "").upper()
     todo = request.form.get("todo") == "si"
@@ -171,6 +173,7 @@ def programada_cancelar(oid):
 
 
 @bp.route("/convertir", methods=["GET", "POST"])
+@limites.idempotente("convertir")
 def convertir():
     c = g.cliente
     pr = precios.vigentes()
@@ -191,6 +194,7 @@ def convertir():
 
 
 @bp.route("/enviar", methods=["GET", "POST"])
+@limites.idempotente("enviar")
 def enviar():
     from . import transferencias as tr
     c = g.cliente
@@ -220,6 +224,7 @@ def enviar():
 @bp.get("/enviar/destinatario")
 def destinatario():
     from . import transferencias as tr
+    limites.exigir(("destinatario", f"u{g.usuario['id']}"), ("destinatario_ip", limites.ip()))
     d = tr.buscar(request.args.get("q"), g.cliente["id"])
     if not d:
         return {"ok": False, "texto": "No encontramos a otro cliente con ese dato."}
@@ -230,6 +235,7 @@ def destinatario():
 
 
 @bp.post("/planes")
+@limites.idempotente("plan")
 def plan_crear():
     activo = (request.form.get("activo") or "").upper()
     try:
@@ -289,6 +295,7 @@ def ver_cartera():
 
 
 @bp.route("/invertir", methods=["GET", "POST"])
+@limites.idempotente("aporte")
 def invertir():
     c = g.cliente
     error = None
@@ -344,6 +351,7 @@ def _solicitudes(cliente_id, tipo, n=5):
 
 
 @bp.route("/retirar", methods=["GET", "POST"])
+@limites.idempotente("retirar")
 def retirar():
     c = g.cliente
     error = None
@@ -374,6 +382,7 @@ def retirar():
 
 
 @bp.post("/retiro")
+@limites.idempotente("retiro")
 def retiro():
     c = g.cliente
     try:

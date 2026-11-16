@@ -120,8 +120,8 @@
     function consultar() {
       var q = destino.value.trim(); if (q === ultimo) return; ultimo = q;
       if (q.length < 5) { info.textContent = ""; info.className = "small"; return; }
-      fetch("/cliente/enviar/destinatario?q=" + encodeURIComponent(q), { credentials: "same-origin" })
-        .then(function (r) { return r.ok ? r.json() : null; })
+      fetch("/cliente/enviar/destinatario?q=" + encodeURIComponent(q), { credentials: "same-origin", headers: { "Accept": "application/json" } })
+        .then(function (r) { return (r.ok || r.status === 429) ? r.json() : null; })
         .then(function (j) { if (!j || destino.value.trim() !== q) return; info.textContent = j.texto; info.className = "small " + (j.ok ? "up" : "down"); })
         .catch(function () {});
     }

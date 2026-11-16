@@ -98,6 +98,8 @@ def solicitar_aporte(cliente, monto, modelo, referencia, usuario, ts=None, acept
                                       + (f"a la cartera {m['nombre']}.{extra}" if m else "a su saldo en dólares."),
                              "tipo": "aporte", "monto_cent": monto, "fuera_perfil": fuera}, usuario=usuario, ts=ts)
         _avisar_equipo(f"{cliente['nombre']} solicitó un aporte de {fmt_usd(monto)}.", opid, usuario, ts)
+    from . import antilavado
+    antilavado.evaluar(cliente["id"])
     return opid
 
 
@@ -112,6 +114,9 @@ def operar(cliente, activo, lado, monto_cent, usuario, todo=False, ts=None, prec
         raise ErrorNegocio("Esa moneda no está disponible.")
     if cliente["kyc_estado"] != "verificado":
         raise ErrorNegocio("Para comprar y vender primero tenemos que verificar tu identidad. Revisa tu perfil.")
+    from . import antilavado
+    if antilavado.bloqueado(cliente["id"]):
+        raise ErrorNegocio("Tu cuenta está en revisión de cumplimiento. Escríbenos desde Ayuda si necesitas más información.")
     maximo = _umbral("ORDEN_MAXIMA_USD")
     ten = cartera.tenencias(cliente["id"])
     bloq = cartera.bloqueado(cliente["id"], excepto_programada, ten)
@@ -237,6 +242,8 @@ def solicitar_retiro(cliente, monto, usuario, ts=None, en_guaranies=False, metod
                             {"texto": f"{cliente['nombre']} solicitó un retiro de {fmt_usd(monto)}.",
                              "tipo": "retiro", "monto_cent": monto}, usuario=usuario, ts=ts)
         _avisar_equipo(f"{cliente['nombre']} solicitó un retiro de {fmt_usd(monto)}.", opid, usuario, ts)
+    from . import antilavado
+    antilavado.evaluar(cliente["id"])
     return opid
 
 
@@ -297,6 +304,10 @@ def aprobar(opid, usuario, ts=None, precios_usar=None):
                            "Esta operación ya se está ejecutando. Revisa sus tramos y reintenta si hace falta.")
     cli = db.uno("SELECT * FROM clientes WHERE id = ?", (op["cliente_id"],))
     monto, tipo = op["monto_cent"], op["tipo"]
+    from . import antilavado
+    if antilavado.bloqueado(cli["id"]):
+        raise ErrorNegocio("El cliente tiene una posible coincidencia con una lista de sanciones sin resolver. "
+                           "Cumplimiento tiene que revisarla antes de aprobar operaciones.")
     if cli["kyc_estado"] != "verificado":
         raise ErrorNegocio(f"No se puede aprobar: la identidad de {cli['nombre']} no está verificada.")
     if requiere_origen(op) and not cli["origen_fondos"]:

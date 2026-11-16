@@ -2,6 +2,22 @@
 
 Este proyecto sigue [versionado semántico](https://semver.org/lang/es/). Las fechas son de Paraguay.
 
+## [0.20.0] - en desarrollo
+
+Evolución completa de la plataforma, trabajada por módulos. Los servicios financieros reales siguen deshabilitados.
+
+### Módulo 1 · Seguridad y arquitectura (hallazgos S-03 a S-10 de la auditoría)
+- **S-03 límites de tasa:** ingreso (20 por IP y 10 por correo cada 10 min), registro, búsqueda de destinatarios (20 por usuario cada 10 min), recuperación de contraseña, descarga de datos y consultas de mercado (240 por minuto por IP). Responden 429 con «Retry-After» y un mensaje claro.
+- **S-04 cifrado en reposo:** secretos de verificación en dos pasos y documentos de identidad cifrados con Fernet y una clave fuera de la base (`CLAVE_CIFRADO`). Comandos `flask cifrado generar-clave`, `migrar` y `rotar` (rotación sin cortar el servicio).
+- **S-05 respaldos:** `flask respaldo crear` hace una copia en caliente de la base y los documentos, la cifra, conserva las últimas 14 y la copia afuera con `RESPALDO_COMANDO`. Cada respaldo se restaura en una carpeta temporal y se verifica (integridad, cadena de la bitácora, conteos, saldos y documentos). Pantalla Ajustes › Respaldos y servicio diario en docker-compose.
+- **S-06 antilavado:** reglas de monto alto, fraccionamiento, entrada y salida rápida, envíos múltiples y PEP; importación de listas de sanciones (ONU, OFAC) con coincidencia por documento y por nombre; cola de alertas para Cumplimiento con resolución justificada; una coincidencia con sanciones bloquea operaciones hasta resolverla. Ficha de debida diligencia (PEP, cargo, nacionalidad, domicilio fiscal).
+- **S-07 recuperación de contraseña:** enlace de un solo uso por correo con vencimiento de 30 minutos, que no saltea la verificación en dos pasos, cierra todas las sesiones y avisa al titular. La respuesta no revela si el correo es cliente.
+- **S-08 contraseñas:** scrypt con N=2^15, r=8, p=3 (equivalente al mínimo de OWASP) y actualización automática del hash al próximo ingreso.
+- **S-09 secretos:** cualquier secreto se puede leer de un archivo (`*_FILE`), y en producción el arranque exige `SECRET_KEY` de 32 caracteres o más y `CLAVE_CIFRADO`.
+- **S-10 escala:** los precios en vivo responden 304 cuando no cambiaron (ETag), así el sondeo cada 3 segundos casi no cuesta.
+- **Idempotencia:** cada formulario que mueve dinero lleva una clave única; un doble clic o un reenvío del navegador no duplica la operación.
+- **Observabilidad y recuperación:** identificador por solicitud (X-Request-ID) visible en las páginas de error, registro estructurado, `/salud` para monitores, `/metricas` para Prometheus con token y `flask recuperar` para retomar ejecuciones cortadas.
+
 ## [0.10.0] - 2026-11-15
 
 Etapa 2 del plan (rediseño visual) más las dos correcciones críticas de la auditoría técnica.

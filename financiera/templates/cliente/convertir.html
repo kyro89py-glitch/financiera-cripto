@@ -4,7 +4,7 @@
 {% block contenido %}
 {{ ph("Convertir", "Cambia una moneda por otra en un solo paso, al precio de mercado.", volver=url_for('cliente.cartera'), volver_txt="Billetera") }}
 <form class="card col convertir" method="post" action="{{ url_for('cliente.convertir') }}" data-confirmar="¿Confirmar la conversión al precio de mercado?" style="max-width:560px">
-  <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="todo" value="">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="idem" value="{{ idem() }}"><input type="hidden" name="todo" value="">
   <div class="caja-conv">
     <div class="row spread small"><span class="muted">Entregas</span><span class="muted">Tienes <b class="num" data-tengo>—</b></span></div>
     <div class="row" style="flex-wrap:nowrap">

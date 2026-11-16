@@ -33,6 +33,14 @@ def notificar(usuario_id, texto, enlace=None, asunto=None, ts=None):
                           (u["email"], asunto or f"Novedades en tu cuenta de {nombre}", cuerpo, ts))
 
 
+def encolar_correo(para, asunto, cuerpo, ts=None):
+    """Encola un correo a una dirección (por ejemplo, la recuperación de contraseña de alguien sin sesión)."""
+    if not correo_activo():
+        return False
+    db.ejecutar("INSERT INTO correos (para, asunto, cuerpo, creado) VALUES (?, ?, ?, ?)", (para, asunto, cuerpo, ts or ahora()))
+    return True
+
+
 def notificar_rol(roles, texto, enlace=None, excepto=None, ts=None):
     marcadores = ",".join("?" * len(roles))
     for u in db.todos(f"SELECT id FROM usuarios WHERE activo = 1 AND rol IN ({marcadores})", tuple(roles)):

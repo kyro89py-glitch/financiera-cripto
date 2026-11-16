@@ -799,3 +799,10 @@ nav.tabs a{transition:background-color .15s,color .15s}
   .tabla-activos th + th,.tabla-activos td + td{padding-left:8px}
 }
 @media (max-width:520px){.indicadores dd{font-size:18px}.indicadores > div{padding:12px 14px}}
+.login.sola{grid-template-columns:minmax(0,1fr)}
+.aml{border-top:1px solid var(--line);padding:12px 0;display:flex;flex-direction:column;gap:6px}
+.aml:first-of-type{border-top:0}
+.aml.critica{box-shadow:inset 3px 0 0 var(--down);padding-left:12px}
+.aml-form{display:flex;gap:6px;flex-wrap:wrap}
+.aml-form input{flex:1;min-width:200px}
+.lista-simple{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}

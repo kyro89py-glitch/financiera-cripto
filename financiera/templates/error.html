@@ -5,6 +5,7 @@
   <span class="codigo">{{ codigo }}</span>
   <h2>{{ titulo_error }}</h2>
   <p class="muted">{{ texto_error }}</p>
+  {% if referencia and codigo >= 500 %}<p class="xs muted">Referencia para soporte: <span class="mono">{{ referencia }}</span></p>{% endif %}
   <a class="btn primary" href="{{ url_for('inicio') }}">Ir al inicio</a>
 </div>
 {% endblock %}

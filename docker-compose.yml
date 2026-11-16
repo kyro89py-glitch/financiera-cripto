@@ -34,8 +34,26 @@ services:
           flask --app financiera actualizar-precios || true
           flask --app financiera ejecutar-planes || true
           flask --app financiera enviar-correos || true
+          flask --app financiera recuperar || true
+          flask --app financiera antilavado revisar || true
           if [ "$$(date +%d)" = "01" ]; then flask --app financiera cobrar-comisiones || true; fi
           sleep 300
+        done
+
+  # Respaldo cifrado diario con prueba de restauración (S-05). Para la copia fuera del servidor define RESPALDO_COMANDO.
+  respaldos:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - datos:/datos
+    entrypoint:
+      - sh
+      - -c
+      - |
+        while true; do
+          flask --app financiera respaldo crear || true
+          sleep 86400
         done
 
   caddy:

@@ -100,7 +100,7 @@
       <button type="button" data-tipo="stop" aria-pressed="false">Stop</button>
     </div>
     <form id="f-orden" method="post" action="{{ url_for('cliente.operar') }}" data-mercado="{{ url_for('cliente.operar') }}" data-prog="{{ url_for('cliente.programada_crear') }}" novalidate>
-      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="idem" value="{{ idem() }}">
       <input type="hidden" name="activo" value="{{ a.codigo }}">
       <input type="hidden" name="lado" value="compra">
       <input type="hidden" name="tipo" value="mercado">

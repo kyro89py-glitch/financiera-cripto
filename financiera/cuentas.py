@@ -71,6 +71,8 @@ def crear_cliente(datos, creador=None, ts=None):
         auditoria.registrar("cliente.creado", f"cliente:{cid}",
                             {"texto": f"Dio de alta al cliente {nombre} ({documento}).", "documento": documento},
                             usuario=creador, ts=ts)
+    from . import antilavado
+    antilavado.evaluar(cid)
     return cid, clave
 
 
@@ -129,6 +131,8 @@ def registrar_web(datos, ip=None, ts=None):
         from . import notificaciones
         notificaciones.notificar_rol(("cumplimiento", "admin"), f"Nueva cuenta abierta en línea: {cli['nombre']}. Revisa su legajo "
                                      "cuando suba los documentos.", f"/equipo/clientes/{cid}", ts=ts)
+    from . import antilavado
+    antilavado.evaluar(cid)
     return cid
 
 

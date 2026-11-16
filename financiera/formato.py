@@ -78,9 +78,14 @@ ACTIVO = {  # qué rutas marcan cada pestaña como activa
     "cliente.perfil": ("cliente.perfil", "auth.seguridad", "auth.clave", "auth.sesiones"),
     "equipo.operaciones": ("equipo.operaciones", "equipo.operacion"),
     "equipo.clientes": ("equipo.clientes", "equipo.cliente", "equipo.cliente_nuevo", "equipo.estado_mensual"),
-    "equipo.cumplimiento": ("equipo.cumplimiento", "equipo.bitacora", "equipo.documentos", "equipo.conciliacion"),
-    "admin.precios": ("admin.precios", "admin.usuarios", "admin.comisiones", "admin.ejecucion", "admin.guaranies"),
+    "equipo.cumplimiento": ("equipo.cumplimiento", "equipo.bitacora", "equipo.documentos", "equipo.conciliacion", "equipo.antilavado"),
+    "admin.precios": ("admin.precios", "admin.usuarios", "admin.comisiones", "admin.ejecucion", "admin.guaranies", "admin.respaldos"),
 }
+
+
+def _idem():
+    from .limites import nueva_clave
+    return nueva_clave()
 
 
 def zona():
@@ -202,7 +207,7 @@ def init_app(app):
         return guarani.fmt(guarani.de_usd_cent(cent or 0, ref)) if ref else None
     from .transferencias import ocultar
     app.jinja_env.globals.update(en_gs=en_gs, cambios_pyg=guarani.cambios, ocultar=ocultar,
-                                 ahora_local=lambda: datetime.now(zona()))
+                                 ahora_local=lambda: datetime.now(zona()), idem=_idem)
     app.jinja_env.globals.update(ROLES=ROLES, ESTADOS=ESTADOS, KYC=KYC, PERFILES=PERFILES, TIPOS_OP=TIPOS_OP,
                                  iniciales=iniciales, icono=icono, navegacion=navegacion, avisos_no_leidos=avisos_no_leidos, cinta=cinta,
                                  VERSION=VERSION, ahora=tiempo.ahora)

@@ -7,7 +7,7 @@
 {% if error %}<div class="flash error" role="alert">{{ error }}</div>{% endif %}
 <div class="g2 ancho-izq">
   <form class="card col enviar" method="post" action="{{ url_for('cliente.enviar') }}" data-confirmar="¿Confirmar el envío? No se puede deshacer." autocomplete="off">
-    <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="todo" value="">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="idem" value="{{ idem() }}"><input type="hidden" name="todo" value="">
     <label class="field" for="destino">Para<input id="destino" name="destino" required value="{{ form.destino or '' }}" placeholder="Correo o número de cédula" autocomplete="off"></label>
     <p class="small" id="destino-info" aria-live="polite"></p>
     <div class="form" style="grid-template-columns:1fr 1fr">

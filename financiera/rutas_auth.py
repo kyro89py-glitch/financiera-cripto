@@ -4,7 +4,7 @@ from datetime import timedelta
 
 from flask import Blueprint, current_app, flash, g, redirect, render_template, request, session, url_for
 
-from . import auditoria, db, seguridad
+from . import auditoria, db, seguridad, cifrado, limites
 from .tiempo import ahora, ahora_dt, iso, leer  # noqa: F401
 
 bp = Blueprint("auth", __name__)
@@ -53,7 +53,12 @@ def ingresar():
     if request.method == "POST":
         email = (request.form.get("email") or "").strip().lower()[:200]
         clave = request.form.get("clave") or ""
+        limites.exigir(("ingreso_ip", limites.ip()), ("ingreso_email", email))
         u = db.uno("SELECT * FROM usuarios WHERE email = ?", (email,))
+        if u and seguridad.verificar_clave(u["clave_hash"], clave) and seguridad.necesita_rehash(u["clave_hash"]):
+            # S-08: la contraseña se vuelve a guardar con el costo vigente la primera vez que se ingresa bien.
+            db.ejecutar("UPDATE usuarios SET clave_hash = ? WHERE id = ?", (seguridad.hash_clave(clave), u["id"]))
+            u = db.uno("SELECT * FROM usuarios WHERE id = ?", (u["id"],))
         if _bloqueado(u):
             error = "La cuenta está bloqueada por varios intentos fallidos. Vuelve a intentar en unos minutos."
         else:
@@ -88,6 +93,7 @@ def codigo():
         return redirect(url_for("auth.ingresar"))
     error = None
     if request.method == "POST":
+        limites.exigir(("ingreso_ip", limites.ip()))
         if _bloqueado(u):
             error = "La cuenta está bloqueada por varios intentos fallidos. Vuelve a intentar en unos minutos."
         else:
@@ -187,9 +193,9 @@ def seguridad_cuenta():
     secreto = enlace = None
     if not u["totp_secreto"]:
         if not u["totp_pendiente"]:
-            db.ejecutar("UPDATE usuarios SET totp_pendiente = ? WHERE id = ?", (seguridad.totp_secreto(), u["id"]))
+            db.ejecutar("UPDATE usuarios SET totp_pendiente = ? WHERE id = ?", (cifrado.cifrar_texto(seguridad.totp_secreto()), u["id"]))
             u = db.uno("SELECT * FROM usuarios WHERE id = ?", (u["id"],))
-        secreto = u["totp_pendiente"]
+        secreto = cifrado.descifrar_texto(u["totp_pendiente"])
         enlace = seguridad.totp_enlace(secreto, u["email"])
     grupos = " ".join(secreto[i:i + 4] for i in range(0, len(secreto), 4)) if secreto else None
     return render_template("auth/seguridad.html", error=error, activa=bool(u["totp_secreto"]), secreto=grupos,
@@ -214,6 +220,7 @@ def abrir_cuenta():
     from . import cuentas
     error, form = None, {}
     if request.method == "POST":
+        limites.exigir(("registro_ip", limites.ip()))
         form = request.form.to_dict()
         try:
             cuentas.registrar_web(form, ip=request.remote_addr)
@@ -327,6 +334,7 @@ def mis_datos():
     if r:
         return r
     u = g.usuario
+    limites.exigir(("datos", f"u{u['id']}"))
     cli = _cliente_actual()
     datos = {"generado": ahora(), "usuario": {k: u[k] for k in ("email", "nombre", "rol", "creado", "ultimo_ingreso", "terminos_version")
                                              if k in u.keys()},
@@ -425,6 +433,7 @@ def mercado():
 
 @bp.get("/mercado/precios.json")
 def mercado_json():
+    limites.api()
     r = seguridad.exigir_sesion()
     if r:
         return {"error": "sesion"}, 401
@@ -432,6 +441,16 @@ def mercado_json():
     from .dinero import decimales_precio
     from .dinero import fmt_precio as f_precio
     from .formato import compacto, f_pct
+    # S-10: si los precios no cambiaron desde la última consulta del navegador, se responde 304 sin armar nada.
+    import hashlib
+    ult = db.uno("SELECT MAX(ts) AS ts, COUNT(*) AS n FROM precios")
+    en_vivo, seg, fuente = precios.vivo()
+    etiqueta = hashlib.sha1(f"{ult['ts']}|{ult['n']}|{en_vivo}|{fuente}".encode()).hexdigest()[:20]
+    if request.if_none_match.contains(etiqueta):
+        resp = current_app.response_class(status=304)
+        resp.set_etag(etiqueta)
+        resp.headers["Cache-Control"] = "private, no-cache"
+        return resp
     out = {}
     for a, p in precios.vigentes().items():
         out[a] = {"precio": f_precio(p["precio"]), "valor": float(p["precio"]),
@@ -439,14 +458,15 @@ def mercado_json():
                   "sube": (p["cambio"] or 0) >= 0, "dec": decimales_precio(p["precio"]),
                   "max": f_precio(p["max"]) if p["max"] else "", "min": f_precio(p["min"]) if p["min"] else "",
                   "vol": compacto(p["volumen"]) if p["volumen"] else ""}
-    en_vivo, seg, fuente = precios.vivo()
     resp = current_app.json.response({"precios": out, "vivo": en_vivo, "seg": round(seg or 0), "fuente": fuente})
-    resp.headers["Cache-Control"] = "no-store"
+    resp.set_etag(etiqueta)
+    resp.headers["Cache-Control"] = "private, no-cache"
     return resp
 
 
 @bp.get("/mercado/<codigo>/velas.json")
 def velas_json(codigo):
+    limites.api()
     r = seguridad.exigir_sesion()
     if r:
         return {"error": "sesion"}, 401
@@ -467,6 +487,7 @@ def velas_json(codigo):
 
 @bp.get("/mercado/<codigo>/libro.json")
 def libro_json(codigo):
+    limites.api()
     r = seguridad.exigir_sesion()
     if r:
         return {"error": "sesion"}, 401
@@ -647,3 +668,93 @@ def avisos():
     lista = notificaciones.listar(g.usuario["id"])
     notificaciones.marcar_leidas(g.usuario["id"])
     return render_template("auth/avisos.html", lista=lista)
+
+
+# ---------- recuperación de contraseña (S-07) ----------
+def _token_hash(token):
+    import hashlib
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def _recuperacion_valida(token):
+    from .tiempo import ahora as _ahora
+    if not token or len(token) > 100:
+        return None
+    r = db.uno("SELECT * FROM recuperaciones WHERE token_hash = ?", (_token_hash(token),))
+    if not r or r["usada"] or r["vence"] < _ahora():
+        return None
+    return r
+
+
+@bp.route("/recuperar", methods=["GET", "POST"])
+def recuperar():
+    if g.get("usuario"):
+        return redirect(url_for("auth.clave"))
+    from . import notificaciones
+    from .tiempo import hace
+    enviado, enlace_prueba = False, None
+    if request.method == "POST":
+        email = (request.form.get("email") or "").strip().lower()[:200]
+        limites.exigir(("recuperar_ip", limites.ip()), ("recuperar_email", email))
+        u = db.uno("SELECT * FROM usuarios WHERE email = ? AND activo = 1", (email,))
+        if u:
+            import secrets as _s
+            token = _s.token_urlsafe(32)
+            minutos = current_app.config["RECUPERACION_MINUTOS"]
+            ts = ahora()
+            with db.transaccion() as c:
+                c.execute("UPDATE recuperaciones SET usada = ? WHERE usuario_id = ? AND usada IS NULL", (ts, u["id"]))
+                c.execute("INSERT INTO recuperaciones (usuario_id, token_hash, creada, vence, ip) VALUES (?, ?, ?, ?, ?)",
+                          (u["id"], _token_hash(token), ts, hace(minutes=-minutos), request.remote_addr))
+            url = (current_app.config["URL_PUBLICA"] or request.host_url.rstrip("/")) + url_for("auth.recuperar_nueva", token=token)
+            nombre = current_app.config["NOMBRE"]
+            notificaciones.encolar_correo(
+                u["email"], f"Recupera tu contraseña de {nombre}",
+                f"Hola {u['nombre'].split()[0]}:\n\nPediste cambiar tu contraseña. Abre este enlace dentro de los próximos "
+                f"{minutos} minutos (sirve una sola vez):\n\n{url}\n\nSi no fuiste tú, ignora este correo: tu contraseña sigue igual.\n\n{nombre}")
+            auditoria.registrar("clave.recuperacion", f"usuario:{u['id']}", {"texto": f"Se pidió recuperar la contraseña de {u['email']}."},
+                                usuario=u, actor="Recuperación de contraseña")
+            if current_app.config["ENTORNO"] != "produccion" and not notificaciones.correo_activo():
+                enlace_prueba = url
+        enviado = True
+    return render_template("auth/recuperar.html", enviado=enviado, enlace_prueba=enlace_prueba)
+
+
+@bp.route("/recuperar/<token>", methods=["GET", "POST"], endpoint="recuperar_nueva")
+def recuperar_nueva(token):
+    r = _recuperacion_valida(token)
+    if not r:
+        return render_template("auth/recuperar_nueva.html", invalido=True), 410
+    u = db.uno("SELECT * FROM usuarios WHERE id = ?", (r["usuario_id"],))
+    error = None
+    if request.method == "POST":
+        limites.exigir(("ingreso_ip", limites.ip()))
+        nueva, repetir = request.form.get("nueva") or "", request.form.get("repetir") or ""
+        error = seguridad.validar_clave_nueva(nueva, u["email"])
+        if not error and nueva != repetir:
+            error = "Las dos contraseñas no coinciden."
+        contador = None
+        if not error and u["totp_secreto"]:
+            # La recuperación no saltea la verificación en dos pasos.
+            contador = seguridad.totp_verificar(u["totp_secreto"], request.form.get("codigo"), u["totp_ultimo"])
+            if contador is None:
+                error = "El código de verificación no es correcto."
+        if not error:
+            ts = ahora()
+            with db.transaccion() as c:
+                hecho = c.execute("UPDATE recuperaciones SET usada = ? WHERE id = ? AND usada IS NULL", (ts, r["id"])).rowcount
+                if hecho:
+                    c.execute("UPDATE usuarios SET clave_hash = ?, debe_cambiar_clave = 0, fallos = 0, bloqueado_hasta = NULL,"
+                              " sesion_ver = sesion_ver + 1" + (", totp_ultimo = ?" if contador is not None else "") + " WHERE id = ?",
+                              (seguridad.hash_clave(nueva), *((contador,) if contador is not None else ()), u["id"]))
+            if not hecho:
+                return render_template("auth/recuperar_nueva.html", invalido=True), 410
+            seguridad.cerrar_sesiones(u["id"], "clave")
+            auditoria.registrar("clave.recuperada", f"usuario:{u['id']}", {"texto": f"{u['email']} cambió su contraseña con un enlace de recuperación."},
+                                usuario=u, ts=ts)
+            from . import notificaciones
+            notificaciones.notificar(u["id"], "Tu contraseña se cambió con un enlace de recuperación y se cerraron todas tus sesiones. "
+                                     "Si no fuiste tú, avísanos de inmediato.", "/cuenta/sesiones", ts=ts)
+            flash("Listo: tu contraseña nueva ya funciona. Ingresa con ella.", "ok")
+            return redirect(url_for("auth.ingresar"))
+    return render_template("auth/recuperar_nueva.html", invalido=False, dos_pasos=bool(u["totp_secreto"]), error=error)

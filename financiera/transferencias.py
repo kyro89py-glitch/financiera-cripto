@@ -66,6 +66,9 @@ def enviar(cliente, destino_texto, activo, monto_cent, usuario, clave, codigo=No
             raise ErrorEnvio("El código de verificación no es correcto.")
     if cliente["kyc_estado"] != "verificado":
         raise ErrorEnvio("Para enviar primero tenemos que verificar tu identidad.")
+    from . import antilavado
+    if antilavado.bloqueado(cliente["id"]):
+        raise ErrorEnvio("Tu cuenta está en revisión de cumplimiento. Escríbenos desde Ayuda si necesitas más información.")
     destino = buscar(destino_texto, cliente["id"])
     if not destino:
         raise ErrorEnvio("No encontramos a ningún otro cliente con ese correo o documento.")
@@ -125,6 +128,8 @@ def enviar(cliente, destino_texto, activo, monto_cent, usuario, clave, codigo=No
         if valor >= aviso:
             notificaciones.notificar_rol(("cumplimiento", "admin"), f"Envío alto entre clientes: {cliente['nombre']} envió {fmt_usd(valor)} "
                                          f"a {destino['nombre']}.", f"/equipo/clientes/{cliente['id']}", ts=ts)
+    from . import antilavado
+    antilavado.evaluar(cliente["id"])
     return tid
 
 

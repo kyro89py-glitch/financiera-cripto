@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block titulo %}Recuperar contraseña{% endblock %}
+{% block layout %}
+<div class="login sola">
+  <section class="form-lado">
+    <div class="auth">
+      <a class="volver" href="{{ url_for('auth.ingresar') }}">← Ingresar</a>
+      <div class="col" style="gap:4px"><h2>Recuperar contraseña</h2>
+        <p class="muted">Te enviamos un enlace de un solo uso a tu correo. Vence en {{ config.RECUPERACION_MINUTOS }} minutos.</p></div>
+      {% if enviado %}
+        <div class="flash ok" role="status">Si el correo corresponde a una cuenta, en unos minutos vas a recibir el enlace. Revisa también la carpeta de correo no deseado.</div>
+        {% if enlace_prueba %}<div class="aviso-demo">Entorno de {{ config.ENTORNO }} sin servidor de correo: este es el enlace que se habría enviado. <a href="{{ enlace_prueba }}">Abrir enlace</a></div>{% endif %}
+      {% else %}
+      <form class="card col" method="post">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <label class="field" for="email">Correo de tu cuenta
+          <input id="email" name="email" type="email" autocomplete="username" required autofocus>
+        </label>
+        <button class="btn primary block" type="submit">Enviarme el enlace</button>
+      </form>
+      {% endif %}
+      <p class="note">Si tienes activada la verificación en dos pasos, también te vamos a pedir el código de tu aplicación. Al cambiar la contraseña se cierran todas tus sesiones.</p>
+    </div>
+  </section>
+</div>
+{% endblock %}

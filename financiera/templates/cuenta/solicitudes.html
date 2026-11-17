@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% from "macros.html" import pill with context %}
+{% block titulo %}Solicitudes y cierre{% endblock %}
+{% block clase_app %} ancha{% endblock %}
+{% block contenido %}
+{% include "cuenta/_cabecera.html" %}
+{% set u = g.usuario %}
+<div class="g2">
+  <div class="col">
+    <section class="panel">
+      <header><h3>Tus solicitudes</h3></header>
+      {% for s in lista %}
+      <article class="solicitud"><div class="row spread"><b>{{ 'Corrección de datos' if s.tipo == 'correccion' else 'Cierre de cuenta' }}</b>{{ pill(estados[s.estado][0], estados[s.estado][1]) }}</div>
+        <div class="small muted">#{{ s.id }} · {{ s.creada|fecha }}</div>
+        {% if s.tipo == 'correccion' %}<ul class="lista-simple small">{% for k, v in s.det.campos.items() %}<li>{{ campos[k] }}: <b>{{ v }}</b></li>{% endfor %}</ul>{% endif %}
+        <p class="small">Motivo: {{ s.det.motivo }}</p>
+        {% if s.nota %}<p class="small"><b>Respuesta del equipo:</b> {{ s.nota }}</p>{% endif %}
+        {% if s.estado == 'abierta' %}<form method="post"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="cancelar"><input type="hidden" name="id" value="{{ s.id }}"><button class="btn sm ghost" type="submit">Cancelar solicitud</button></form>{% endif %}
+      </article>
+      {% else %}<div class="empty compacto">{{ icono('documento') }}<span>No hiciste solicitudes.</span></div>{% endfor %}
+    </section>
+    <form class="panel" method="post">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="correccion">
+      <header><h3>Corregir un dato verificado</h3></header>
+      <p class="small muted">Completa solo lo que quieras corregir. Cumplimiento lo revisa y, si cambia tu nombre o documento, vuelve a verificar tu identidad.</p>
+      <label class="field" for="c-nombre">Nombre y apellido <span class="xs muted">(actual: {{ u.nombre }})</span><input id="c-nombre" name="nombre" maxlength="120"></label>
+      {% if cli %}<label class="field" for="c-doc">Número de documento <span class="xs muted">(actual: {{ cli.documento }})</span><input id="c-doc" name="documento" maxlength="30"></label>{% endif %}
+      <label class="field" for="c-nac">Fecha de nacimiento <span class="xs muted">(actual: {{ u.nacimiento or 'sin cargar' }})</span><input id="c-nac" name="nacimiento" type="date"></label>
+      <label class="field" for="c-motivo">Motivo<textarea id="c-motivo" name="motivo" rows="3" required minlength="10" maxlength="400" placeholder="Por ejemplo: mi apellido está mal escrito."></textarea></label>
+      <button class="btn primary" type="submit" style="align-self:flex-start">Enviar solicitud</button>
+    </form>
+  </div>
+  <form class="panel zona-peligro" method="post" data-confirmar="¿Enviar el pedido de cierre de tu cuenta? El equipo lo revisa antes de cerrarla.">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="cierre">
+    <header><h3>Cerrar mi cuenta</h3></header>
+    <p class="small">Al cerrar la cuenta se desactiva tu acceso. Por obligación legal conservamos los registros de tus operaciones durante 5 años; no se eliminan.</p>
+    {% if pendientes_cierre %}
+    <div class="flash warn">Antes de pedir el cierre:<ul class="lista-simple">{% for p in pendientes_cierre %}<li>{{ p|capitalize }}.</li>{% endfor %}</ul></div>
+    {% else %}
+    <label class="field" for="motivo-cierre">Motivo (opcional)<textarea id="motivo-cierre" name="motivo" rows="3" maxlength="400"></textarea></label>
+    <label class="field" for="clave-cierre">Tu contraseña<input id="clave-cierre" name="clave" type="password" autocomplete="current-password" required></label>
+    <button class="btn danger" type="submit" style="align-self:flex-start" {{ 'disabled' if u.estado_cuenta != 'activa' }}>{{ 'Cierre ya solicitado' if u.estado_cuenta != 'activa' else 'Pedir el cierre de mi cuenta' }}</button>
+    {% endif %}
+    <p class="xs muted">También puedes descargar una copia de tus datos desde <a href="{{ url_for('auth.sesiones') }}">Dispositivos</a>.</p>
+  </form>
+</div>
+{% endblock %}

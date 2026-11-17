@@ -1,19 +1,17 @@
 {% extends "base.html" %}
 {% from "macros.html" import kyc, pill, riesgo, ph, check with context %}
-{% block titulo %}Mi perfil{% endblock %}
+{% block titulo %}Verificación y límites{% endblock %}
+{% block clase_app %} ancha{% endblock %}
 {% block contenido %}
 {% set cli = g.cliente %}
-{% call ph("Mi perfil", "Tus datos, tu verificación y la seguridad de tu cuenta.") %}{{ kyc(cli) }}{% endcall %}
-<section class="identidad">
-  <div class="id-avatar" aria-hidden="true">{{ iniciales(cli.nombre) }}</div>
-  <div class="grow"><h3>{{ cli.nombre }}</h3><div class="small muted">{{ g.usuario.email }} · cliente desde {{ cli.creado|dia }}</div>
+{% include "cuenta/_cabecera.html" %}
+<section class="identidad sin-avatar">
+  <div class="grow"><div class="row spread" style="gap:8px;flex-wrap:wrap"><h3>Nivel {{ nivel.n }} · {{ nivel.nombre }}</h3>{{ kyc(cli) }}</div>
     <div class="niveles" role="img" aria-label="Nivel de verificación {{ nivel.n }} de 2: {{ nivel.nombre }}">
       {% for i, t in [(0, 'Cuenta abierta'), (1, 'Identidad verificada'), (2, 'Verificación reforzada')] %}<span class="{{ 'on' if nivel.n >= i }}{{ ' actual' if nivel.n == i }}"><b>{{ i }}</b>{{ t }}</span>{% endfor %}
     </div>
     <p class="small">{{ nivel.puede }}{% if nivel.falta %} <span class="muted">{{ nivel.falta }}</span>{% endif %}</p>
   </div>
-  <a class="prot-anillo {{ proteccion.estado }}" href="{{ url_for('auth.centro_seguridad') }}" style="--p:{{ proteccion.puntos }}" aria-label="Protección de la cuenta: {{ proteccion.puntos }} de 100">
-    <b class="num">{{ proteccion.puntos }}</b><span>Protección {{ proteccion.estado }}</span></a>
 </section>
 <nav class="mas-g" aria-label="Más secciones">
   <a href="{{ url_for('cliente.analisis_cartera') }}">{{ icono('resumen') }}<b>Análisis de cartera</b><span>Riesgo y distribución</span></a>
@@ -68,8 +66,8 @@
       <div class="pref"><div class="grow"><b>Moneda de la billetera</b><span class="small muted">En qué moneda ves tu patrimonio. Los saldos se llevan siempre en dólares.</span></div>
         <form method="post" action="{{ url_for('auth.preferencias_guardar') }}" class="segmentos"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="moneda"><input type="hidden" name="volver" value="{{ url_for('cliente.perfil') }}#preferencias">
           {% for m, t in [('USD', 'US$'), ('PYG', '₲')] %}<button type="submit" name="moneda" value="{{ m }}" aria-pressed="{{ 'true' if pref.moneda == m else 'false' }}">{{ t }}</button>{% endfor %}</form></div>
-      <div class="pref"><div class="grow"><b>Apariencia</b><span class="small muted">Tema {{ 'claro' if request.cookies.get('tema') == 'claro' else 'oscuro' }} en este dispositivo.</span></div>
-        <form method="post" action="{{ url_for('auth.tema') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="volver" value="{{ url_for('cliente.perfil') }}#preferencias"><button class="btn sm" type="submit">Cambiar a {{ 'oscuro' if request.cookies.get('tema') == 'claro' else 'claro' }}</button></form></div>
+      <div class="pref"><div class="grow"><b>Apariencia</b><span class="small muted">Tema {{ tema_actual() }} en este dispositivo.</span></div>
+        <form method="post" action="{{ url_for('auth.tema') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="volver" value="{{ url_for('cliente.perfil') }}#preferencias"><button class="btn sm" type="submit">Cambiar a {{ 'oscuro' if tema_actual() == 'claro' else 'claro' }}</button></form></div>
       <div class="pref"><div class="grow"><b>Avisos</b><span class="small muted">Qué te llega por correo, además de verlo en la plataforma.</span></div><a class="btn sm" href="{{ url_for('auth.avisos') }}">Configurar</a></div>
       <div class="pref"><div class="grow"><b>Inicio</b><span class="small muted">Qué módulos ves en tu panel y en qué orden.</span></div><a class="btn sm" href="{{ url_for('cliente.inicio') }}">Personalizar</a></div>
       <div class="pref"><div class="grow"><b>Acceso por API</b><span class="small muted">Todavía no ofrecemos claves de API para clientes. Cuando exista, se gestionará desde aquí con permisos limitados.</span></div><span class="pill">No disponible</span></div>

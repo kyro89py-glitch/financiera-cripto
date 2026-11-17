@@ -1,5 +1,5 @@
-<!DOCTYPE html>
-<html lang="es" data-tema="{{ 'claro' if request.cookies.get('tema') == 'claro' else 'oscuro' }}"{% if usuario and usuario.ocultar_saldos %} data-ocultar{% endif %}>
+{% from "macros.html" import avatar with context %}<!DOCTYPE html>
+<html lang="es" data-tema="{{ tema_actual() }}"{% if usuario and usuario.ocultar_saldos %} data-ocultar{% endif %}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -29,16 +29,17 @@
     {% set n_avisos = avisos_no_leidos() %}
     <a class="iconbtn" href="{{ url_for('auth.avisos') }}" aria-label="Avisos{% if n_avisos %}: {{ n_avisos }} sin leer{% endif %}">{{ icono('campana') }}{% if n_avisos %}<span class="badge">{{ n_avisos if n_avisos < 100 else '99+' }}</span>{% endif %}</a>
     <details class="cuenta">
-      <summary aria-label="Mi cuenta"><span class="avatar">{{ iniciales(usuario.nombre) }}</span></summary>
+      <summary aria-label="Mi cuenta">{{ avatar(usuario) }}</summary>
       <div class="menu">
-        <div class="who"><b>{{ usuario.nombre }}</b><span class="small muted">{{ usuario.email }}</span><span class="xs muted">{{ ROLES[usuario.rol] }}</span></div>
-        {% if usuario.rol == 'cliente' %}<a href="{{ url_for('cliente.perfil') }}">{{ icono('perfil') }}Mi perfil y documentos</a>{% endif %}
+        <div class="who"><b>{{ usuario.nombre_publico or usuario.nombre }}</b><span class="small muted">{{ ('@' ~ usuario.usuario) if usuario.usuario else usuario.email }}</span><span class="xs muted">{{ ROLES[usuario.rol] }}</span></div>
+        <a href="{{ url_for('cuenta.inicio') }}">{{ icono('perfil') }}Mi cuenta</a>
+        <a href="{{ url_for('cuenta.personalizar') }}">{{ icono('ajustes') }}Preferencias</a>
         <a href="{{ url_for('auth.sesiones') }}">{{ icono('dispositivo') }}Dispositivos y seguridad</a>
         <a href="{{ url_for('auth.seguridad') }}">{{ icono('escudo') }}Verificación en dos pasos</a>
         <a href="{{ url_for('auth.clave') }}">{{ icono('llave') }}Cambiar contraseña</a>
         <form method="post" action="{{ url_for('auth.tema') }}">
           <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="volver" value="{{ request.full_path.rstrip('?') }}">
-          <button class="link" type="submit">{{ icono('tema') }}Tema {{ 'oscuro' if request.cookies.get('tema') == 'claro' else 'claro' }}</button>
+          <button class="link" type="submit">{{ icono('tema') }}Tema {{ 'oscuro' if tema_actual() == 'claro' else 'claro' }}</button>
         </form>
         <form method="post" action="{{ url_for('auth.salir') }}">
           <input type="hidden" name="csrf" value="{{ csrf_token() }}">

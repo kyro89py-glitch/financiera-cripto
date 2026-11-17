@@ -26,6 +26,9 @@ REGLAS = {
     "recuperar_email": (3, 3600),
     "datos": (15, 3600),
     "consulta": (30, 600),
+    "usuario_disp": (60, 600),
+    "foto": (12, 3600),
+    "correo": (5, 3600),
 }
 API_POR_MINUTO = 240
 

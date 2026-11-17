@@ -109,3 +109,9 @@
   {% for e in g.etiquetas %}<text class="eje" x="{{ '%.1f'|format(e.x) }}" y="{{ g.alto - 6 }}" text-anchor="{{ e.ancla }}">{{ e.texto }}</text>{% endfor %}
 </svg>
 {%- endmacro %}
+
+
+{# Avatar de un usuario: su foto si tiene, o sus iniciales con el estilo que eligió. u = fila de usuarios. #}
+{% macro avatar(u, clase="") -%}
+{% if u.foto %}<img class="avatar {{ clase }}" src="{{ url_for('cuenta.foto', uid=u.id, v=u.foto_ts) }}" alt="" loading="lazy" decoding="async">{% else %}<span class="avatar av-{{ u.avatar or 0 }} {{ clase }}" aria-hidden="true">{{ iniciales(u.nombre_publico or u.nombre) }}</span>{% endif %}
+{%- endmacro %}

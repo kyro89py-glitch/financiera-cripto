@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% from "macros.html" import pill, vacio with context %}
+{% block titulo %}Actividad{% endblock %}
+{% block clase_app %} ancha{% endblock %}
+{% block contenido %}
+{% include "cuenta/_cabecera.html" %}
+<div class="actividad-g">
+  <aside class="act-filtros">
+    <nav class="act-cats" aria-label="Categoría">
+      <a href="{{ url_for('cuenta.actividad', desde=desde, hasta=hasta) }}" aria-current="{{ 'true' if not cat else 'false' }}"><span>Todo</span><b class="num">{{ conteo.values()|sum }}</b></a>
+      {% for k, t in categorias.items() %}<a href="{{ url_for('cuenta.actividad', cat=k, desde=desde, hasta=hasta) }}" aria-current="{{ 'true' if cat == k else 'false' }}"><span>{{ t }}</span><b class="num">{{ conteo.get(k, 0) }}</b></a>{% endfor %}
+    </nav>
+    <form class="col" method="get">
+      {% if cat %}<input type="hidden" name="cat" value="{{ cat }}">{% endif %}
+      <label class="field">Desde<input type="date" name="desde" value="{{ desde or '' }}"></label>
+      <label class="field">Hasta<input type="date" name="hasta" value="{{ hasta or '' }}"></label>
+      <div class="row" style="gap:6px"><button class="btn sm primary" type="submit">Filtrar</button>{% if desde or hasta %}<a class="btn sm ghost" href="{{ url_for('cuenta.actividad', cat=cat) }}">Quitar fechas</a>{% endif %}</div>
+    </form>
+    <a class="btn sm" href="{{ url_for('cuenta.actividad', cat=cat, desde=desde, hasta=hasta, formato='csv') }}">{{ icono('descargar') }}Exportar CSV</a>
+  </aside>
+  <section class="act-linea">
+    <p class="small muted">{{ total }} registro{{ 's' if total != 1 }}{% if cat %} en {{ categorias[cat] }}{% endif %}. Horas en tu zona horaria.</p>
+    {% for dia, eventos in grupos.items() %}
+    <h3 class="act-dia">{{ dia.strftime('%d/%m/%Y') }}</h3>
+    <ol class="act-lista">{% for e in eventos %}
+      <li class="act-ev cat-{{ e.cat }}"><time class="num">{{ e.ts|hora }}</time><span class="act-punto" aria-hidden="true"></span>
+        <div class="grow">{% if e.enlace %}<a href="{{ e.enlace }}">{{ e.texto }}</a>{% else %}{{ e.texto }}{% endif %}<div class="xs muted">{{ categorias[e.cat] }}{% if e.ip %} · IP {{ e.ip }}{% endif %}</div></div>
+        {{ pill(e.estado[0], e.estado[1]) }}</li>{% endfor %}
+    </ol>
+    {% else %}{{ vacio('movimientos', 'No hay actividad con esos filtros.') }}{% endfor %}
+  </section>
+</div>
+{% endblock %}

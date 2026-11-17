@@ -750,7 +750,11 @@ def favorito(codigo):
 
 @bp.post("/cuenta/tema")
 def tema():
-    actual = request.cookies.get("tema", "oscuro")
+    from .formato import tema_actual
+    actual = tema_actual()
+    if g.get("usuario"):
+        from . import preferencias
+        preferencias.guardar(g.usuario["id"], {"tema": "claro" if actual != "claro" else "oscuro"})
     destino = request.form.get("volver", "")
     resp = redirect(destino if destino.startswith("/") and not destino.startswith("//") else url_for("inicio"))
     resp.set_cookie("tema", "claro" if actual != "claro" else "oscuro", max_age=365 * 86400, samesite="Lax",
@@ -892,6 +896,8 @@ def preferencias_guardar():
     elif f.get("accion") == "correo":
         cambios["correo"] = {k: f.get(k) == "si" for k in preferencias.CATEGORIAS}
     preferencias.guardar(g.usuario["id"], cambios)
+    auditoria.registrar("preferencias.cambiadas", f"usuario:{g.usuario['id']}",
+                        {"texto": "Cambió sus preferencias: " + {"panel": "panel de inicio", "moneda": "moneda", "correo": "avisos por correo"}.get(f.get("accion"), "ajustes") + "."})
     flash("Preferencias guardadas.", "ok")
     destino = f.get("volver") or ""
     return redirect(destino if destino.startswith(("/cliente", "/cuenta", "/mercado", "/trading")) and "//" not in destino else url_for("inicio"))

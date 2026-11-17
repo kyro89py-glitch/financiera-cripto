@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block titulo %}Preferencias{% endblock %}
+{% block clase_app %} ancha{% endblock %}
+{% block contenido %}
+{% include "cuenta/_cabecera.html" %}
+{% set u = g.usuario %}
+<form method="post" class="pref-g">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <section class="panel">
+    <header><h3>Apariencia</h3></header>
+    <div class="temas" role="radiogroup" aria-label="Tema">
+      {% for k, t in [('oscuro', 'Oscuro'), ('claro', 'Claro')] %}<label class="tema-op tema-{{ k }}"><input type="radio" name="tema" value="{{ k }}" {{ 'checked' if pref.tema == k }}><span class="muestra" aria-hidden="true"><i></i><i></i><i></i></span><b>{{ t }}</b></label>{% endfor %}
+    </div>
+  </section>
+  <section class="panel">
+    <header><h3>Región</h3></header>
+    <label class="field" for="moneda">Moneda principal<select id="moneda" name="moneda"><option value="USD"{% if pref.moneda == 'USD' %} selected{% endif %}>Dólares (US$)</option><option value="PYG"{% if pref.moneda == 'PYG' %} selected{% endif %}>Guaraníes (₲)</option></select>
+      <span class="xs muted">En qué moneda ves tu patrimonio. Tus saldos se llevan siempre en dólares.</span></label>
+    <label class="field" for="zona">Zona horaria<select id="zona" name="zona"><option value="">La de la plataforma ({{ zona_plataforma }})</option>{% for k, t in zonas.items() %}<option value="{{ k }}"{% if pref.zona == k %} selected{% endif %}>{{ t }}</option>{% endfor %}</select>
+      <span class="xs muted">Ahora mismo: {{ ahora_local().strftime('%d/%m/%Y %H:%M') }}. Los límites diarios siempre se cuentan con la hora de Paraguay.</span></label>
+    <label class="field" for="idioma">Idioma<select id="idioma" disabled>{% for k, (t, ok) in idiomas.items() %}<option{% if k == 'es' %} selected{% endif %}>{{ t }}{{ '' if ok else ' (próximamente)' }}</option>{% endfor %}</select>
+      <span class="xs muted">Por ahora la plataforma está completa solo en español. Guaraní, portugués e inglés están pendientes.</span></label>
+  </section>
+  <section class="panel">
+    <header><h3>Privacidad</h3></header>
+    <label class="interruptor-fila"><span class="grow"><b>Ocultar saldos</b><span class="small muted">Difumina los montos en pantalla hasta que toques el ojo.</span></span><input type="checkbox" name="ocultar_saldos" value="si" {{ 'checked' if u.ocultar_saldos }}><i aria-hidden="true"></i></label>
+    {% if cli %}<label class="interruptor-fila"><span class="grow"><b>Recibir envíos de otros clientes</b><span class="small muted">Si lo apagas, nadie te encuentra para enviarte dinero.</span></span><input type="checkbox" name="recibir_envios" value="si" {{ 'checked' if cli.recibir_envios }}><i aria-hidden="true"></i></label>{% endif %}
+    <a class="small" href="{{ url_for('cuenta.datos') }}#publico">Qué muestra mi perfil público</a>
+  </section>
+  <section class="panel">
+    <header><h3>Más ajustes</h3></header>
+    <div class="pref"><div class="grow"><b>Notificaciones</b><span class="small muted">Qué avisos recibes y por qué canal.</span></div><a class="btn sm" href="{{ url_for('auth.avisos') }}#preferencias">Configurar</a></div>
+    {% if cli %}<div class="pref"><div class="grow"><b>Inicio</b><span class="small muted">Módulos, orden y vistas guardadas de tu panel.</span></div><a class="btn sm" href="{{ url_for('cliente.inicio') }}">Personalizar</a></div>{% endif %}
+  </section>
+  <div class="pref-pie"><button class="btn primary" type="submit">Guardar preferencias</button><span class="xs muted">Se guardan en tu cuenta, no en este dispositivo.</span></div>
+</form>
+{% endblock %}

@@ -2,6 +2,24 @@
 
 Este proyecto sigue [versionado semántico](https://semver.org/lang/es/). Las fechas son de Paraguay.
 
+## [0.30.0] - en curso
+
+Personalización e identidad. Los servicios financieros reales siguen deshabilitados; lo que se ejecuta en simulador se indica como tal.
+
+### Módulo 1 · Mi cuenta e identidad
+- **Mi cuenta:** nueva sección con cabecera de identidad (foto, nombre, usuario, identificador, nivel, estado, antigüedad y protección) y pestañas Resumen, Datos y fotografía, Verificación y límites, Seguridad, Dispositivos, Preferencias, Actividad y Solicitudes y cierre. El resumen muestra qué falta para completar la cuenta.
+- **Fotografía:** subir, tomar con la cámara (teléfono), recortar, acercar y girar antes de guardar, cambiar y quitar; seis avatares predeterminados. El servidor acepta solo JPG, PNG o WebP reales de hasta 6 MB, los vuelve a codificar a 512×512 sin metadatos (ubicación, cámara), guarda con nombre aleatorio fuera de la carpeta pública y limita los intentos. La foto vive en la cuenta: aparece en cualquier dispositivo.
+- **Nombre de usuario único:** disponibilidad en tiempo real, unicidad garantizada por la base (sin distinguir mayúsculas), nombres reservados y un cambio cada 30 días. **Identificador de cuenta** «FC» + 8 dígitos con dígito verificador.
+- **Perfil público** `/u/usuario`: la persona elige qué se ve (foto, presentación, ciudad, antigüedad, identidad verificada) o lo apaga. Nunca muestra saldos, movimientos, correo, teléfono, documento ni dirección; solo lo ven usuarios con sesión.
+- **Datos editables y datos verificados:** nombre público, presentación, teléfono, país, ciudad, dirección y avatar se cambian al instante. Nombre legal, documento y fecha de nacimiento se corrigen con una **solicitud** que revisa Cumplimiento (persona distinta, nota obligatoria, bitácora); si cambia nombre o documento, la identidad vuelve a quedar pendiente de verificación.
+- **Cambio de correo con verificación:** pide la contraseña, envía un enlace de un solo uso (1 hora) a la dirección nueva, avisa a la anterior y cierra todas las sesiones al aplicarse. No revela si una dirección ya está registrada.
+- **Cierre de cuenta:** pedido con contraseña; no se puede con saldo, órdenes o trámites abiertos; lo aprueba el equipo y los registros se conservan el plazo legal.
+- **Preferencias en la cuenta:** tema, moneda principal, zona horaria, ocultar saldos y recepción de envíos se guardan en el servidor y se aplican en todos los dispositivos. Idioma: solo español por ahora (guaraní, portugués e inglés pendientes).
+- **Actividad:** línea de tiempo propia con inicios de sesión, seguridad, perfil, configuración, compras y ventas, depósitos, retiros, transferencias y órdenes; filtros por categoría y fechas, estado de cada registro y exportación CSV.
+- **Envíos:** el destinatario se puede buscar por @usuario o identificador de cuenta, además de correo y cédula.
+- **Equipo:** Cumplimiento › Solicitudes, con permiso propio (`cuenta.solicitudes`).
+- Dependencias declaradas: `Pillow` y `cryptography` (esta última faltaba en requirements desde la 0.20).
+
 ## [0.20.0] - 2026-11-16
 
 Evolución completa de la plataforma, trabajada por módulos. Los servicios financieros reales siguen deshabilitados.

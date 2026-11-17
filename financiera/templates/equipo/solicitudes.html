@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% from "macros.html" import pill, ph, vacio with context %}
+{% block titulo %}Solicitudes de cuenta{% endblock %}
+{% block contenido %}
+{{ ph("Solicitudes de cuenta", "Correcciones de datos verificados y pedidos de cierre. Cada decisión lleva una nota y queda en la bitácora.") }}
+{% include "equipo/_subnav.html" %}
+<div class="col">
+{% for s in lista %}
+<article class="card col solicitud-eq">
+  <div class="row spread" style="flex-wrap:wrap;gap:8px"><div><b>{{ 'Corrección de datos' if s.tipo == 'correccion' else 'Cierre de cuenta' }}</b> · #{{ s.id }}
+    <div class="small muted">{% if s.cliente_id %}<a href="{{ url_for('equipo.cliente', cid=s.cliente_id) }}">{{ s.nombre }}</a>{% else %}{{ s.nombre }}{% endif %} · {{ s.email }} · {{ s.creada|fecha }}</div></div>
+    {{ pill(estados[s.estado][0], estados[s.estado][1]) }}</div>
+  {% if s.tipo == 'correccion' %}
+  <div class="tablewrap"><table class="tabla"><thead><tr><th>Dato</th><th>Actual</th><th>Pedido</th></tr></thead><tbody>
+    {% for k, v in s.det.campos.items() %}<tr><td>{{ campos[k] }}</td><td>{{ {'nombre': s.nombre, 'documento': s.documento, 'nacimiento': s.nacimiento}[k] or 'Sin cargar' }}</td><td><b>{{ v }}</b></td></tr>{% endfor %}
+  </tbody></table></div>
+  <p class="xs muted">Si apruebas un cambio de nombre o documento, la identidad vuelve a quedar pendiente de verificación con el documento actualizado.</p>
+  {% endif %}
+  <p class="small">Motivo: {{ s.det.motivo or 'Sin motivo' }}</p>
+  {% if s.bloqueos %}<div class="flash warn">No se puede cerrar todavía: {{ s.bloqueos|join('; ') }}.</div>{% endif %}
+  {% if s.estado == 'abierta' %}
+  <form method="post" class="col" style="gap:8px">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ s.id }}">
+    <label class="field" for="nota-{{ s.id }}">Nota para la persona y la bitácora<textarea id="nota-{{ s.id }}" name="nota" rows="2" required minlength="5" maxlength="400"></textarea></label>
+    <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn primary" name="decision" value="aprobar" type="submit" {{ 'disabled' if s.bloqueos }}>Aprobar</button><button class="btn" name="decision" value="rechazar" type="submit">Rechazar</button></div>
+  </form>
+  {% elif s.nota %}<p class="small"><b>{{ s.revisor or 'Equipo' }}:</b> {{ s.nota }}{% if s.resuelta %} <span class="muted">· {{ s.resuelta|fecha }}</span>{% endif %}</p>{% endif %}
+</article>
+{% else %}{{ vacio('documento', 'No hay solicitudes.') }}{% endfor %}
+</div>
+{% endblock %}

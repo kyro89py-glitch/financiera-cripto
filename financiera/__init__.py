@@ -111,6 +111,7 @@ def create_app(config=None):
     os.makedirs(carpeta, exist_ok=True)
     if not app.config["DOCUMENTOS_DIR"]:
         app.config["DOCUMENTOS_DIR"] = os.path.join(carpeta, "documentos")
+    app.config.setdefault("FOTOS_DIR", os.environ.get("FOTOS_DIR") or os.path.join(carpeta, "fotos"))
     if not app.config["RESPALDOS_DIR"]:
         app.config["RESPALDOS_DIR"] = os.path.join(carpeta, "respaldos")
 
@@ -127,7 +128,8 @@ def create_app(config=None):
     from .rutas_cliente import bp as bp_cliente
     from .rutas_documentos import bp as bp_documentos
     from .rutas_equipo import bp as bp_equipo
-    for bp in (bp_auth, bp_cliente, bp_equipo, bp_admin, bp_documentos):
+    from .rutas_cuenta import bp as bp_cuenta
+    for bp in (bp_auth, bp_cliente, bp_equipo, bp_admin, bp_documentos, bp_cuenta):
         app.register_blueprint(bp)
 
     from . import antilavado, cifrado, comisiones, demo, notificaciones, observabilidad, planes, respaldos

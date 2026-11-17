@@ -9,7 +9,7 @@ from flask import current_app
 
 from . import auditoria, cartera, db, notificaciones, precios, seguridad
 from .dinero import fmt_unidades, fmt_usd, unidades_por, valor_cent
-from .formato import zona
+from .formato import zona_plataforma
 from .tiempo import ahora, ahora_dt, iso
 
 
@@ -26,16 +26,24 @@ def ocultar(nombre):
 
 
 def buscar(texto, excepto_cliente=None):
-    """Cliente destinatario por correo o por número de documento (solo clientes con acceso al portal)."""
+    """Cliente destinatario por @usuario, identificador de cuenta (FC…), correo o número de documento."""
+    from . import cuenta
     t = (texto or "").strip()
     if not t:
         return None
-    if "@" in t:
-        c = db.uno("SELECT c.* FROM clientes c JOIN usuarios u ON u.id = c.usuario_id WHERE lower(u.email) = lower(?) AND u.activo = 1", (t,))
+    base = "SELECT c.* FROM clientes c JOIN usuarios u ON u.id = c.usuario_id WHERE u.activo = 1 AND "
+    uid, c = cuenta.leer_codigo(t), None
+    if uid:
+        c = db.uno(base + "u.id = ?", (uid,))
+    elif "@" in t[1:]:
+        c = db.uno(base + "lower(u.email) = lower(?)", (t,))
     else:
+        if t.startswith("@") or t[0].isalpha():
+            c = db.uno(base + "u.usuario = ? COLLATE NOCASE", (t.lstrip("@"),))
         doc = "".join(ch for ch in t.upper() if ch.isalnum())
-        c = next((x for x in db.todos("SELECT c.* FROM clientes c JOIN usuarios u ON u.id = c.usuario_id WHERE u.activo = 1")
-                  if "".join(ch for ch in x["documento"].upper() if ch.isalnum()).endswith(doc) and len(doc) >= 5), None)
+        if not c and not t.startswith("@") and len(doc) >= 5:
+            c = next((x for x in db.todos(base + "1 = 1")
+                      if "".join(ch for ch in x["documento"].upper() if ch.isalnum()).endswith(doc)), None)
     if c and excepto_cliente and c["id"] == excepto_cliente:
         return None
     if c and not c["recibir_envios"]:  # eligió no aparecer en las búsquedas de envíos
@@ -45,7 +53,7 @@ def buscar(texto, excepto_cliente=None):
 
 def enviado_hoy(cliente_id):
     """Valor en centavos de lo enviado desde la medianoche de Paraguay."""
-    hoy = ahora_dt().astimezone(zona()).replace(hour=0, minute=0, second=0, microsecond=0)
+    hoy = ahora_dt().astimezone(zona_plataforma()).replace(hour=0, minute=0, second=0, microsecond=0)
     return db.uno("SELECT COALESCE(SUM(valor_cent), 0) AS s FROM transferencias WHERE de_cliente = ? AND ts >= ?",
                   (cliente_id, iso(hoy)))["s"]
 

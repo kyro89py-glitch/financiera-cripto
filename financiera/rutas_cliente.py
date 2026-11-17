@@ -262,6 +262,8 @@ def enviar():
             error = str(e)
         form.pop("clave", None)
         form.pop("codigo", None)
+    if request.method == "GET" and request.args.get("a"):
+        form = {"destino": "@" + request.args["a"].lstrip("@")[:20]}
     filas, _ = cartera.posiciones(c["id"])
     return render_template("cliente/enviar.html", filas=filas, error=error, form=form, historial=tr.del_cliente(c["id"]),
                            hoy=tr.enviado_hoy(c["id"]), limite=tr.limite_dia(), dos_pasos=bool(g.usuario["totp_secreto"]),
@@ -690,6 +692,7 @@ def perfil():
             flash(str(e), "error")
         return redirect(url_for("cliente.perfil") + "#legajo")
     modelo = db.uno("SELECT * FROM modelos WHERE codigo = ?", (c["modelo"],))
+    from . import cuenta as cuenta_mod
     from . import niveles, preferencias
     from . import transferencias as tr
     lim = [("Máximo por orden", niveles.cent("ORDEN_MAXIMA_USD"), None),
@@ -698,6 +701,7 @@ def perfil():
     actividad = db.todos("SELECT ts, accion, detalle, ip FROM bitacora WHERE usuario_id = ? ORDER BY id DESC LIMIT 15", (g.usuario["id"],))
     return render_template("cliente/perfil.html", nivel=niveles.nivel(c, g.usuario), limites_op=lim,
                            proteccion=niveles.proteccion(c, g.usuario), pref=preferencias.leer(g.usuario["id"]),
+                           cli=c, codigo=cuenta_mod.codigo(g.usuario["id"]),
                            actividad_cuenta=actividad, doble_firma=niveles.cent("UMBRAL_DOBLE_FIRMA_USD"),
                            legajo=documentos.legajo(c), modelo=modelo,
                            tipos=documentos.TIPOS[c["tipo"]], estados_doc=documentos.ESTADOS,

@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% from "macros.html" import avatar with context %}
+{% block titulo %}Datos y fotografía{% endblock %}
+{% block clase_app %} ancha{% endblock %}
+{% block cabeza %}<script src="{{ url_for('static', filename='js/cuenta.js') }}?v={{ VERSION }}" defer></script>{% endblock %}
+{% block contenido %}
+{% include "cuenta/_cabecera.html" %}
+{% set u = g.usuario %}
+<div class="g2">
+  <div class="col">
+    <section class="panel" id="foto">
+      <header><h3>Fotografía</h3><span class="meta">JPG, PNG o WebP · hasta 6 MB</span></header>
+      <div class="foto-fila">
+        {{ avatar(u, "xl") }}
+        <div class="col" style="gap:8px">
+          <form method="post" action="{{ url_for('cuenta.foto_guardar') }}" enctype="multipart/form-data" id="f-foto" class="row" style="flex-wrap:wrap;gap:8px">
+            <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+            <label class="btn primary">{{ icono('subir') }}{{ 'Cambiar foto' if u.foto else 'Subir foto' }}<input class="sr-only" type="file" name="foto" accept="image/jpeg,image/png,image/webp" data-foto></label>
+            <label class="btn solo-tactil">{{ icono('camara') }}Tomar foto<input class="sr-only" type="file" accept="image/*" capture="user" data-foto></label>
+            <noscript><button class="btn" type="submit">Guardar</button></noscript>
+          </form>
+          {% if u.foto %}<form method="post" action="{{ url_for('cuenta.foto_guardar') }}" data-confirmar="¿Quitar tu fotografía? Se mostrará tu avatar predeterminado.">
+            <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="quitar"><button class="btn ghost sm" type="submit">Quitar foto</button></form>{% endif %}
+          <p class="xs muted" id="foto-error" role="alert"></p>
+        </div>
+      </div>
+      <p class="xs muted">Puedes recortarla y ajustarla antes de guardar. La guardamos sin los datos ocultos del archivo (como la ubicación donde se tomó).</p>
+    </section>
+
+    <form class="panel" method="post" id="contacto">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <header><h3>Presentación y contacto</h3><span class="meta">los cambias cuando quieras</span></header>
+      <label class="field" for="nombre_publico">Nombre público<input id="nombre_publico" name="nombre_publico" maxlength="40" value="{{ u.nombre_publico or '' }}" placeholder="{{ u.nombre.split()[0] }}"><span class="xs muted">Cómo te ven otros usuarios. Si lo dejas vacío usamos tu primer nombre.</span></label>
+      <label class="field" for="bio">Presentación<input id="bio" name="bio" maxlength="160" value="{{ u.bio or '' }}" placeholder="Una línea sobre ti (opcional)"></label>
+      <div class="g2 g2-igual">
+        <label class="field" for="telefono">Teléfono<input id="telefono" name="telefono" inputmode="tel" autocomplete="tel" maxlength="30" value="{{ u.telefono or (cli.telefono if cli else '') or '' }}"></label>
+        <label class="field" for="nacimiento">Fecha de nacimiento<input id="nacimiento" name="nacimiento" type="date" value="{{ u.nacimiento or '' }}" {{ 'disabled' if u.nacimiento }}>{% if u.nacimiento %}<span class="xs muted">Ya verificada: se corrige con una solicitud.</span>{% endif %}</label>
+        <label class="field" for="pais">País<select id="pais" name="pais"><option value="">Elegir</option>{% for p in paises %}<option{% if u.pais == p %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
+        <label class="field" for="ciudad">Ciudad<input id="ciudad" name="ciudad" maxlength="60" autocomplete="address-level2" value="{{ u.ciudad or '' }}"></label>
+      </div>
+      <label class="field" for="direccion">Dirección<input id="direccion" name="direccion" maxlength="160" autocomplete="street-address" value="{{ u.direccion or '' }}"><span class="xs muted">Solo la usa el equipo si hace falta para tu legajo. No se muestra a nadie más.</span></label>
+      <fieldset class="avatares"><legend class="lab">Avatar predeterminado <span class="xs muted">(si no usas foto)</span></legend>
+        {% for i in avatares %}<label><input type="radio" name="avatar" value="{{ i }}" {{ 'checked' if u.avatar == i }}><span class="avatar av-{{ i }}">{{ iniciales(u.nombre_publico or u.nombre) }}</span></label>{% endfor %}</fieldset>
+      <button class="btn primary" type="submit" style="align-self:flex-start">Guardar cambios</button>
+    </form>
+  </div>
+
+  <div class="col">
+    <form class="panel" method="post" id="usuario" autocomplete="off">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="usuario">
+      <header><h3>Nombre de usuario</h3>{% if u.usuario %}<span class="meta">@{{ u.usuario }}</span>{% endif %}</header>
+      <label class="field" for="campo-usuario">Tu usuario único
+        <span class="con-prefijo"><span aria-hidden="true">@</span><input id="campo-usuario" name="usuario" minlength="3" maxlength="20" value="{{ u.usuario or '' }}" required pattern="[A-Za-z][A-Za-z0-9_.]{2,19}" autocapitalize="none" spellcheck="false" data-usuario-disp="{{ url_for('cuenta.usuario_disponible') }}"></span>
+        <span class="xs" id="usuario-estado" role="status" aria-live="polite"></span></label>
+      <p class="xs muted">De 3 a 20 caracteres: letras, números, punto o guion bajo. Sirve para que te envíen dinero sin dar tu correo. Se puede cambiar una vez cada 30 días.</p>
+      <button class="btn primary" type="submit" style="align-self:flex-start">Guardar usuario</button>
+    </form>
+
+    <form class="panel" method="post" id="publico">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="publico">
+      <header><h3>Perfil público</h3>{% if u.usuario %}<a class="small" href="{{ url_for('cuenta.publico', nombre=u.usuario) }}">Vista previa</a>{% endif %}</header>
+      {% for k, t, d in [('activo', 'Perfil público activo', 'Otros usuarios con sesión pueden ver tu perfil y encontrarte por tu usuario.'), ('foto', 'Mostrar mi fotografía', ''), ('bio', 'Mostrar mi presentación', ''), ('ubicacion', 'Mostrar mi ciudad y país', ''), ('antiguedad', 'Mostrar desde cuándo soy cliente', ''), ('nivel', 'Mostrar si mi identidad está verificada', '')] %}
+      <label class="interruptor-fila"><span class="grow"><b>{{ t }}</b>{% if d %}<span class="small muted">{{ d }}</span>{% endif %}</span><input type="checkbox" name="{{ k }}" value="si" {{ 'checked' if pref.publico[k] }}><i aria-hidden="true"></i></label>{% endfor %}
+      <p class="xs muted">Nunca se muestran saldos, movimientos, correo, teléfono, documento ni dirección.</p>
+      <button class="btn" type="submit" style="align-self:flex-start">Guardar privacidad del perfil</button>
+    </form>
+
+    <form class="panel" method="post" action="{{ url_for('cuenta.correo_pedir') }}" id="correo" autocomplete="off">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <header><h3>Correo electrónico</h3><span class="meta">{{ u.email }}</span></header>
+      {% if correo_pendiente %}<div class="flash">Esperando que confirmes <b>{{ correo_pendiente.nuevo }}</b> desde el enlace que te enviamos.</div>{% endif %}
+      {% if enlace_prueba %}<div class="aviso-demo">Entorno de {{ config.ENTORNO }} sin servidor de correo: este es el enlace que se habría enviado. <a href="{{ enlace_prueba }}">Confirmar correo</a></div>{% endif %}
+      <label class="field" for="nuevo">Correo nuevo<input id="nuevo" name="nuevo" type="email" required></label>
+      <label class="field" for="clave-correo">Tu contraseña actual<input id="clave-correo" name="clave" type="password" autocomplete="current-password" required></label>
+      <p class="xs muted">Enviamos un enlace a la dirección nueva. El cambio se aplica recién cuando lo abres, y se cierran todas tus sesiones.</p>
+      <button class="btn" type="submit" style="align-self:flex-start">Enviar enlace de verificación</button>
+    </form>
+  </div>
+</div>
+
+<dialog class="confirmar recorte" id="d-foto" aria-labelledby="d-foto-t">
+  <h3 id="d-foto-t">Ajusta tu fotografía</h3>
+  <div class="recorte-area"><canvas id="recorte" width="320" height="320" aria-label="Vista previa del recorte: arrastra para mover la imagen"></canvas></div>
+  <label class="field">Acercar<input type="range" id="recorte-zoom" min="1" max="4" step="0.01" value="1"></label>
+  <div class="row spread"><span class="row" style="gap:6px"><button class="btn sm" type="button" id="recorte-girar" aria-label="Girar 90 grados">⟳ Girar</button></span>
+    <span class="row" style="gap:8px"><button class="btn" type="button" data-cerrar>Cancelar</button><button class="btn primary" type="button" id="recorte-ok">Guardar foto</button></span></div>
+</dialog>
+{% endblock %}

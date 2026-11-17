@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block titulo %}Mi cuenta{% endblock %}
+{% block clase_app %} ancha{% endblock %}
+{% block contenido %}
+{% include "cuenta/_cabecera.html" %}
+{% set u = g.usuario %}
+{% if abiertas %}<div class="flash warn">Tienes {{ abiertas|length }} solicitud{{ 'es' if abiertas|length > 1 }} en revisión. <a href="{{ url_for('cuenta.solicitudes') }}">Ver estado</a></div>{% endif %}
+<div class="cuenta-g">
+  <section class="completar">
+    <header><div><span class="lab">Tu cuenta está completa al</span><div class="cifra-mayor num">{{ (hechos / completo|length * 100)|round|int }} %</div></div>
+      <div class="pasos-barra" role="img" aria-label="{{ hechos }} de {{ completo|length }} pasos">{% for t, ok, ep, ancla in completo %}<i class="{{ 'ok' if ok }}"></i>{% endfor %}</div></header>
+    <ul class="pasos">{% for t, ok, ep, ancla in completo %}
+      <li class="{{ 'ok' if ok }}"><span class="marca-paso" aria-hidden="true">{{ '✓' if ok else loop.index }}</span><span class="grow">{{ t }}</span>{% if not ok %}<a class="btn sm" href="{{ url_for(ep) }}{{ '#' ~ ancla if ancla }}">Completar</a>{% else %}<span class="xs muted">Listo</span>{% endif %}</li>{% endfor %}
+    </ul>
+  </section>
+  <nav class="accesos-cuenta" aria-label="Accesos de la cuenta">
+    <a href="{{ url_for('cuenta.datos') }}"><span>{{ icono('perfil') }}</span><b>Datos y fotografía</b><small>Nombre público, contacto y usuario</small></a>
+    <a href="{{ url_for('auth.centro_seguridad') }}"><span>{{ icono('escudo') }}</span><b>Seguridad</b><small>Protección {{ proteccion.estado }} · {{ proteccion.puntos }} de 100</small></a>
+    <a href="{{ url_for('auth.sesiones') }}"><span>{{ icono('dispositivo') }}</span><b>Dispositivos</b><small>{{ sesiones }} sesión{{ 'es' if sesiones != 1 }} abierta{{ 's' if sesiones != 1 }}</small></a>
+    <a href="{{ url_for('cuenta.personalizar') }}"><span>{{ icono('ajustes') }}</span><b>Preferencias</b><small>Tema {{ pref.tema }} · {{ pref.moneda }}</small></a>
+    <a href="{{ url_for('auth.avisos') }}"><span>{{ icono('campana') }}</span><b>Notificaciones</b><small>{{ avisos }} sin leer</small></a>
+    <a href="{{ url_for('cuenta.actividad') }}"><span>{{ icono('movimientos') }}</span><b>Actividad</b><small>Todo lo que pasó en tu cuenta</small></a>
+    {% if cli %}<a href="{{ url_for('cliente.perfil') }}"><span>{{ icono('documento') }}</span><b>Verificación y límites</b><small>Nivel {{ nivel.n }} · documentos</small></a>
+    <a href="{{ url_for('cliente.ayuda') }}"><span>{{ icono('campana') }}</span><b>Ayuda</b><small>Preguntas y consultas</small></a>{% endif %}
+  </nav>
+</div>
+<div class="g2">
+  <section class="panel">
+    <header><h3>Identidad</h3><a class="small" href="{{ url_for('cuenta.solicitudes') }}">Pedir una corrección</a></header>
+    <dl class="ficha-datos">
+      <div><dt>Nombre legal</dt><dd>{{ u.nombre }} <span class="candado" title="Dato verificado: se cambia con una solicitud">{{ icono('llave') }}</span></dd></div>
+      {% if cli %}<div><dt>Documento</dt><dd>{{ cli.documento }} <span class="candado" title="Dato verificado">{{ icono('llave') }}</span></dd></div>{% endif %}
+      <div><dt>Fecha de nacimiento</dt><dd>{{ u.nacimiento or 'Sin cargar' }}{% if u.nacimiento %} <span class="candado" title="Dato verificado">{{ icono('llave') }}</span>{% endif %}</dd></div>
+      <div><dt>Correo</dt><dd>{{ u.email }}</dd></div>
+    </dl>
+    <p class="xs muted">Los datos con candado se usaron para verificar tu identidad. Para corregirlos hace falta una revisión de Cumplimiento.</p>
+  </section>
+  <section class="panel">
+    <header><h3>Perfil público</h3>{% if u.usuario %}<a class="small" href="{{ url_for('cuenta.publico', nombre=u.usuario) }}">Ver como lo ven otros</a>{% endif %}</header>
+    {% if u.usuario and pref.publico.activo %}
+    <p class="small">Otros clientes pueden encontrarte como <b>@{{ u.usuario }}</b> para enviarte dinero. Ven tu nombre público{{ ', tu foto' if pref.publico.foto }}{{ ', tu ciudad' if pref.publico.ubicacion }}{{ ' y si tu identidad está verificada' if pref.publico.nivel }}.</p>
+    {% elif u.usuario %}<p class="small">Tu perfil público está desactivado: nadie puede verlo.</p>
+    {% else %}<p class="small">Elige un nombre de usuario para que otros clientes te encuentren sin compartir tu correo ni tu cédula.</p>{% endif %}
+    <p class="xs muted">Tu perfil público nunca muestra saldos, movimientos, correo, teléfono, documento ni dirección.</p>
+    <a class="btn sm" href="{{ url_for('cuenta.datos') }}#publico" style="align-self:flex-start">Elegir qué se muestra</a>
+  </section>
+</div>
+{% endblock %}

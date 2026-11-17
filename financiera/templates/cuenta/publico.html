@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block titulo %}@{{ p.usuario }}{% endblock %}
+{% block contenido %}
+<article class="tarjeta-publica">
+  <div class="id-banda" aria-hidden="true"></div>
+  {% if p.foto %}<img class="avatar xl" src="{{ url_for('cuenta.foto', uid=p.id, v=p.foto_ts) }}" alt="Fotografía de {{ p.nombre }}">{% else %}<span class="avatar xl av-{{ p.avatar or 0 }}" aria-hidden="true">{{ iniciales(p.nombre) }}</span>{% endif %}
+  <h2>{{ p.nombre }}{% if p.verificado %}<span class="sello" title="Identidad verificada" aria-label="Identidad verificada">✓</span>{% endif %}</h2>
+  <div class="id-sub">@{{ p.usuario }}</div>
+  {% if p.bio %}<p>{{ p.bio }}</p>{% endif %}
+  <div class="id-chips" style="justify-content:center">
+    {% if p.verificado is not none %}<span class="chip-dato"><span>Identidad</span><b>{{ 'Verificada' if p.verificado else 'Sin verificar' }}</b></span>{% endif %}
+    {% if p.ubicacion %}<span class="chip-dato"><span>Ubicación</span><b>{{ p.ubicacion }}</b></span>{% endif %}
+    {% if p.desde %}<span class="chip-dato"><span>Miembro desde</span><b>{{ p.desde|dia }}</b></span>{% endif %}
+  </div>
+  {% if propio %}<p class="small muted">Así ven tu perfil los demás usuarios. <a href="{{ url_for('cuenta.datos') }}#publico">Cambiar qué se muestra</a></p>
+  {% elif puedo_enviar and p.recibe %}<a class="btn primary" href="{{ url_for('cliente.enviar', a=p.usuario) }}">{{ icono('enviar') }}Enviar dinero a {{ p.nombre }}</a>{% endif %}
+  <p class="xs muted">Los perfiles públicos no muestran información financiera ni de contacto.</p>
+</article>
+{% endblock %}

@@ -19,6 +19,13 @@ MODULOS = {
     "recomendaciones": ("Para considerar", "medio"),
     "actividad": ("Actividad reciente", "medio"),
 }
+ZONAS = {"America/Asuncion": "Paraguay (Asunción)", "America/Argentina/Buenos_Aires": "Argentina (Buenos Aires)",
+         "America/Sao_Paulo": "Brasil (São Paulo)", "America/La_Paz": "Bolivia (La Paz)", "America/Santiago": "Chile (Santiago)",
+         "America/Montevideo": "Uruguay (Montevideo)", "America/Lima": "Perú (Lima)", "America/Bogota": "Colombia (Bogotá)",
+         "America/Mexico_City": "México (Ciudad de México)", "America/New_York": "Estados Unidos (Nueva York)",
+         "Europe/Madrid": "España (Madrid)", "UTC": "UTC"}
+# El único idioma con la interfaz completa es el español; los demás se anuncian pero todavía no se pueden elegir.
+IDIOMAS = {"es": ("Español", True), "gn": ("Guaraní", False), "pt": ("Português", False), "en": ("English", False)}
 CATEGORIAS = {"operaciones": "Operaciones y movimientos", "precios": "Alertas de precio y órdenes", "seguridad": "Seguridad",
               "cuenta": "Cuenta y verificación", "mercado": "Novedades del mercado"}
 DEFECTO = {
@@ -26,6 +33,10 @@ DEFECTO = {
     "ocultos": [],
     "moneda": "USD",
     "correo": {k: True for k in CATEGORIAS},
+    "tema": "oscuro",
+    "zona": "",          # vacío = la de la plataforma
+    "idioma": "es",
+    "publico": {"activo": True, "foto": True, "bio": True, "ubicacion": False, "antiguedad": True, "nivel": True},
     "lecciones": [],
     "earn_interes": [],
 }
@@ -46,6 +57,13 @@ def leer(usuario_id):
         if isinstance(guardado.get("correo", {}).get(k), bool):
             out["correo"][k] = guardado["correo"][k]
     out["correo"]["seguridad"] = True  # los avisos de seguridad siempre llegan
+    if guardado.get("tema") in ("oscuro", "claro"):
+        out["tema"] = guardado["tema"]
+    if guardado.get("zona") in ZONAS:
+        out["zona"] = guardado["zona"]
+    for k in out["publico"]:
+        if isinstance(guardado.get("publico", {}).get(k), bool):
+            out["publico"][k] = guardado["publico"][k]
     out["lecciones"] = [x for x in guardado.get("lecciones", []) if isinstance(x, str)][:100]
     out["earn_interes"] = [x for x in guardado.get("earn_interes", []) if isinstance(x, str)][:20]
     return out
@@ -65,6 +83,19 @@ def guardar(usuario_id, cambios):
             if k in cambios["correo"]:
                 actual["correo"][k] = bool(cambios["correo"][k])
         actual["correo"]["seguridad"] = True
+    if cambios.get("tema") in ("oscuro", "claro"):
+        actual["tema"] = cambios["tema"]
+    if "zona" in cambios:
+        actual["zona"] = cambios["zona"] if cambios["zona"] in ZONAS else ""
+    if isinstance(cambios.get("publico"), dict):
+        for k in actual["publico"]:
+            if k in cambios["publico"]:
+                actual["publico"][k] = bool(cambios["publico"][k])
+    try:
+        from flask import g
+        g.pop("_pref", None)
+    except RuntimeError:
+        pass
     for clave in ("lecciones", "earn_interes"):
         if isinstance(cambios.get(clave), list):
             actual[clave] = list(dict.fromkeys(str(x)[:60] for x in cambios[clave]))[:100]
@@ -72,3 +103,14 @@ def guardar(usuario_id, cambios):
                 " ON CONFLICT(usuario_id) DO UPDATE SET datos = excluded.datos, actualizado = excluded.actualizado",
                 (usuario_id, json.dumps(actual, ensure_ascii=False), ahora()))
     return actual
+
+
+def de_sesion():
+    """Preferencias de quien tiene la sesión abierta (una lectura por solicitud). None si no hay sesión."""
+    from flask import g
+    u = g.get("usuario")
+    if not u:
+        return None
+    if g.get("_pref") is None:
+        g._pref = leer(u["id"])
+    return g._pref

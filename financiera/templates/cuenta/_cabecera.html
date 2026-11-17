@@ -1,0 +1,24 @@
+{# Cabecera común de Mi cuenta: identidad a la vista y navegación entre sus secciones. #}
+{% from "macros.html" import avatar with context %}
+{% set u = g.usuario %}
+<section class="id-hero">
+  <div class="id-banda" aria-hidden="true"></div>
+  <div class="id-cuerpo">
+    <a class="id-foto" href="{{ url_for('cuenta.datos') }}#foto" aria-label="Cambiar fotografía">{{ avatar(u, "xl") }}<span class="id-lapiz" aria-hidden="true">{{ icono('camara') }}</span></a>
+    <div class="id-nombre">
+      <h2>{{ u.nombre_publico or u.nombre }}{% if cli and cli.kyc_estado == 'verificado' %}<span class="sello" title="Identidad verificada" aria-label="Identidad verificada">✓</span>{% endif %}</h2>
+      <div class="id-sub">{% if u.usuario %}<a href="{{ url_for('cuenta.publico', nombre=u.usuario) }}">@{{ u.usuario }}</a>{% else %}<a href="{{ url_for('cuenta.datos') }}#usuario">Elige tu nombre de usuario</a>{% endif %} · {{ ROLES[u.rol] }}</div>
+      <div class="id-chips">
+        <button type="button" class="chip-dato" data-copiar="{{ codigo }}" title="Copiar identificador de cuenta"><span>ID</span><b class="mono">{{ codigo }}</b>{{ icono('copiar') }}</button>
+        {% if nivel %}<span class="chip-dato"><span>Nivel</span><b>{{ nivel.n }} · {{ nivel.nombre }}</b></span>{% endif %}
+        <span class="chip-dato"><span>Estado</span><b class="{{ 'up' if u.estado_cuenta == 'activa' else 'warn-txt' }}">{{ {'activa': 'Activa', 'cierre_solicitado': 'Cierre solicitado', 'cerrada': 'Cerrada'}[u.estado_cuenta] }}</b></span>
+        <span class="chip-dato"><span>Desde</span><b>{{ u.creado|dia }}</b></span>
+      </div>
+    </div>
+    <a class="prot-anillo {{ proteccion.estado }}" href="{{ url_for('auth.centro_seguridad') }}" style="--p:{{ proteccion.puntos }}" aria-label="Protección de la cuenta: {{ proteccion.puntos }} de 100"><b class="num">{{ proteccion.puntos }}</b><span>Protección {{ proteccion.estado }}</span></a>
+  </div>
+</section>
+<nav class="subnav cuenta-nav" aria-label="Mi cuenta">
+  {% for ep, t, solo_cli in [('cuenta.inicio', 'Resumen', false), ('cuenta.datos', 'Datos y fotografía', false), ('cliente.perfil', 'Verificación y límites', true), ('auth.centro_seguridad', 'Seguridad', false), ('auth.sesiones', 'Dispositivos', false), ('cuenta.personalizar', 'Preferencias', false), ('cuenta.actividad', 'Actividad', false), ('cuenta.solicitudes', 'Solicitudes y cierre', false)] %}
+  {% if not solo_cli or u.rol == 'cliente' %}<a href="{{ url_for(ep) }}"{% if request.endpoint == ep %} aria-current="page"{% endif %}>{{ t }}</a>{% endif %}{% endfor %}
+</nav>

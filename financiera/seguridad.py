@@ -25,7 +25,7 @@ DESCRIPCION_PERMISOS = {
     "ejecucion.reanudar": "Reanudar la ejecución", "precios.editar": "Precios, monedas y ajustes",
     "usuarios.gestionar": "Gestionar usuarios del equipo", "antilavado.resolver": "Resolver alertas antilavado",
     "respaldos.gestionar": "Crear y probar respaldos", "limites.editar": "Cambiar límites de operación",
-    "soporte.atender": "Responder consultas de clientes", "panel.ver": "Ver el panel de administración",
+    "soporte.atender": "Responder consultas de clientes", "cuenta.solicitudes": "Resolver correcciones de datos y cierres de cuenta", "panel.ver": "Ver el panel de administración",
 }
 
 PERMISOS = {
@@ -34,6 +34,7 @@ PERMISOS = {
     "clientes.crear": {"operador", "admin"},
     "clientes.clave": {"operador", "admin"},
     "clientes.kyc": {"cumplimiento", "admin"},
+    "cuenta.solicitudes": {"cumplimiento", "admin"},
     "clientes.origen": {"cumplimiento", "admin"},
     "cumplimiento.ver": {"cumplimiento", "admin"},
     "reportes.exportar": {"cumplimiento", "admin"},

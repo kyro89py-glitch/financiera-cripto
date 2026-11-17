@@ -55,6 +55,9 @@ ICONOS = {
 ICONOS["trading"] = ('<path d="M7 3v4M7 17v4M17 3v7M17 18v3"/><rect x="5" y="7" width="4" height="10" rx="1"/>'
                      '<rect x="15" y="10" width="4" height="8" rx="1"/>')
 ICONOS["retiro"] = '<circle cx="12" cy="12" r="8.5"/><path d="M12 8v8M8.5 12.5L12 16l3.5-3.5"/>'
+ICONOS["camara"] = '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>'
+ICONOS["subir"] = '<path d="M12 16V4m0 0-4 4m4-4 4 4M5 20h14"/>'
+ICONOS["copiar"] = '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>'
 ICONOS["convertir"] = '<path d="M7 7h11l-3-3M17 17H6l3 3"/>'
 ICONOS["ojo"] = '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'
 ICONOS["dispositivo"] = '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>'
@@ -63,7 +66,7 @@ ICONOS["buscar"] = '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>'
 NAV = {
     "cliente": [("cliente.inicio", "Inicio", "inicio", None), ("auth.mercado", "Mercados", "mercado", None),
                 ("auth.trading", "Trading", "trading", None), ("cliente.cartera", "Billetera", "billetera", None),
-                ("cliente.perfil", "Perfil", "perfil", None),
+                ("cuenta.inicio", "Cuenta", "perfil", None),
                 ("cliente.analisis_cartera", "Análisis", "resumen", "sec"), ("auth.academia", "Academia", "documento", "sec"),
                 ("cliente.earn", "Earn", "invertir", "sec"), ("cliente.ayuda", "Ayuda", "campana", "sec")],
     "equipo": [("equipo.resumen", "Resumen", "resumen", None), ("auth.mercado", "Mercados", "mercado", "sec"),
@@ -78,13 +81,14 @@ ACTIVO = {  # qué rutas marcan cada pestaña como activa
     "auth.mercado": ("auth.mercado", "auth.moneda"),
     "cliente.cartera": ("cliente.cartera", "cliente.invertir", "cliente.convertir", "cliente.enviar", "cliente.movimientos",
                         "cliente.estado_mensual", "cliente.movimiento", "cliente.envio", "cliente.retirar"),
-    "cliente.perfil": ("cliente.perfil", "auth.seguridad", "auth.clave", "auth.sesiones", "auth.centro_seguridad", "auth.avisos"),
+    "cuenta.inicio": ("cuenta.inicio", "cuenta.datos", "cuenta.personalizar", "cuenta.solicitudes", "cuenta.actividad", "cuenta.publico",
+                      "cliente.perfil", "auth.seguridad", "auth.clave", "auth.sesiones", "auth.centro_seguridad", "auth.avisos"),
     "auth.academia": ("auth.academia", "auth.leccion"),
     "cliente.ayuda": ("cliente.ayuda", "cliente.consulta"),
     "equipo.soporte": ("equipo.soporte", "equipo.soporte_consulta"),
     "equipo.operaciones": ("equipo.operaciones", "equipo.operacion"),
     "equipo.clientes": ("equipo.clientes", "equipo.cliente", "equipo.cliente_nuevo", "equipo.estado_mensual"),
-    "equipo.cumplimiento": ("equipo.cumplimiento", "equipo.bitacora", "equipo.documentos", "equipo.conciliacion", "equipo.antilavado",
+    "equipo.cumplimiento": ("equipo.cumplimiento", "equipo.bitacora", "equipo.documentos", "equipo.conciliacion", "equipo.antilavado", "equipo.solicitudes",
                             "equipo.verificar_comprobante"),
     "admin.panel": ("admin.precios", "admin.usuarios", "admin.comisiones", "admin.ejecucion", "admin.guaranies", "admin.respaldos",
                       "admin.panel", "admin.limites", "admin.permisos"),
@@ -96,7 +100,32 @@ def _idem():
     return nueva_clave()
 
 
+def zona_plataforma():
+    return ZoneInfo(current_app.config["ZONA_HORARIA"])
+
+
+def tema_actual():
+    """Tema de la interfaz: el guardado en la cuenta si hay sesión; si no, el de la cookie del dispositivo."""
+    from flask import request
+    try:
+        from . import preferencias
+        p = preferencias.de_sesion()
+        if p:
+            return p["tema"]
+    except RuntimeError:
+        pass
+    return "claro" if request.cookies.get("tema") == "claro" else "oscuro"
+
+
 def zona():
+    """Zona horaria para mostrar fechas: la que eligió la persona en sus preferencias o, si no, la de la plataforma."""
+    try:
+        from . import preferencias
+        p = preferencias.de_sesion()
+        if p and p["zona"]:
+            return ZoneInfo(p["zona"])
+    except RuntimeError:
+        pass
     return ZoneInfo(current_app.config["ZONA_HORARIA"])
 
 
@@ -212,6 +241,7 @@ def init_app(app):
     from . import guarani
     app.jinja_env.filters["gs"] = guarani.fmt
     app.jinja_env.filters["compacto"] = compacto
+    app.jinja_env.filters["hora"] = lambda t: tiempo.leer(t).astimezone(zona()).strftime("%H:%M")
 
     def detalle_txt(d):
         import json
@@ -231,7 +261,7 @@ def init_app(app):
         return guarani.fmt(guarani.de_usd_cent(cent or 0, ref)) if ref else None
     from .transferencias import ocultar
     app.jinja_env.globals.update(en_gs=en_gs, cambios_pyg=guarani.cambios, ocultar=ocultar,
-                                 ahora_local=lambda: datetime.now(zona()), idem=_idem)
+                                 ahora_local=lambda: datetime.now(zona()), idem=_idem, tema_actual=tema_actual)
     app.jinja_env.globals.update(ROLES=ROLES, ESTADOS=ESTADOS, KYC=KYC, PERFILES=PERFILES, TIPOS_OP=TIPOS_OP,
                                  iniciales=iniciales, icono=icono, navegacion=navegacion, avisos_no_leidos=avisos_no_leidos, cinta=cinta,
                                  VERSION=VERSION, ahora=tiempo.ahora)

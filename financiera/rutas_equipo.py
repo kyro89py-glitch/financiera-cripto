@@ -250,6 +250,34 @@ def cumplimiento():
                            pendientes=pendientes)
 
 
+@bp.route("/solicitudes", methods=["GET", "POST"])
+@seguridad.requiere("cuenta.solicitudes")
+def solicitudes():
+    """Correcciones de datos verificados y cierres de cuenta: los resuelve una persona distinta de quien los pidió."""
+    import json
+
+    from . import cuenta
+    if request.method == "POST":
+        try:
+            cuenta.resolver_solicitud(request.form.get("id", type=int), request.form.get("decision") == "aprobar",
+                                      request.form.get("nota"), g.usuario)
+            flash("Solicitud resuelta. La persona recibió un aviso.", "ok")
+        except cuenta.ErrorCuenta as e:
+            flash(str(e), "error")
+        return redirect(url_for("equipo.solicitudes"))
+    filas = db.todos("SELECT s.*, u.nombre, u.email, u.nacimiento, c.id AS cliente_id, c.documento, r.nombre AS revisor FROM solicitudes_cuenta s"
+                     " JOIN usuarios u ON u.id = s.usuario_id LEFT JOIN clientes c ON c.usuario_id = u.id"
+                     " LEFT JOIN usuarios r ON r.id = s.resuelta_por ORDER BY s.estado = 'abierta' DESC, s.id DESC LIMIT 200")
+    lista = []
+    for f in filas:
+        d = dict(f)
+        d["det"] = json.loads(f["detalle"])
+        cli = db.uno("SELECT * FROM clientes WHERE id = ?", (f["cliente_id"],)) if f["cliente_id"] else None
+        d["bloqueos"] = cuenta.pendientes_para_cerrar(cli) if f["tipo"] == "cierre" and f["estado"] == "abierta" else []
+        lista.append(d)
+    return render_template("equipo/solicitudes.html", lista=lista, campos=cuenta.CAMPOS_VERIFICADOS, estados=cuenta.ESTADOS_SOLICITUD)
+
+
 @bp.get("/bitacora")
 @seguridad.requiere("cumplimiento.ver")
 def bitacora():

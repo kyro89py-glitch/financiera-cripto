@@ -77,7 +77,10 @@ def inicio():
     ind = cartera.indicadores(c["id"], filas, total, ten)
     riesgo_d = panel.riesgo(c, filas, ind)
     vivo = {"ten": {a: u for a, u in ten.items() if u}, "precios": {a: float(p["precio"]) for a, p in pr_v.items()}}
+    favs = {f["activo"] for f in db.todos("SELECT activo FROM favoritos WHERE usuario_id = ?", (g.usuario["id"],))}
     return render_template("cliente/inicio.html", pref=pref, modulos=preferencias.MODULOS, vivo=vivo,
+                           accesos={k: v for k, v in preferencias.ACCESOS.items() if v[1] in current_app.view_functions},
+                           rangos_op=preferencias.RANGOS, favoritos=[m for m in mercado if m["codigo"] in favs][:8],
                            rendimientos=panel.rendimientos(c["id"], total, mercado) if "rendimientos" not in pref["ocultos"] else [],
                            riesgo=riesgo_d, ranking=panel.ranking(filas, costos),
                            alertas_hoy=panel.alertas(c, g.usuario, filas, total, abiertas, ind),

@@ -1148,3 +1148,14 @@ dialog.recorte .row.spread{justify-content:space-between;flex-wrap:wrap;gap:8px}
 .canales th[scope="row"] span{display:block;font-weight:400;line-height:1.3;margin-top:2px}
 .canales input{width:18px;height:18px;accent-color:var(--accent)}
 @media (min-width:1000px){.avisos-g{grid-template-columns:minmax(0,1fr) 400px}}
+/* Inicio personalizable */
+.acciones{grid-template-columns:repeat(auto-fit,minmax(76px,1fr))}
+@media (max-width:520px){.acciones{grid-template-columns:repeat(4,minmax(0,1fr))}.acciones.n6,.acciones.n3{grid-template-columns:repeat(3,minmax(0,1fr))}.acciones.n5{grid-template-columns:repeat(5,minmax(0,1fr))}}
+.favs{display:flex;flex-direction:column}
+.fav{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line);text-decoration:none;color:var(--ink)}.fav:first-child{border-top:0}
+.fav .grow{display:flex;flex-direction:column;min-width:0}.fav svg.chispa{width:84px;height:28px;flex:none}
+.fav-precio{display:flex;flex-direction:column;align-items:flex-end;min-width:92px}
+.accesos-op{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 10px;margin:6px 0 12px}
+.vistas{list-style:none;margin:6px 0 0;padding:0}.vistas li{display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--line);font-size:14px}
+.vista-chip{border-style:dashed}
+dialog.panel-dlg{max-height:88vh;overflow-y:auto}

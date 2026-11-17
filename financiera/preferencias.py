@@ -11,6 +11,7 @@ MODULOS = {
     "indicadores": ("Indicadores financieros", "lleno"),
     "alertas": ("Alertas importantes", "medio"),
     "rendimientos": ("Rendimiento por período", "medio"),
+    "favoritos": ("Tus favoritos", "medio"),
     "activos": ("Tus activos", "lleno"),
     "composicion": ("Composición 3D", "medio"),
     "riesgo": ("Riesgo de tu cartera", "medio"),
@@ -34,10 +35,24 @@ DETALLE_CATEGORIAS = {"operaciones": "Confirmaciones de compras y ventas, depós
                       "cuenta": "Verificación de identidad, documentos, solicitudes y consultas.",
                       "mercado": "Movimientos fuertes de las monedas que sigues.", "comunicaciones": "Novedades y anuncios del equipo."}
 CANALES = {"app": "En la plataforma", "correo": "Correo", "push": "Push"}
+# Accesos rápidos del inicio: clave -> (texto, ruta, icono). La persona elige cuáles y en qué orden.
+ACCESOS = {"depositar": ("Depositar", "cliente.invertir", "invertir"), "comprar": ("Comprar", "auth.trading", "trading"),
+           "vender": ("Vender", "auth.trading", "mercado"), "convertir": ("Convertir", "cliente.convertir", "convertir"),
+           "enviar": ("Enviar", "cliente.enviar", "enviar"), "retirar": ("Retirar", "cliente.retirar", "retiro"),
+           "mercados": ("Mercados", "auth.mercado", "mercado"), "movimientos": ("Movimientos", "cliente.movimientos", "movimientos"),
+           "analisis": ("Análisis", "cliente.analisis_cartera", "resumen"), "comparar": ("Comparar", "auth.comparar", "operaciones"),
+           "actividad": ("Actividad", "cuenta.actividad", "dispositivo"), "academia": ("Academia", "auth.academia", "documento"),
+           "herramientas": ("Herramientas", "auth.herramientas", "ajustes"), "ayuda": ("Ayuda", "cliente.ayuda", "campana")}
+ACCESOS_DEFECTO = ["depositar", "comprar", "vender", "convertir", "enviar", "retirar"]
+RANGOS = ("7D", "1M", "3M", "1A", "Todo")
+MAX_VISTAS = 5
 DEFECTO = {
     "orden": list(MODULOS),
     "ocultos": [],
     "moneda": "USD",
+    "accesos": list(ACCESOS_DEFECTO),
+    "rango": "",          # período con el que abre el gráfico de patrimonio; vacío = el primero disponible
+    "vistas": [],         # configuraciones guardadas del inicio: nombre, orden, ocultos, accesos, rango
     "correo": {k: True for k in CATEGORIAS},
     "app": {k: True for k in CATEGORIAS},
     "push": {k: False for k in CATEGORIAS},   # se guarda la elección; el envío push todavía no está integrado
@@ -51,6 +66,20 @@ DEFECTO = {
 }
 
 
+def _accesos(lista):
+    return [a for a in dict.fromkeys(x for x in lista if isinstance(x, str)) if a in ACCESOS][:8] or list(ACCESOS_DEFECTO)
+
+
+def _vista(v):
+    nombre = " ".join(str(v.get("nombre") or "").split())[:30]
+    if not nombre:
+        return None
+    orden = [m for m in v.get("orden", []) if m in MODULOS]
+    return {"nombre": nombre, "orden": list(dict.fromkeys(orden)) + [m for m in MODULOS if m not in orden],
+            "ocultos": [m for m in v.get("ocultos", []) if m in MODULOS and m != "patrimonio"],
+            "accesos": _accesos(v.get("accesos") or []), "rango": v.get("rango") if v.get("rango") in RANGOS else ""}
+
+
 def leer(usuario_id):
     fila = db.uno("SELECT datos FROM preferencias WHERE usuario_id = ?", (usuario_id,))
     try:
@@ -62,6 +91,10 @@ def leer(usuario_id):
     out["orden"] = orden + [m for m in MODULOS if m not in orden]  # módulos nuevos aparecen al final
     out["ocultos"] = [m for m in guardado.get("ocultos", []) if m in MODULOS]
     out["moneda"] = guardado.get("moneda") if guardado.get("moneda") in ("USD", "PYG") else "USD"
+    if isinstance(guardado.get("accesos"), list):
+        out["accesos"] = _accesos(guardado["accesos"])
+    out["rango"] = guardado.get("rango") if guardado.get("rango") in RANGOS else ""
+    out["vistas"] = [v for v in (_vista(x) for x in guardado.get("vistas", []) if isinstance(x, dict)) if v][:MAX_VISTAS]
     for k in CATEGORIAS:
         if isinstance(guardado.get("correo", {}).get(k), bool):
             out["correo"][k] = guardado["correo"][k]
@@ -93,6 +126,20 @@ def guardar(usuario_id, cambios):
         actual["ocultos"] = [m for m in dict.fromkeys(cambios["ocultos"]) if m in MODULOS and m != "patrimonio"]
     if cambios.get("moneda") in ("USD", "PYG"):
         actual["moneda"] = cambios["moneda"]
+    if isinstance(cambios.get("accesos"), list):
+        actual["accesos"] = _accesos(cambios["accesos"])
+    if "rango" in cambios:
+        actual["rango"] = cambios["rango"] if cambios["rango"] in RANGOS else ""
+    if cambios.get("guardar_vista"):
+        v = _vista({"nombre": cambios["guardar_vista"], "orden": actual["orden"], "ocultos": actual["ocultos"],
+                    "accesos": actual["accesos"], "rango": actual["rango"]})
+        if v:
+            actual["vistas"] = ([x for x in actual["vistas"] if x["nombre"].lower() != v["nombre"].lower()] + [v])[-MAX_VISTAS:]
+    if isinstance(cambios.get("aplicar_vista"), int) and 0 <= cambios["aplicar_vista"] < len(actual["vistas"]):
+        v = actual["vistas"][cambios["aplicar_vista"]]
+        actual.update(orden=list(v["orden"]), ocultos=list(v["ocultos"]), accesos=list(v["accesos"]), rango=v["rango"])
+    if isinstance(cambios.get("borrar_vista"), int) and 0 <= cambios["borrar_vista"] < len(actual["vistas"]):
+        actual["vistas"].pop(cambios["borrar_vista"])
     if isinstance(cambios.get("correo"), dict):
         for k in CATEGORIAS:
             if k in cambios["correo"]:

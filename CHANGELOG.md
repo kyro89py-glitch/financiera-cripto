@@ -26,6 +26,13 @@ Personalización e identidad. Los servicios financieros reales siguen deshabilit
 - **Inicios de sesión:** aviso al entrar desde un dispositivo nuevo o, si la persona lo elige, en cada inicio.
 - Nueva categoría «Comunicaciones de la plataforma» y función de comunicados del equipo a todos los clientes.
 
+### Módulo 3 · Inicio personalizable
+- **Tus favoritos:** módulo nuevo con las monedas marcadas con estrella, su precio en vivo, variación y mini gráfico.
+- **Accesos rápidos a elección:** hasta 8 entre depositar, comprar, vender, convertir, enviar, retirar, mercados, movimientos, análisis, comparar, actividad, academia, herramientas y ayuda.
+- **Período del gráfico:** se elige con cuál abre el gráfico de patrimonio.
+- **Vistas guardadas:** hasta 5 configuraciones con nombre (módulos, orden, accesos y período) que se aplican con un toque. Todo queda en la cuenta, no en el dispositivo.
+- Acceso directo al Centro de actividad desde el módulo de actividad reciente.
+
 ## [0.20.0] - 2026-11-16
 
 Evolución completa de la plataforma, trabajada por módulos. Los servicios financieros reales siguen deshabilitados.

@@ -923,15 +923,21 @@ def preferencias_guardar():
         cambios["orden"] = [x for x in (f.get("orden") or "").split(",") if x]
         visibles = set(f.getlist("visible"))
         cambios["ocultos"] = [m for m in preferencias.MODULOS if m not in visibles]
+        cambios["accesos"] = f.getlist("acceso")
+        cambios["rango"] = f.get("rango") or ""
+        if (f.get("vista_nombre") or "").strip():
+            cambios["guardar_vista"] = f.get("vista_nombre")
         if f.get("restablecer"):
-            cambios = {"orden": list(preferencias.MODULOS), "ocultos": []}
+            cambios = {"orden": list(preferencias.MODULOS), "ocultos": [], "accesos": list(preferencias.ACCESOS_DEFECTO), "rango": ""}
+    elif f.get("accion") == "vista":
+        cambios["borrar_vista" if f.get("borrar") else "aplicar_vista"] = f.get("i", type=int)
     elif f.get("accion") == "moneda":
         cambios["moneda"] = f.get("moneda")
     elif f.get("accion") == "correo":
         cambios["correo"] = {k: f.get(k) == "si" for k in preferencias.CATEGORIAS}
     preferencias.guardar(g.usuario["id"], cambios)
     auditoria.registrar("preferencias.cambiadas", f"usuario:{g.usuario['id']}",
-                        {"texto": "Cambió sus preferencias: " + {"panel": "panel de inicio", "moneda": "moneda", "correo": "avisos por correo"}.get(f.get("accion"), "ajustes") + "."})
+                        {"texto": "Cambió sus preferencias: " + {"panel": "panel de inicio", "vista": "vista del inicio", "moneda": "moneda", "correo": "avisos por correo"}.get(f.get("accion"), "ajustes") + "."})
     flash("Preferencias guardadas.", "ok")
     destino = f.get("volver") or ""
     return redirect(destino if destino.startswith(("/cliente", "/cuenta", "/mercado", "/trading")) and "//" not in destino else url_for("inicio"))

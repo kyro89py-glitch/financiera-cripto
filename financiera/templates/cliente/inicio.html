@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import kyc, barra, estado, tipo_op, signo, vacio, escena3d, mercado_item with context %}
+{% from "macros.html" import kyc, barra, estado, tipo_op, signo, vacio, escena3d, mercado_item, chispa with context %}
 {% block titulo %}Inicio{% endblock %}
 {% block clase_app %} ancha{% endblock %}
 {% block cabeza %}<script src="{{ url_for('static', filename='js/escena3d.js') }}?v={{ VERSION }}" defer></script>
@@ -32,7 +32,7 @@
     <div class="row spread" style="align-items:center">
       <div class="graf-resumen num small" data-graf-resumen aria-live="polite"></div>
       <div class="segmentos" role="group" aria-label="Período del gráfico">
-        {% for k in rangos %}<button type="button" data-rango="{{ k }}" aria-pressed="{{ 'true' if loop.first else 'false' }}">{{ k }}</button>{% endfor %}
+        {% set r0 = pref.rango if pref.rango in rangos else (rangos|list)[0] %}{% for k in rangos %}<button type="button" data-rango="{{ k }}" aria-pressed="{{ 'true' if k == r0 else 'false' }}">{{ k }}</button>{% endfor %}
       </div>
     </div>
     <div class="graf-area" data-grafico="patrimonio" role="img" aria-label="Evolución de tu patrimonio"><canvas></canvas><div class="graf-tip num" hidden></div></div>
@@ -45,14 +45,21 @@
 {% endmacro %}
 
 {% macro m_acciones() %}
-<nav class="acciones" aria-label="Accesos rápidos">
-  <a href="{{ url_for('cliente.invertir') }}"><span>{{ icono('invertir') }}</span>Depositar</a>
-  <a href="{{ url_for('auth.trading') }}"><span>{{ icono('trading') }}</span>Comprar</a>
-  <a href="{{ url_for('auth.trading') }}"><span>{{ icono('mercado') }}</span>Vender</a>
-  <a href="{{ url_for('cliente.convertir') }}"><span>{{ icono('convertir') }}</span>Convertir</a>
-  <a href="{{ url_for('cliente.enviar') }}"><span>{{ icono('enviar') }}</span>Enviar</a>
-  <a href="{{ url_for('cliente.retirar') }}"><span>{{ icono('retiro') }}</span>Retirar</a>
+<nav class="acciones n{{ pref.accesos|length }}" aria-label="Accesos rápidos">
+  {% for k in pref.accesos %}{% set a = accesos[k] %}<a href="{{ url_for(a[1]) }}"><span>{{ icono(a[2]) }}</span>{{ a[0] }}</a>{% endfor %}
 </nav>
+{% endmacro %}
+
+{% macro m_favoritos() %}
+<section class="panel">
+  <header><h3>Tus favoritos</h3><a class="small" href="{{ url_for('auth.mercado', ver='favoritos') }}">Ver en Mercados</a></header>
+  {% if favoritos %}<div class="favs">{% for m in favoritos %}
+    <a class="fav" href="{{ url_for('auth.trading', codigo=m.codigo) }}"><span class="moneda-ico" aria-hidden="true">{{ m.codigo[:1] }}</span>
+      <div class="grow"><b>{{ m.codigo }}</b><span class="xs muted">{{ m.nombre }}</span></div>
+      {{ chispa(m.chispa) }}
+      <div class="fav-precio"><span class="num" data-precio="{{ m.codigo }}">{{ m.precio|precio if m.precio is not none else 'sin precio' }}</span>{% if m.cambio is not none %}<span class="num xs {{ 'up' if m.cambio >= 0 else 'down' }}">{{ '%+.2f'|format(m.cambio)|replace('.', ',') }} %</span>{% endif %}</div></a>{% endfor %}</div>
+  {% else %}<p class="small muted vacio-sm">Marca monedas con la estrella en Mercados para seguirlas desde aquí.</p>{% endif %}
+</section>
 {% endmacro %}
 
 {% macro m_indicadores() %}
@@ -184,7 +191,7 @@
 
 {% macro m_actividad() %}
 <section class="panel privado">
-  <header><h3>Actividad reciente</h3><a class="small" href="{{ url_for('cliente.movimientos') }}">Ver todo</a></header>
+  <header><h3>Actividad reciente</h3><span class="row" style="gap:12px"><a class="small" href="{{ url_for('cliente.movimientos') }}">Movimientos</a><a class="small" href="{{ url_for('cuenta.actividad') }}">Centro de actividad</a></span></header>
   <div class="list">{% for m in ultimos %}
     {% if m.clase == 'op' %}<a class="item" href="{{ m.url }}"><span class="mov-ico {{ m.o.tipo }}">{{ icono({'aporte': 'invertir', 'retiro': 'retiro', 'compra': 'mercado', 'venta': 'mercado'}.get(m.o.tipo, 'documento')) }}</span><div class="grow"><div class="t">{{ tipo_op(m.o) }}</div><div class="d">{{ m.ts|fecha }} · {{ estado(m.o) }}</div></div><div class="amt num {{ 'up' if m.o.tipo == 'aporte' else ('' if m.o.tipo in ('compra', 'venta') else 'down') }}">{{ signo(m.o) }}{{ m.monto|usd }}</div></a>
     {% else %}<a class="item" href="{{ m.url }}"><span class="mov-ico envio">{{ icono('enviar') }}</span><div class="grow"><div class="t">{{ ("Enviaste a " if m.sale else "Recibiste de ") ~ ocultar(m.otro) }}</div><div class="d">{{ m.ts|fecha }} · <span class="pill ok">Hecho</span></div></div><div class="amt num {{ 'down' if m.sale else 'up' }}">{{ '−' if m.sale else '+' }}{{ m.monto|usd }}</div></a>{% endif %}
@@ -198,13 +205,13 @@
 {% endmacro %}
 
 {% set M = {"patrimonio": m_patrimonio, "acciones": m_acciones, "indicadores": m_indicadores, "alertas": m_alertas,
-            "rendimientos": m_rendimientos, "activos": m_activos, "composicion": m_composicion, "riesgo": m_riesgo,
+            "rendimientos": m_rendimientos, "favoritos": m_favoritos, "activos": m_activos, "composicion": m_composicion, "riesgo": m_riesgo,
             "ranking": m_ranking, "mercado": m_mercado, "recomendaciones": m_recomendaciones, "actividad": m_actividad} %}
 
 {# ---------------- página ---------------- #}
 <div class="saludo">
   <div><span class="lab">{{ ['Buen día', 'Buenas tardes', 'Buenas noches'][0 if ahora_local().hour < 12 else (1 if ahora_local().hour < 19 else 2)] }}</span><h2>{{ cli.nombre.split()[0] }}</h2></div>
-  <div class="row" style="gap:8px">{{ kyc(cli) }}<button class="btn sm ghost" type="button" data-abrir="d-panel">{{ icono('ajustes') }}Personalizar</button></div>
+  <div class="row" style="gap:8px;flex-wrap:wrap;justify-content:flex-end">{{ kyc(cli) }}{% for v in pref.vistas %}<form method="post" action="{{ url_for('auth.preferencias_guardar') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="vista"><input type="hidden" name="i" value="{{ loop.index0 }}"><input type="hidden" name="volver" value="{{ url_for('cliente.inicio') }}"><button class="btn sm ghost vista-chip" type="submit" title="Aplicar la vista {{ v.nombre }}">{{ v.nombre }}</button></form>{% endfor %}<button class="btn sm ghost" type="button" data-abrir="d-panel">{{ icono('ajustes') }}Personalizar</button></div>
 </div>
 {% if cli.kyc_estado == 'observado' and cli.kyc_nota %}
   <div class="flash error">Tu verificación tiene una observación: {{ cli.kyc_nota }} Hasta resolverla no se pueden aprobar nuevas operaciones. <a href="{{ url_for('cliente.perfil') }}">Ir a tu perfil</a></div>
@@ -240,9 +247,17 @@
         <span class="mover"><button type="button" data-mover="-1" aria-label="Subir {{ modulos[m][0] }}">↑</button><button type="button" data-mover="1" aria-label="Bajar {{ modulos[m][0] }}">↓</button></span>
       </li>{% endfor %}
     </ul>
+    <h4 class="lab">Accesos rápidos <span class="xs muted">(hasta 8)</span></h4>
+    <div class="accesos-op">{% for k, a in accesos.items() %}<label class="check"><input type="checkbox" name="acceso" value="{{ k }}" {{ 'checked' if k in pref.accesos }}>{{ a[0] }}</label>{% endfor %}</div>
+    <label class="field" for="p-rango">El gráfico de patrimonio abre en<select id="p-rango" name="rango"><option value="">El período más corto</option>{% for k in rangos_op %}<option value="{{ k }}"{% if pref.rango == k %} selected{% endif %}>{{ k }}</option>{% endfor %}</select></label>
+    <label class="field" for="p-vista">Guardar esta configuración como vista <span class="xs muted">(opcional)</span><input id="p-vista" name="vista_nombre" maxlength="30" placeholder="Por ejemplo: Trading, Resumen simple"></label>
     <div class="row spread"><button class="btn ghost sm" type="submit" name="restablecer" value="1">Restablecer</button>
       <span class="row" style="gap:8px"><button class="btn" type="button" data-cerrar>Cancelar</button><button class="btn primary" type="submit">Guardar</button></span></div>
   </form>
+  {% if pref.vistas %}<h4 class="lab" style="margin-top:14px">Tus vistas guardadas</h4>
+  <ul class="vistas">{% for v in pref.vistas %}<li><span class="grow">{{ v.nombre }}</span>
+    <form method="post" action="{{ url_for('auth.preferencias_guardar') }}" class="row" style="gap:6px"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="vista"><input type="hidden" name="i" value="{{ loop.index0 }}"><input type="hidden" name="volver" value="{{ url_for('cliente.inicio') }}">
+      <button class="btn sm" type="submit">Usar</button><button class="btn sm ghost" type="submit" name="borrar" value="1" aria-label="Borrar la vista {{ v.nombre }}">Borrar</button></form></li>{% endfor %}</ul>{% endif %}
 </dialog>
 <script type="application/json" id="datos-vivo">{{ vivo|tojson }}</script>
 {% endblock %}

@@ -30,11 +30,13 @@ def notificar(usuario_id, texto, enlace=None, asunto=None, ts=None, categoria=No
     correo con el mismo texto. Los avisos de seguridad siempre se envían."""
     ts = ts or ahora()
     categoria = categoria or categoria_de(texto, enlace)
-    with db.transaccion() as c:
-        c.execute("INSERT INTO notificaciones (usuario_id, texto, enlace, ts, categoria) VALUES (?, ?, ?, ?, ?)",
-                  (usuario_id, texto, enlace, ts, categoria))
     from . import preferencias
-    if not preferencias.leer(usuario_id)["correo"].get(categoria, True):
+    pref = preferencias.leer(usuario_id)
+    silenciada = not pref["app"].get(categoria, True)  # queda en el historial, pero ya leída: no suma al contador
+    with db.transaccion() as c:
+        c.execute("INSERT INTO notificaciones (usuario_id, texto, enlace, ts, categoria, leida) VALUES (?, ?, ?, ?, ?, ?)",
+                  (usuario_id, texto, enlace, ts, categoria, 1 if silenciada else 0))
+    if not pref["correo"].get(categoria, True):
         return
     with db.transaccion() as c:
         if correo_activo():
@@ -84,8 +86,30 @@ def por_categoria(usuario_id):
         "SELECT categoria, COUNT(*) AS n, SUM(leida = 0) AS nuevas FROM notificaciones WHERE usuario_id = ? GROUP BY categoria", (usuario_id,))}
 
 
-def marcar_leidas(usuario_id):
-    db.ejecutar("UPDATE notificaciones SET leida = 1 WHERE usuario_id = ? AND leida = 0", (usuario_id,))
+def marcar_leidas(usuario_id, categoria=None):
+    db.ejecutar("UPDATE notificaciones SET leida = 1 WHERE usuario_id = ? AND leida = 0" + (" AND categoria = ?" if categoria else ""),
+                (usuario_id, categoria) if categoria else (usuario_id,))
+
+
+def marcar(usuario_id, nid, leida):
+    return db.ejecutar("UPDATE notificaciones SET leida = ? WHERE id = ? AND usuario_id = ?", (1 if leida else 0, nid, usuario_id))
+
+
+def eliminar(usuario_id, nid=None, solo_leidas=False):
+    """Borra un aviso propio, o todos los ya leídos. La bitácora de la cuenta no se toca."""
+    if nid:
+        db.ejecutar("DELETE FROM notificaciones WHERE id = ? AND usuario_id = ?", (nid, usuario_id))
+    elif solo_leidas:
+        db.ejecutar("DELETE FROM notificaciones WHERE usuario_id = ? AND leida = 1", (usuario_id,))
+
+
+def comunicado(texto, enlace=None, roles=("cliente",)):
+    """Aviso del equipo a todas las personas de esos roles. Devuelve a cuántas llegó."""
+    marcadores = ",".join("?" * len(roles))
+    ids = [u["id"] for u in db.todos(f"SELECT id FROM usuarios WHERE activo = 1 AND rol IN ({marcadores})", tuple(roles))]
+    for uid in ids:
+        notificar(uid, texto, enlace, asunto=f"Comunicado de {current_app.config['NOMBRE']}", categoria="comunicaciones")
+    return len(ids)
 
 
 def enviar_pendientes(limite=50):

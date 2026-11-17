@@ -2,7 +2,7 @@
 import time
 from datetime import datetime, timedelta
 
-from flask import Blueprint, current_app, flash, g, redirect, render_template, request, session, url_for
+from flask import Blueprint, abort, current_app, flash, g, redirect, render_template, request, session, url_for
 
 from . import auditoria, db, seguridad, cifrado, limites
 from .tiempo import ahora, ahora_dt, iso, leer  # noqa: F401
@@ -762,7 +762,7 @@ def tema():
     return resp
 
 
-@bp.get("/cuenta/avisos")
+@bp.route("/cuenta/avisos", methods=["GET", "POST"])
 def avisos():
     r = seguridad.exigir_sesion()
     if r:
@@ -770,21 +770,55 @@ def avisos():
     from . import notificaciones, preferencias
     from .formato import zona
     from .tiempo import leer
-    cat = request.args.get("cat") if request.args.get("cat") in preferencias.CATEGORIAS else None
-    nuevas = request.args.get("ver") == "nuevas"
-    lista = notificaciones.listar(g.usuario["id"], 100, categoria=cat, solo_no_leidas=nuevas)
+    uid = g.usuario["id"]
+    cat = request.values.get("cat") if request.values.get("cat") in preferencias.CATEGORIAS else None
+    nuevas = request.values.get("ver") == "nuevas"
+    if request.method == "POST":
+        f = request.form
+        accion, nid = f.get("accion"), f.get("id", type=int)
+        if accion == "leer_todo":
+            notificaciones.marcar_leidas(uid, cat)
+        elif accion in ("leer", "no_leer") and nid:
+            notificaciones.marcar(uid, nid, accion == "leer")
+        elif accion == "eliminar" and nid:
+            notificaciones.eliminar(uid, nid)
+        elif accion == "eliminar_leidas":
+            notificaciones.eliminar(uid, solo_leidas=True)
+            flash("Eliminamos los avisos que ya habías leído.", "ok")
+        elif accion == "preferencias":
+            preferencias.guardar(uid, {canal: {k: f.get(f"{canal}_{k}") == "si" for k in preferencias.CATEGORIAS} for canal in preferencias.CANALES}
+                                 | {"aviso_ingreso": f.get("aviso_ingreso")})
+            auditoria.registrar("preferencias.cambiadas", f"usuario:{uid}", {"texto": "Cambió sus preferencias de notificaciones."})
+            flash("Preferencias de notificaciones guardadas en tu cuenta.", "ok")
+            return redirect(url_for("auth.avisos") + "#preferencias")
+        return redirect(url_for("auth.avisos", cat=cat, ver="nuevas" if nuevas else None))
+    lista = notificaciones.listar(uid, 150, categoria=cat, solo_no_leidas=nuevas)
     hoy = datetime.now(zona()).date()
     grupos = {}
     for a in lista:
         dia = leer(a["ts"]).astimezone(zona()).date()
         clave = "Hoy" if dia == hoy else "Ayer" if (hoy - dia).days == 1 else "Esta semana" if (hoy - dia).days < 7 else "Antes"
         grupos.setdefault(clave, []).append(a)
-    ids = [a["id"] for a in lista if not a["leida"]]
-    if ids:
-        db.ejecutar(f"UPDATE notificaciones SET leida = 1 WHERE usuario_id = ? AND id IN ({','.join('?' * len(ids))})", (g.usuario["id"], *ids))
+    conteo = notificaciones.por_categoria(uid)
     return render_template("auth/avisos.html", grupos=grupos, cat=cat, nuevas=nuevas, categorias=preferencias.CATEGORIAS,
-                           conteo=notificaciones.por_categoria(g.usuario["id"]), pref=preferencias.leer(g.usuario["id"]),
-                           correo=notificaciones.correo_activo())
+                           detalle=preferencias.DETALLE_CATEGORIAS, canales=preferencias.CANALES, conteo=conteo,
+                           sin_leer=sum(c[1] or 0 for c in conteo.values()), leidas=sum((c[0] or 0) - (c[1] or 0) for c in conteo.values()),
+                           pref=preferencias.leer(uid), correo=notificaciones.correo_activo())
+
+
+@bp.get("/cuenta/avisos/<int:nid>")
+def aviso_abrir(nid):
+    """Abre el destino de un aviso y lo marca como leído."""
+    r = seguridad.exigir_sesion()
+    if r:
+        return r
+    from . import notificaciones
+    a = db.uno("SELECT * FROM notificaciones WHERE id = ? AND usuario_id = ?", (nid, g.usuario["id"]))
+    if not a:
+        abort(404)
+    notificaciones.marcar(g.usuario["id"], nid, True)
+    e = a["enlace"] or ""
+    return redirect(e if e.startswith("/") and not e.startswith("//") else url_for("auth.avisos"))
 
 
 # ---------- recuperación de contraseña (S-07) ----------

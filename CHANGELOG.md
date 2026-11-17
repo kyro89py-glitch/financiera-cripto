@@ -20,6 +20,12 @@ Personalización e identidad. Los servicios financieros reales siguen deshabilit
 - **Equipo:** Cumplimiento › Solicitudes, con permiso propio (`cuenta.solicitudes`).
 - Dependencias declaradas: `Pillow` y `cryptography` (esta última faltaba en requirements desde la 0.20).
 
+### Módulo 2 · Centro de actividad y notificaciones
+- **Notificaciones:** marcar una o todas como leídas (también por categoría), volver a marcar como no leída, eliminar una o todas las leídas, y filtros por tipo y «sin leer». Ver la lista ya no las marca solas: lo decide la persona. Abrir un aviso lo marca como leído.
+- **Preferencias por tipo y canal**, guardadas en la cuenta: plataforma, correo y push para operaciones, alertas de precio, seguridad, cuenta, mercado y comunicados. Seguridad no se puede silenciar. **Push queda preparado pero no se envía** (pendiente de integración); el correo depende de que la plataforma tenga servidor de correo configurado.
+- **Inicios de sesión:** aviso al entrar desde un dispositivo nuevo o, si la persona lo elige, en cada inicio.
+- Nueva categoría «Comunicaciones de la plataforma» y función de comunicados del equipo a todos los clientes.
+
 ## [0.20.0] - 2026-11-16
 
 Evolución completa de la plataforma, trabajada por módulos. Los servicios financieros reales siguen deshabilitados.

@@ -1,43 +1,60 @@
 {% extends "base.html" %}
 {% from "macros.html" import ph, vacio with context %}
-{% block titulo %}Avisos{% endblock %}
+{% block titulo %}Notificaciones{% endblock %}
+{% block clase_app %} ancha{% endblock %}
 {% block contenido %}
-{{ ph("Centro de avisos", "Tus operaciones, órdenes, seguridad y verificación, en un solo lugar.") }}
+{{ ph("Notificaciones", "Tus operaciones, alertas, seguridad y comunicados, y cómo quieres recibirlos.") }}
 <div class="avisos-g">
   <div class="col">
-    <nav class="chips" aria-label="Filtrar avisos">
+    <nav class="chips fila-scroll" aria-label="Filtrar avisos">
       <a href="{{ url_for('auth.avisos') }}" aria-current="{{ 'true' if not cat and not nuevas else 'false' }}">Todos</a>
-      <a href="{{ url_for('auth.avisos', ver='nuevas') }}" aria-current="{{ 'true' if nuevas else 'false' }}">Sin leer</a>
+      <a href="{{ url_for('auth.avisos', ver='nuevas') }}" aria-current="{{ 'true' if nuevas else 'false' }}">Sin leer{% if sin_leer %} <span class="badge-in">{{ sin_leer }}</span>{% endif %}</a>
       {% for k, t in categorias.items() %}{% set c = conteo.get(k) %}
       <a href="{{ url_for('auth.avisos', cat=k) }}" aria-current="{{ 'true' if cat == k else 'false' }}">{{ t }}{% if c and c[1] %} <span class="badge-in">{{ c[1] }}</span>{% endif %}</a>
       {% endfor %}
     </nav>
+    <div class="row avisos-acc">
+      <form method="post"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="leer_todo">{% if cat %}<input type="hidden" name="cat" value="{{ cat }}">{% endif %}
+        <button class="btn sm" type="submit" {{ 'disabled' if not sin_leer }}>Marcar {{ 'esta categoría' if cat else 'todo' }} como leído</button></form>
+      <form method="post" data-confirmar="¿Eliminar los {{ leidas }} avisos que ya leíste? El historial de tu cuenta sigue en Actividad."><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="eliminar_leidas">
+        <button class="btn sm ghost" type="submit" {{ 'disabled' if not leidas }}>Eliminar leídos</button></form>
+    </div>
     {% for titulo, lista in grupos.items() %}
     <section class="panel avisos-grupo">
       <header><h3>{{ titulo }}</h3><span class="meta">{{ lista|length }}</span></header>
       {% for a in lista %}
-        {% if a.enlace %}<a class="aviso-item{{ ' nuevo' if not a.leida }} cat-{{ a.categoria }}" href="{{ a.enlace }}">{% else %}<div class="aviso-item{{ ' nuevo' if not a.leida }} cat-{{ a.categoria }}">{% endif %}
-          <span class="aviso-ico" aria-hidden="true">{{ icono({'seguridad': 'escudo', 'precios': 'campana', 'operaciones': 'movimientos', 'mercado': 'mercado'}.get(a.categoria, 'perfil')) }}</span>
-          <div class="grow"><div>{{ a.texto }}</div><div class="xs muted">{{ categorias.get(a.categoria, '') }} · {{ a.ts|fecha }} · {{ a.ts|hace }}</div></div>
-        {% if a.enlace %}</a>{% else %}</div>{% endif %}
+        <div class="aviso-item{{ ' nuevo' if not a.leida }} cat-{{ a.categoria }}">
+          <span class="aviso-ico" aria-hidden="true">{{ icono({'seguridad': 'escudo', 'precios': 'campana', 'operaciones': 'movimientos', 'mercado': 'mercado', 'comunicaciones': 'documento'}.get(a.categoria, 'perfil')) }}</span>
+          <div class="grow">{% if a.enlace %}<a class="aviso-txt" href="{{ url_for('auth.aviso_abrir', nid=a.id) }}">{{ a.texto }}</a>{% else %}<div>{{ a.texto }}</div>{% endif %}
+            <div class="xs muted">{{ categorias.get(a.categoria, '') }} · {{ a.ts|fecha }} · {{ a.ts|hace }}</div></div>
+          <form method="post" class="aviso-bot"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ a.id }}">
+            {% if cat %}<input type="hidden" name="cat" value="{{ cat }}">{% endif %}{% if nuevas %}<input type="hidden" name="ver" value="nuevas">{% endif %}
+            <button class="iconbtn" name="accion" value="{{ 'no_leer' if a.leida else 'leer' }}" type="submit" aria-label="{{ 'Marcar como no leído' if a.leida else 'Marcar como leído' }}" title="{{ 'Marcar como no leído' if a.leida else 'Marcar como leído' }}">{{ icono('check' if not a.leida else 'campana') }}</button>
+            <button class="iconbtn" name="accion" value="eliminar" type="submit" aria-label="Eliminar aviso" title="Eliminar">{{ icono('cerrar') }}</button></form>
+        </div>
       {% endfor %}
     </section>
     {% else %}
       <section class="panel">{{ vacio('campana', 'No hay avisos ' ~ ('sin leer' if nuevas else 'en esta categoría' if cat else 'todavía') ~ '.') }}</section>
     {% endfor %}
   </div>
-  <aside class="panel">
-    <header><h3>Avisos por correo</h3></header>
-    {% if not correo %}<p class="xs muted">El envío de correos todavía no está configurado en la plataforma: por ahora los avisos se ven solo aquí.</p>{% endif %}
-    <form class="col" method="post" action="{{ url_for('auth.preferencias_guardar') }}">
-      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="correo"><input type="hidden" name="volver" value="{{ request.full_path.rstrip('?') }}">
-      {% for k, t in categorias.items() %}
-      <label class="check"><input type="checkbox" name="{{ k }}" value="si" {{ 'checked' if pref.correo[k] }}{{ ' disabled' if k == 'seguridad' }}><span>{{ t }}{% if k == 'seguridad' %} <span class="xs muted">(siempre activo)</span>{% endif %}</span></label>
-      {% if k == 'seguridad' %}<input type="hidden" name="seguridad" value="si">{% endif %}
-      {% endfor %}
-      <button class="btn sm" type="submit">Guardar</button>
+  <aside class="panel" id="preferencias">
+    <header><h3>Cómo recibirlos</h3></header>
+    <form class="col" method="post">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="preferencias">
+      <table class="canales"><thead><tr><th scope="col">Tipo de aviso</th>{% for c, t in canales.items() %}<th scope="col">{{ t }}</th>{% endfor %}</tr></thead><tbody>
+      {% for k, t in categorias.items() %}<tr><th scope="row">{{ t }}<span class="xs muted">{{ detalle[k] }}</span></th>
+        {% for c in canales %}<td>{% set fijo = k == 'seguridad' and c != 'push' %}<input type="checkbox" name="{{ c }}_{{ k }}" value="si" aria-label="{{ t }}: {{ canales[c] }}" {{ 'checked' if pref[c][k] }}{{ ' disabled' if fijo }}>{% if fijo %}<input type="hidden" name="{{ c }}_{{ k }}" value="si">{% endif %}</td>{% endfor %}</tr>
+      {% endfor %}</tbody></table>
+      <label class="field" for="aviso_ingreso">Avisarme de inicios de sesión<select id="aviso_ingreso" name="aviso_ingreso"><option value="nuevo"{% if pref.aviso_ingreso == 'nuevo' %} selected{% endif %}>Solo desde dispositivos nuevos</option><option value="siempre"{% if pref.aviso_ingreso == 'siempre' %} selected{% endif %}>Cada vez que se inicia sesión</option></select></label>
+      <button class="btn sm primary" type="submit" style="align-self:flex-start">Guardar</button>
     </form>
-    <p class="xs muted">Dentro de la plataforma siempre ves todos los avisos. Esto decide solo qué te llega también por correo.</p>
+    <ul class="xs muted lista-simple">
+      <li>Los avisos de seguridad no se pueden silenciar.</li>
+      <li>Si apagas un tipo en la plataforma, queda en el historial pero no suma al contador.</li>
+      <li>{% if correo %}El correo está activo.{% else %}El envío de correos todavía no está configurado en la plataforma: tu elección queda guardada.{% endif %}</li>
+      <li><b>Push: pendiente de integración.</b> Guardamos tu elección para cuando exista la app; hoy no se envía ninguna notificación push.</li>
+    </ul>
   </aside>
 </div>
 {% endblock %}

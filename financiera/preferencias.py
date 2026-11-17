@@ -27,12 +27,21 @@ ZONAS = {"America/Asuncion": "Paraguay (Asunción)", "America/Argentina/Buenos_A
 # El único idioma con la interfaz completa es el español; los demás se anuncian pero todavía no se pueden elegir.
 IDIOMAS = {"es": ("Español", True), "gn": ("Guaraní", False), "pt": ("Português", False), "en": ("English", False)}
 CATEGORIAS = {"operaciones": "Operaciones y movimientos", "precios": "Alertas de precio y órdenes", "seguridad": "Seguridad",
-              "cuenta": "Cuenta y verificación", "mercado": "Novedades del mercado"}
+              "cuenta": "Cuenta y verificación", "mercado": "Novedades del mercado", "comunicaciones": "Comunicaciones de la plataforma"}
+DETALLE_CATEGORIAS = {"operaciones": "Confirmaciones de compras y ventas, depósitos, retiros y envíos.",
+                      "precios": "Alertas de precio, variaciones y órdenes programadas.",
+                      "seguridad": "Inicios de sesión, cambios de contraseña o correo y actividad sospechosa.",
+                      "cuenta": "Verificación de identidad, documentos, solicitudes y consultas.",
+                      "mercado": "Movimientos fuertes de las monedas que sigues.", "comunicaciones": "Novedades y anuncios del equipo."}
+CANALES = {"app": "En la plataforma", "correo": "Correo", "push": "Push"}
 DEFECTO = {
     "orden": list(MODULOS),
     "ocultos": [],
     "moneda": "USD",
     "correo": {k: True for k in CATEGORIAS},
+    "app": {k: True for k in CATEGORIAS},
+    "push": {k: False for k in CATEGORIAS},   # se guarda la elección; el envío push todavía no está integrado
+    "aviso_ingreso": "nuevo",                 # nuevo = solo dispositivos nuevos · siempre = cada inicio de sesión
     "tema": "oscuro",
     "zona": "",          # vacío = la de la plataforma
     "idioma": "es",
@@ -56,7 +65,13 @@ def leer(usuario_id):
     for k in CATEGORIAS:
         if isinstance(guardado.get("correo", {}).get(k), bool):
             out["correo"][k] = guardado["correo"][k]
-    out["correo"]["seguridad"] = True  # los avisos de seguridad siempre llegan
+    for canal in ("app", "push"):
+        for k in CATEGORIAS:
+            if isinstance(guardado.get(canal, {}).get(k), bool):
+                out[canal][k] = guardado[canal][k]
+    out["correo"]["seguridad"] = out["app"]["seguridad"] = True  # los avisos de seguridad siempre llegan
+    if guardado.get("aviso_ingreso") in ("nuevo", "siempre"):
+        out["aviso_ingreso"] = guardado["aviso_ingreso"]
     if guardado.get("tema") in ("oscuro", "claro"):
         out["tema"] = guardado["tema"]
     if guardado.get("zona") in ZONAS:
@@ -83,6 +98,14 @@ def guardar(usuario_id, cambios):
             if k in cambios["correo"]:
                 actual["correo"][k] = bool(cambios["correo"][k])
         actual["correo"]["seguridad"] = True
+    for canal in ("app", "push"):
+        if isinstance(cambios.get(canal), dict):
+            for k in CATEGORIAS:
+                if k in cambios[canal]:
+                    actual[canal][k] = bool(cambios[canal][k])
+    actual["app"]["seguridad"] = True
+    if cambios.get("aviso_ingreso") in ("nuevo", "siempre"):
+        actual["aviso_ingreso"] = cambios["aviso_ingreso"]
     if cambios.get("tema") in ("oscuro", "claro"):
         actual["tema"] = cambios["tema"]
     if "zona" in cambios:

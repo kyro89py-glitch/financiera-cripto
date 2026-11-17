@@ -188,10 +188,15 @@ def iniciar_sesion(usuario, motivo=None):
                   (sid, usuario["id"], ts, ts, request.remote_addr if request else None, agente, disp))
     session["sid"] = sid
     session["sid_t"] = time.time()
-    if previas and not conocido and not motivo:
-        from . import notificaciones
-        notificaciones.notificar(usuario["id"], f"Nuevo ingreso a tu cuenta desde {disp} (IP {request.remote_addr}). "
-                                 "Si no fuiste tú, cambia tu contraseña y cierra esa sesión desde Seguridad.", "/cuenta/sesiones", ts=ts)
+    if previas and not motivo:
+        from . import notificaciones, preferencias
+        if not conocido:
+            notificaciones.notificar(usuario["id"], f"Nuevo ingreso a tu cuenta desde {disp} (IP {request.remote_addr}). "
+                                     "Si no fuiste tú, cambia tu contraseña y cierra esa sesión desde Seguridad.", "/cuenta/sesiones", ts=ts,
+                                     categoria="seguridad")
+        elif preferencias.leer(usuario["id"])["aviso_ingreso"] == "siempre":
+            notificaciones.notificar(usuario["id"], f"Inicio de sesión desde {disp} (IP {request.remote_addr}).", "/cuenta/sesiones", ts=ts,
+                                     categoria="seguridad")
 
 
 def cerrar_sesiones(usuario_id, cierre, excepto=None):

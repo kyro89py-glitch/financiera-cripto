@@ -84,5 +84,6 @@ def test_avisos_por_categoria_y_correo_segun_preferencia(nav, ctx):
     n = nav("laura@x.com")
     html = n.get("/cuenta/avisos?cat=precios").data.decode()
     assert "alerta de precio" in html and "Nuevo ingreso" not in html
+    n.post("/cuenta/avisos", {"accion": "leer_todo", "cat": "precios"})   # 0.30: se marcan a pedido, por categoría
     assert db.uno("SELECT leida FROM notificaciones WHERE usuario_id = ? AND categoria = 'precios'", (uid,))["leida"] == 1
     assert db.uno("SELECT leida FROM notificaciones WHERE usuario_id = ? AND categoria = 'seguridad' ORDER BY id DESC", (uid,))["leida"] == 0

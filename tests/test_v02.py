@@ -220,6 +220,8 @@ def test_avisos_de_aprobacion_y_correo(nav, ctx):
     assert correo and "https://app.ejemplo.com/cliente/movimientos" in correo["cuerpo"]
     n = nav("laura@x.com")
     assert n.get("/cuenta/avisos").status_code == 200
+    assert notificaciones.no_leidas(laura["id"]) >= 1          # desde la 0.30 ver la lista no los marca: lo decide la persona
+    n.post("/cuenta/avisos", {"accion": "leer_todo"})
     assert notificaciones.no_leidas(laura["id"]) == 0
 
 

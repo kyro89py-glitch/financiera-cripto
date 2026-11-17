@@ -55,6 +55,8 @@ ICONOS = {
 ICONOS["trading"] = ('<path d="M7 3v4M7 17v4M17 3v7M17 18v3"/><rect x="5" y="7" width="4" height="10" rx="1"/>'
                      '<rect x="15" y="10" width="4" height="8" rx="1"/>')
 ICONOS["retiro"] = '<circle cx="12" cy="12" r="8.5"/><path d="M12 8v8M8.5 12.5L12 16l3.5-3.5"/>'
+ICONOS["check"] = '<path d="m5 12.5 4.5 4.5L19 7.5"/>'
+ICONOS["cerrar"] = '<path d="M6 6l12 12M18 6 6 18"/>'
 ICONOS["camara"] = '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>'
 ICONOS["subir"] = '<path d="M12 16V4m0 0-4 4m4-4 4 4M5 20h14"/>'
 ICONOS["copiar"] = '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>'

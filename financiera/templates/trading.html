@@ -48,6 +48,7 @@
     <span class="vivo" data-vivo title="Estado de la actualización de precios"><i></i><span>Conectando…</span></span>
     <form method="post" action="{{ url_for('auth.favorito', codigo=a.codigo) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="volver" value="{{ request.full_path.rstrip('?') }}">
       <button class="estrella{{ ' on' if favorito }}" type="submit" aria-label="{{ 'Quitar de' if favorito else 'Agregar a' }} favoritas" aria-pressed="{{ 'true' if favorito else 'false' }}">{{ icono('estrella') }}</button></form>
+    <a class="btn sm ghost" href="{{ url_for('auth.moneda', codigo=a.codigo) }}#alertas" title="Crear una alerta de precio">{{ icono('campana') }}<span class="oc">Alerta</span></a>
     <a class="btn sm ghost" href="{{ url_for('auth.moneda', codigo=a.codigo) }}">Info</a>
   </div>
 </header>
@@ -68,17 +69,27 @@
         <button type="button" data-ind="ma" title="Medias móviles simples de 7 y 25 velas">MA</button>
         <button type="button" data-ind="ema" title="Media móvil exponencial de 20 velas">EMA</button>
         <button type="button" data-ind="boll" title="Bandas de Bollinger 20 y 2 desvíos">BOLL</button>
+        <button type="button" data-ind="vwap" title="Precio promedio ponderado por volumen, desde la primera vela cargada">VWAP</button>
         <button type="button" data-ind="vol" title="Volumen negociado">VOL</button>
         <button type="button" data-ind="rsi" title="Índice de fuerza relativa de 14 velas">RSI</button>
         <button type="button" data-ind="macd" title="Convergencia y divergencia de medias 12, 26 y 9">MACD</button>
+        <button type="button" data-ind="estoc" title="Oscilador estocástico 14 y 3">ESTOC</button>
+        <button type="button" data-ind="sr" title="Soportes y resistencias detectados en las velas visibles">S/R</button>
+      </div>
+      <div class="chips dib-chips" role="group" aria-label="Dibujar en el gráfico">
+        <button type="button" data-dib="nivel" title="Línea horizontal en un precio">— Nivel</button>
+        <button type="button" data-dib="tendencia" title="Línea de tendencia entre dos puntos">╱ Tendencia</button>
+        <button type="button" data-dib="borrar" title="Borrar un dibujo">Borrar</button>
+        <label class="cmp-sel"><span class="sr-only">Comparar con otra moneda</span><select id="comparar"><option value="">Comparar con…</option>{% for p in pares if p.codigo != a.codigo %}<option value="{{ p.codigo }}">{{ p.codigo }}</option>{% endfor %}</select></label>
       </div>
     </div>
+    <div class="dib-ayuda small" id="dib-ayuda" role="status" hidden><span></span><button class="btn sm ghost" type="button" id="dib-todos" hidden>Borrar todos</button></div>
     <div class="leyenda num" id="leyenda" aria-live="off"></div>
     <div class="lienzo" id="lienzo">
       <canvas id="velas" role="img" aria-label="Gráfico de velas de {{ a.codigo }}/USD"></canvas>
       <div class="cargando" id="graf-estado">Cargando velas…</div>
     </div>
-    <div class="graf-pie small muted"><span><i class="ma ma7"></i>MA <span data-par-ind="ma1">7</span></span><span><i class="ma ma25"></i>MA <span data-par-ind="ma2">25</span></span><span><i class="ma ema"></i>EMA <span data-par-ind="ema">20</span></span><span id="graf-fuente"></span><span class="xs">Arrastra para desplazarte, usa la rueda o pellizca para acercar.</span></div>
+    <div class="graf-pie small muted"><span><i class="ma ma7"></i>MA <span data-par-ind="ma1">7</span></span><span><i class="ma ma25"></i>MA <span data-par-ind="ma2">25</span></span><span><i class="ma ema"></i>EMA <span data-par-ind="ema">20</span></span><span data-leg="vwap" hidden><i class="ma vwap"></i>VWAP</span><span data-leg="cmp" hidden><i class="ma cmp"></i><span></span> (escalada al precio de {{ a.codigo }})</span><span data-leg="dib" hidden><i class="ma dib"></i>Tus dibujos</span><span id="graf-fuente"></span><span class="xs">Arrastra para desplazarte, usa la rueda o pellizca para acercar.</span></div>
     <dialog class="confirmar" id="d-ind" aria-labelledby="d-ind-t">
       <h3 id="d-ind-t">Configurar indicadores</h3>
       <form class="col" method="dialog" id="f-ind">
@@ -92,9 +103,16 @@
           <label class="field">MACD rápida<input type="number" name="mf" min="2" max="50" step="1"></label>
           <label class="field">MACD lenta<input type="number" name="ms" min="3" max="100" step="1"></label>
           <label class="field">MACD señal<input type="number" name="mg" min="2" max="50" step="1"></label>
+          <label class="field">Estocástico %K<input type="number" name="ek" min="3" max="50" step="1"></label>
+          <label class="field">Estocástico %D<input type="number" name="ed" min="2" max="20" step="1"></label>
         </div>
         <div class="row"><button class="btn" type="button" id="ind-reset">Valores clásicos</button><button class="btn primary" type="submit">Aplicar</button></div>
       </form>
+      <h4 class="lab" style="margin-top:14px">Plantillas</h4>
+      <p class="xs muted">Guarda los indicadores y parámetros que usas ahora para volver a ellos con un toque. Quedan en tu cuenta.</p>
+      <div class="plantillas" id="plantillas"></div>
+      <div class="row pl-nueva"><input id="pl-nombre" maxlength="30" placeholder="Nombre, por ejemplo: Tendencia" aria-label="Nombre de la plantilla"><button class="btn sm" type="button" id="pl-guardar">Guardar actual</button></div>
+      <p class="xs error-txt" id="pl-error" role="alert" hidden></p>
     </dialog>
   </section>
 
@@ -108,6 +126,7 @@
       <div class="row spread xs"><span class="muted">Profundidad ±1 %</span><span class="muted">niveles visibles</span></div>
       <div class="liq-barra" aria-hidden="true"><i></i></div>
       <div class="row spread small num"><span class="up" data-liq-compra>—</span><span class="down" data-liq-venta>—</span></div>
+      <canvas id="prof" class="prof" role="img" aria-label="Profundidad del libro"></canvas>
     </div>
     <p class="xs muted libro-nota">Toca un precio para usarlo en una orden límite.</p>
   </section>
@@ -188,6 +207,7 @@
     <button type="button" role="tab" aria-selected="true" aria-controls="t-abiertas" id="tab-abiertas">Órdenes abiertas ({{ abiertas|length }})</button>
     <button type="button" role="tab" aria-selected="false" aria-controls="t-historial" id="tab-historial">Ejecutadas</button>
     <button type="button" role="tab" aria-selected="false" aria-controls="t-canceladas" id="tab-canceladas">Canceladas ({{ canceladas|length }})</button>
+    <a class="tabs-extra small" href="{{ url_for('cliente.estadisticas') }}">{{ icono('resumen') }}Estadísticas</a>
   </div>
   <div id="t-abiertas" role="tabpanel" aria-labelledby="tab-abiertas">
     {% if abiertas %}
@@ -261,6 +281,18 @@
     <p class="xs muted">{% if expo.peso > 50 %}Más de la mitad de tu cartera está en {{ a.codigo }}: una caída fuerte de esta moneda afectaría a casi todo tu patrimonio.{% else %}La marca indica el 50 % de tu cartera. Antes de confirmar, el resumen te muestra cómo cambiaría tu exposición.{% endif %}</p>
   </div>
   {% endif %}
+  <div class="panel" id="anotaciones">
+    <header><h3>Tus anotaciones de {{ a.codigo }}</h3><span class="meta">{{ notas|length }}</span></header>
+    <form method="post" action="{{ url_for('auth.trading_dibujos', codigo=a.codigo) }}" class="col" style="gap:8px">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="tipo" value="nota">
+      <label class="field" for="nota-txt">Qué ves o qué planeas<textarea id="nota-txt" name="texto" rows="2" maxlength="500" minlength="3" required placeholder="Por ejemplo: rompió la resistencia, espero confirmación antes de comprar"></textarea></label>
+      <div class="row spread" style="gap:8px;flex-wrap:wrap"><label class="check xs"><input type="checkbox" name="con_precio" value="si" checked>Guardar el precio de ahora</label><button class="btn sm primary" type="submit">Anotar</button></div>
+    </form>
+    {% if notas %}<ol class="notas">{% for n in notas %}
+      <li><div class="grow"><p>{{ n.texto }}</p><span class="xs muted">{{ n.creado|fecha }}{% if n.precio %} · precio entonces {{ n.precio|precio }}{% if vig %}{% set dif = (vig.precio|float / n.precio - 1) * 100 %} · desde entonces <b class="{{ 'up' if dif >= 0 else 'down' }}">{{ '%+.2f'|format(dif)|replace('.', ',') }} %</b>{% endif %}{% endif %}</span></div>
+        <form method="post" action="{{ url_for('auth.trading_dibujos', codigo=a.codigo) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="borrar"><input type="hidden" name="id" value="{{ n.id }}"><button class="iconbtn" type="submit" aria-label="Borrar anotación" title="Borrar">{{ icono('cerrar') }}</button></form></li>{% endfor %}</ol>
+    {% else %}<p class="xs muted">Anota lo que observas para revisarlo después. Solo tú ves tus anotaciones.</p>{% endif %}
+  </div>
 </section>
 <p class="note">Las criptomonedas son inversiones de alto riesgo: su precio puede bajar con fuerza y puedes perder parte o todo lo invertido. El precio de cada orden es el que se obtiene al ejecutarla.</p>
 <script type="application/json" id="datos-trading">{{ datos|tojson }}</script>

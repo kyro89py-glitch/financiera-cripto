@@ -243,6 +243,15 @@ def convertir():
                            de=(request.values.get("de") or "USD").upper(), a=(request.values.get("a") or "BTC").upper())
 
 
+@bp.get("/estadisticas")
+def estadisticas():
+    from . import estadisticas as est
+    from . import exchange
+    periodo = request.args.get("periodo") if request.args.get("periodo") in est.PERIODOS else "todo"
+    return render_template("cliente/estadisticas.html", e=est.de_cliente(g.cliente["id"], periodo), periodos=est.PERIODOS,
+                           periodo=periodo, simulador=exchange.modo() != "binance")
+
+
 @bp.route("/enviar", methods=["GET", "POST"])
 @limites.idempotente("enviar")
 def enviar():

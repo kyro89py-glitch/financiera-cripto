@@ -41,6 +41,7 @@ ACCESOS = {"depositar": ("Depositar", "cliente.invertir", "invertir"), "comprar"
            "enviar": ("Enviar", "cliente.enviar", "enviar"), "retirar": ("Retirar", "cliente.retirar", "retiro"),
            "mercados": ("Mercados", "auth.mercado", "mercado"), "movimientos": ("Movimientos", "cliente.movimientos", "movimientos"),
            "analisis": ("Análisis", "cliente.analisis_cartera", "resumen"), "comparar": ("Comparar", "auth.comparar", "operaciones"),
+           "estadisticas": ("Estadísticas", "cliente.estadisticas", "resumen"),
            "actividad": ("Actividad", "cuenta.actividad", "dispositivo"), "academia": ("Academia", "auth.academia", "documento"),
            "herramientas": ("Herramientas", "auth.herramientas", "ajustes"), "ayuda": ("Ayuda", "cliente.ayuda", "campana")}
 ACCESOS_DEFECTO = ["depositar", "comprar", "vender", "convertir", "enviar", "retirar"]
@@ -52,7 +53,8 @@ DEFECTO = {
     "moneda": "USD",
     "accesos": list(ACCESOS_DEFECTO),
     "rango": "",          # período con el que abre el gráfico de patrimonio; vacío = el primero disponible
-    "vistas": [],         # configuraciones guardadas del inicio: nombre, orden, ocultos, accesos, rango
+    "vistas": [],
+    "grafico": {},        # indicadores, parámetros y plantillas del gráfico de trading (ver graficos_usuario)         # configuraciones guardadas del inicio: nombre, orden, ocultos, accesos, rango
     "correo": {k: True for k in CATEGORIAS},
     "app": {k: True for k in CATEGORIAS},
     "push": {k: False for k in CATEGORIAS},   # se guarda la elección; el envío push todavía no está integrado
@@ -93,6 +95,8 @@ def leer(usuario_id):
     out["moneda"] = guardado.get("moneda") if guardado.get("moneda") in ("USD", "PYG") else "USD"
     if isinstance(guardado.get("accesos"), list):
         out["accesos"] = _accesos(guardado["accesos"])
+    from . import graficos_usuario
+    out["grafico"] = graficos_usuario.limpiar(guardado.get("grafico"))
     out["rango"] = guardado.get("rango") if guardado.get("rango") in RANGOS else ""
     out["vistas"] = [v for v in (_vista(x) for x in guardado.get("vistas", []) if isinstance(x, dict)) if v][:MAX_VISTAS]
     for k in CATEGORIAS:
@@ -128,6 +132,9 @@ def guardar(usuario_id, cambios):
         actual["moneda"] = cambios["moneda"]
     if isinstance(cambios.get("accesos"), list):
         actual["accesos"] = _accesos(cambios["accesos"])
+    if "grafico" in cambios:
+        from . import graficos_usuario
+        actual["grafico"] = graficos_usuario.limpiar(cambios["grafico"])
     if "rango" in cambios:
         actual["rango"] = cambios["rango"] if cambios["rango"] in RANGOS else ""
     if cambios.get("guardar_vista"):

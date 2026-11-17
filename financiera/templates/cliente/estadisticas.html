@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph, vacio with context %}
+{% block titulo %}Estadísticas de operaciones{% endblock %}
+{% block clase_app %} ancha{% endblock %}
+{% block contenido %}
+{{ ph("Estadísticas de tus operaciones", "Qué pasó con tus compras y ventas: resultado, comisiones y rendimiento por moneda.") }}
+{% if e.algo_simulado %}<div class="aviso-demo"><b>Resultados simulados.</b> {{ 'Todas tus' if e.todo_simulado else e.simuladas ~ ' de tus ' ~ e.ordenes }} órdenes de este período se ejecutaron en el simulador, sin dinero real ni un exchange de por medio. Estas cifras no son ganancias ni pérdidas reales.</div>{% endif %}
+<nav class="chips fila-scroll" aria-label="Período">{% for k, (t, d) in periodos.items() %}<a href="{{ url_for('cliente.estadisticas', periodo=k) }}" aria-current="{{ 'true' if k == periodo else 'false' }}">{{ t }}</a>{% endfor %}</nav>
+{% if e.ordenes %}
+<section class="est-cab">
+  <div class="est-principal"><span class="lab">Resultado acumulado de tus ventas{{ ' (simulado)' if e.todo_simulado }}</span>
+    <div class="cifra-mayor num {{ 'up' if e.acumulado >= 0 else 'down' }}">{{ '+' if e.acumulado >= 0 }}{{ e.acumulado|usd }}</div>
+    <span class="small muted">{{ e.cerradas }} venta{{ 's' if e.cerradas != 1 }} cerrada{{ 's' if e.cerradas != 1 }}, contra el costo promedio de lo que vendiste</span></div>
+  <div class="est-aro" style="--p:{{ e.pct_positivas or 0 }}" role="img" aria-label="{{ e.positivas }} de {{ e.cerradas }} ventas con resultado positivo"><b class="num">{{ (e.pct_positivas|round|int ~ ' %') if e.pct_positivas is not none else '—' }}</b><span>ventas positivas</span></div>
+</section>
+<dl class="mini-kpis tres est-kpis">
+  <div><dt>Órdenes ejecutadas</dt><dd class="num">{{ e.ordenes }}</dd><span class="xs muted">{{ e.compras }} compras · {{ e.ventas }} ventas</span></div>
+  <div><dt>Volumen operado</dt><dd class="num">{{ e.volumen|usd }}</dd></div>
+  <div><dt>Resultado promedio por venta</dt><dd class="num {{ 'up' if (e.promedio or 0) >= 0 else 'down' }}">{{ e.promedio|usd if e.promedio is not none else '—' }}</dd></div>
+  <div><dt>Comisiones de operación</dt><dd class="num">{{ e.comisiones|usd }}</dd><span class="xs muted">{{ 'el simulador no cobra comisión' if simulador and not e.comisiones else 'descontadas en la ejecución' }}</span></div>
+  <div><dt>Comisiones de gestión</dt><dd class="num">{{ e.gestion|usd }}</dd></div>
+  <div><dt>Mejor y peor venta</dt><dd class="num">{% if e.mejor %}<span class="up">{{ e.mejor.resultado|usd }}</span> · <span class="down">{{ e.peor.resultado|usd }}</span>{% else %}—{% endif %}</dd></div>
+</dl>
+<div class="g2">
+  <section class="panel">
+    <header><h3>Rendimiento por moneda</h3></header>
+    <div class="tablewrap"><table class="tabla est-tabla"><thead><tr><th>Moneda</th><th class="r">Compras</th><th class="r">Ventas</th><th class="r oc">Volumen</th><th class="r">Resultado</th></tr></thead><tbody>
+      {% for a in e.activos %}<tr><td><a href="{{ url_for('auth.trading', codigo=a.activo) }}"><b>{{ a.activo }}</b></a></td><td class="r num">{{ a.compras }}</td><td class="r num">{{ a.ventas }}{% if a.ventas %} <span class="xs muted">({{ a.positivas }} +)</span>{% endif %}</td><td class="r num oc">{{ a.volumen|usd }}</td>
+        <td class="r num {{ 'up' if a.realizado > 0 else ('down' if a.realizado < 0 else '') }}">{{ ('+' if a.realizado > 0 else '') ~ a.realizado|usd if a.ventas else '—' }}</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+  <section class="panel">
+    <header><h3>Últimas ventas</h3></header>
+    <div class="list">{% for v in e.ultimas %}<a class="item" href="{{ url_for('cliente.movimiento', opid=v.operacion_id) }}"><div class="grow"><div class="t">Venta de {{ v.activo }}</div><div class="d">{{ v.ts|fecha }} · por {{ v.importe|usd }}</div></div><div class="amt num {{ 'up' if v.resultado >= 0 else 'down' }}">{{ '+' if v.resultado >= 0 }}{{ v.resultado|usd }}</div></a>
+    {% else %}<p class="small muted vacio-sm">Todavía no vendiste nada en este período: el resultado aparece cuando cierras una posición.</p>{% endfor %}</div>
+  </section>
+</div>
+{% else %}<section class="panel">{{ vacio('trading', 'No hay órdenes ejecutadas en este período.') }}</section>{% endif %}
+<p class="note">El resultado de cada venta se calcula contra el costo promedio de lo que tenías. Son datos de lo que ya pasó; no anticipan resultados futuros{{ ' y, al venir del simulador, no representan dinero real' if e.algo_simulado }}.</p>
+{% endblock %}

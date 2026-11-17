@@ -60,7 +60,7 @@
   var lienzo = document.getElementById("lienzo"), canvas = document.getElementById("velas");
   var estado = document.getElementById("graf-estado"), leyenda = document.getElementById("leyenda");
   var ctx = canvas.getContext("2d");
-  var G = { velas: [], vol: false, seg: 900, i: D.intervalo, hover: -1, mouseY: null, w: 0, h: 0, dpr: 1, ancho: 6, desplaz: 0, inicio: 0 };
+  var G = { cmp: null, cmpCod: "", dib: D.dibujos || [], modo: null, punto1: null, esc: null, velas: [], vol: false, seg: 900, i: D.intervalo, hover: -1, mouseY: null, w: 0, h: 0, dpr: 1, ancho: 6, desplaz: 0, inicio: 0 };
   var MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
   function medida() {
@@ -72,16 +72,57 @@
     dibujar();
   }
   // ---- indicadores técnicos (sobre la serie completa) ----
-  var IND = { ma: true, ema: false, boll: false, vol: true, rsi: false, macd: false };
-  try { var guardado = JSON.parse(localStorage.getItem("fc-indicadores") || "null"); if (guardado) for (var k in IND) if (k in guardado) IND[k] = !!guardado[k]; } catch (e) { /* sin almacenamiento */ }
+  // La configuración vive en la cuenta (servidor): se ve igual en el teléfono y en la computadora.
+  var GC = D.grafico || { ind: {}, par: {}, plantillas: [], comparar: "" };
+  var IND = { ma: true, ema: false, boll: false, vwap: false, vol: true, rsi: false, macd: false, estoc: false, sr: false };
+  var CLASICOS = { ma1: 7, ma2: 25, ema: 20, bb: 20, bbk: 2, rsi: 14, mf: 12, ms: 26, mg: 9, ek: 14, ed: 3 }, PAR = {};
   var CALC = {};
-  var CLASICOS = { ma1: 7, ma2: 25, ema: 20, bb: 20, bbk: 2, rsi: 14, mf: 12, ms: 26, mg: 9 }, PAR = {};
-  for (var kk in CLASICOS) PAR[kk] = CLASICOS[kk];
-  try { var pg = JSON.parse(localStorage.getItem("fc-ind-param") || "null"); if (pg) for (var k2 in CLASICOS) if (+pg[k2] > 0) PAR[k2] = +pg[k2]; } catch (e) { /* sin almacenamiento */ }
+  function tomarConfig(ind, par) {
+    for (var k in IND) if (ind && typeof ind[k] === "boolean") IND[k] = ind[k];
+    for (var k2 in CLASICOS) PAR[k2] = par && +par[k2] > 0 ? +par[k2] : CLASICOS[k2];
+  }
+  tomarConfig(GC.ind, GC.par);
+  var tGuardar = null;
+  function enviarConfig(extra) {
+    var cuerpo = { ind: IND, par: PAR, comparar: G.cmpCod || "" };
+    for (var k in extra || {}) cuerpo[k] = extra[k];
+    return fetch("/trading/config", { method: "POST", credentials: "same-origin", body: JSON.stringify(cuerpo),
+      headers: { "Content-Type": "application/json", "X-CSRF-Token": D.csrf } })
+      .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || "No se pudo guardar."); return j; }); })
+      .then(function (j) { GC = j.grafico; return j; });
+  }
+  function guardarConfig() { clearTimeout(tGuardar); tGuardar = setTimeout(function () { enviarConfig().catch(function () { /* se reintenta en el próximo cambio */ }); }, 600); }
+  // Quien usaba la versión anterior tenía los indicadores en este navegador: se pasan una sola vez a la cuenta.
+  try {
+    var viejoI = JSON.parse(localStorage.getItem("fc-indicadores") || "null"), viejoP = JSON.parse(localStorage.getItem("fc-ind-param") || "null");
+    if ((viejoI || viejoP) && D.grafico_nuevo) { tomarConfig(viejoI || IND, viejoP || PAR); guardarConfig(); }
+    localStorage.removeItem("fc-indicadores"); localStorage.removeItem("fc-ind-param");
+  } catch (e) { /* sin almacenamiento */ }
   function sma(n) { var out = [], s = 0, v = G.velas; for (var i = 0; i < v.length; i++) { s += v[i][4]; if (i >= n) s -= v[i - n][4]; out.push(i >= n - 1 ? s / n : null); } return out; }
   function emaDe(vals, n) { var out = [], k = 2 / (n + 1), e = null, s = 0, c = 0; for (var i = 0; i < vals.length; i++) { var x = vals[i]; if (x == null) { out.push(null); continue; } if (e == null) { s += x; c++; if (c === n) e = s / n; out.push(e); } else { e = x * k + e * (1 - k); out.push(e); } } return out; }
+  function mediaDe(vals, n) {
+    var out = [], s = 0, c = 0;
+    for (var i = 0; i < vals.length; i++) {
+      if (vals[i] == null) { out.push(null); s = 0; c = 0; continue; }
+      s += vals[i]; c++;
+      if (c > n) { s -= vals[i - n]; c = n; }
+      out.push(c === n ? s / n : null);
+    }
+    return out;
+  }
   function calcularIndicadores() {
     var v = G.velas, cierres = v.map(function (c) { return c[4]; });
+    // VWAP anclado a la primera vela cargada y estocástico %K/%D
+    var pv = 0, vv = 0;
+    CALC.vwap = v.map(function (c) { pv += (c[2] + c[3] + c[4]) / 3 * c[5]; vv += c[5]; return vv > 0 ? pv / vv : null; });
+    var nk = PAR.ek, kser = [];
+    for (var e1 = 0; e1 < v.length; e1++) {
+      if (e1 < nk - 1) { kser.push(null); continue; }
+      var hh = -Infinity, ll = Infinity;
+      for (var e2 = e1 - nk + 1; e2 <= e1; e2++) { hh = Math.max(hh, v[e2][2]); ll = Math.min(ll, v[e2][3]); }
+      kser.push(hh > ll ? (v[e1][4] - ll) / (hh - ll) * 100 : 50);
+    }
+    CALC.estK = kser; CALC.estD = mediaDe(kser, PAR.ed);
     CALC.ma7 = sma(PAR.ma1); CALC.ma25 = sma(PAR.ma2); CALC.ema20 = emaDe(cierres, PAR.ema);
     var nb = PAR.bb, m20 = sma(nb); CALC.bsup = []; CALC.binf = [];
     for (var i = 0; i < v.length; i++) {
@@ -102,17 +143,20 @@
     CALC.macd = macd; CALC.senal = emaDe(macd, PAR.mg);
     CALC.hist = macd.map(function (x, k) { return x != null && CALC.senal[k] != null ? x - CALC.senal[k] : null; });
   }
+  function sincronizarChips() {
+    document.querySelectorAll(".indicadores-chips [data-ind]").forEach(function (b) { b.setAttribute("aria-pressed", IND[b.getAttribute("data-ind")] ? "true" : "false"); });
+  }
+  sincronizarChips();
   document.querySelectorAll(".indicadores-chips [data-ind]").forEach(function (b) {
-    var k = b.getAttribute("data-ind"); b.setAttribute("aria-pressed", IND[k] ? "true" : "false");
+    var k = b.getAttribute("data-ind");
     b.addEventListener("click", function () {
-      IND[k] = !IND[k]; b.setAttribute("aria-pressed", IND[k] ? "true" : "false");
-      try { localStorage.setItem("fc-indicadores", JSON.stringify(IND)); } catch (e) { /* sin almacenamiento */ }
+      IND[k] = !IND[k]; sincronizarChips(); guardarConfig();
       alturaPaneles(); medida();
     });
   });
   function alturaPaneles() {
-    var n = (IND.rsi ? 1 : 0) + (IND.macd ? 1 : 0);
-    lienzo.classList.toggle("subs-1", n === 1); lienzo.classList.toggle("subs-2", n === 2);
+    var n = (IND.rsi ? 1 : 0) + (IND.macd ? 1 : 0) + (IND.estoc ? 1 : 0);
+    lienzo.classList.toggle("subs-1", n === 1); lienzo.classList.toggle("subs-2", n === 2); lienzo.classList.toggle("subs-3", n === 3);
   }
   alturaPaneles();
   function media(arr, n, k) {
@@ -155,13 +199,22 @@
     if (!v.length) return;
     calcularIndicadores();
     var base = G.inicio;
-    var ejeY = 64, ejeX = 22, plotW = W - ejeY, subH = 74, subs = (IND.rsi ? 1 : 0) + (IND.macd ? 1 : 0);
+    var ejeY = 64, ejeX = 22, plotW = W - ejeY, subH = 74, subs = (IND.rsi ? 1 : 0) + (IND.macd ? 1 : 0) + (IND.estoc ? 1 : 0);
+    // Comparación: la otra moneda reescalada para empezar en el mismo precio que la primera vela visible que tienen en común.
+    var cmpS = null, cmpJ0 = -1;
+    if (G.cmp && G.cmp.mapa) {
+      var crudo = v.map(function (c) { var x = G.cmp.mapa[c[0]]; return x == null ? null : x; });
+      for (var c0 = 0; c0 < v.length; c0++) if (crudo[c0] != null) { cmpJ0 = c0; break; }
+      if (cmpJ0 >= 0) { var r0 = v[cmpJ0][4] / crudo[cmpJ0]; cmpS = crudo.map(function (x) { return x == null ? null : x * r0; }); }
+    }
+    G.cmpS = cmpS; G.cmpJ0 = cmpJ0;
     var mainH = H - ejeX - subs * subH;
     var volH = IND.vol && G.vol ? Math.round(mainH * 0.18) : 0, plotH = mainH - 6;
     var hi = -Infinity, lo = Infinity, vmax = 0;
     v.forEach(function (c, j) {
       hi = Math.max(hi, c[2]); lo = Math.min(lo, c[3]); vmax = Math.max(vmax, c[5]);
       if (IND.boll && CALC.bsup[base + j] != null) { hi = Math.max(hi, CALC.bsup[base + j]); lo = Math.min(lo, CALC.binf[base + j]); }
+      if (cmpS && cmpS[j] != null) { hi = Math.max(hi, cmpS[j]); lo = Math.min(lo, cmpS[j]); }
     });
     if (hi === lo) { hi *= 1.001; lo *= 0.999; }
     var pad = (hi - lo) * 0.08; hi += pad; lo -= pad;
@@ -207,9 +260,61 @@
     });
     if (IND.ma) { linea(CALC.ma7, base, paso, y, color("--warn")); linea(CALC.ma25, base, paso, y, color("--accent")); }
     if (IND.ema) linea(CALC.ema20, base, paso, y, "#B67CFF", 1.5);
+    if (IND.vwap && G.vol) { ctx.setLineDash([6, 3]); linea(CALC.vwap, base, paso, y, "#2EC4B6", 1.4); ctx.setLineDash([]); }
+    if (cmpS) linea(cmpS, 0, paso, y, "#5BC0EB", 1.6);
+    var leg = function (k, si, texto) { var el = document.querySelector("[data-leg=" + k + "]"); if (el) { el.hidden = !si; if (texto) el.querySelector("span").textContent = texto; } };
+    leg("vwap", IND.vwap && G.vol); leg("cmp", !!cmpS, G.cmp && G.cmp.codigo); leg("dib", G.dib.length > 0);
+    G.esc = { hi: hi, lo: lo, alto: plotH - 8 - volH * 0.6, mainH: mainH, plotW: plotW, pasoW: paso.w, base: base };
+    var cDib = color("--gold") || "#D9B45A", etiquetas = [];
+    // Soportes y resistencias detectados: mínimos y máximos locales que se repiten en la zona visible.
+    if (IND.sr && v.length > 12) {
+      var piv = [], w = 3;
+      for (var s1 = w; s1 < v.length - w; s1++) {
+        var esA = true, esB = true;
+        for (var s2 = s1 - w; s2 <= s1 + w; s2++) { if (v[s2][2] > v[s1][2]) esA = false; if (v[s2][3] < v[s1][3]) esB = false; }
+        if (esA) piv.push(v[s1][2]);
+        if (esB) piv.push(v[s1][3]);
+      }
+      var tol = (hi - lo) * 0.015, grupos = [];
+      piv.sort(function (a, b) { return a - b; }).forEach(function (p) {
+        var gr = grupos[grupos.length - 1];
+        if (gr && p - gr.max <= tol) { gr.s += p; gr.n++; gr.max = p; } else grupos.push({ s: p, n: 1, max: p });
+      });
+      var actual = v[v.length - 1][4], niveles = grupos.filter(function (gr) { return gr.n >= 2; }).map(function (gr) { return { p: gr.s / gr.n, n: gr.n }; });
+      // los dos más cercanos de cada lado, separados entre sí para no amontonar líneas casi iguales
+      var elegir = function (lista) { var out = []; lista.forEach(function (x) { if (out.length < 2 && out.every(function (o) { return Math.abs(o.p - x.p) > tol * 3; })) out.push(x); }); return out; };
+      var arriba = elegir(niveles.filter(function (x) { return x.p > actual; }).sort(function (a, b) { return a.p - b.p; }));
+      var abajo = elegir(niveles.filter(function (x) { return x.p < actual; }).sort(function (a, b) { return b.p - a.p; }));
+      ctx.setLineDash([2, 4]); ctx.lineWidth = 1.2; ctx.font = "10px " + color("--sans"); ctx.textAlign = "left"; ctx.textBaseline = "bottom";
+      arriba.concat(abajo).forEach(function (x) {
+        var yy = y(x.p), col = x.p > actual ? cDown : cUp;
+        ctx.strokeStyle = col; ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(plotW, yy); ctx.stroke();
+        ctx.fillStyle = col; ctx.fillText((x.p > actual ? "Resistencia" : "Soporte") + " · " + x.n + " toques", 6, yy - 2);
+      });
+      ctx.setLineDash([]); ctx.font = "11px " + color("--sans");
+    }
+    // Dibujos de la persona (guardados en su cuenta)
+    var xDeT = function (t) { return (t - v[0][0]) / (G.seg * 1000) * paso.w + paso.w / 2; };
+    ctx.save(); ctx.beginPath(); ctx.rect(0, 0, plotW, mainH); ctx.clip();
+    ctx.strokeStyle = ctx.fillStyle = cDib; ctx.lineWidth = 1.5;
+    G.dib.forEach(function (d) {
+      if (d.tipo === "nivel") {
+        var yy = y(d.precio); ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(plotW, yy); ctx.stroke();
+        if (yy > 0 && yy < mainH) etiquetas.push([d.precio, yy]);
+      } else if (d.tipo === "tendencia") {
+        var x1 = xDeT(d.t1), y1 = y(d.p1), x2 = xDeT(d.t2), y2 = y(d.p2);
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        var der = x2 > x1, xa = der ? x2 : x1, ya = der ? y2 : y1, pend = (y2 - y1) / (x2 - x1);
+        ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(xa, ya); ctx.lineTo(plotW, ya + pend * (plotW - xa)); ctx.stroke(); ctx.setLineDash([]);
+        [[x1, y1], [x2, y2]].forEach(function (pt) { ctx.beginPath(); ctx.arc(pt[0], pt[1], 3, 0, 7); ctx.fill(); });
+      }
+    });
+    if (G.punto1) { ctx.beginPath(); ctx.arc(xDeT(G.punto1.t), y(G.punto1.p), 5, 0, 7); ctx.fill(); }
+    ctx.restore();
     ctx.lineWidth = 1;
     var ult = v[v.length - 1], uy = y(ult[4]), cUlt = ult[4] >= ult[1] ? cUp : cDown;
     ctx.setLineDash([3, 3]); ctx.strokeStyle = cUlt; ctx.beginPath(); ctx.moveTo(0, uy); ctx.lineTo(plotW, uy); ctx.stroke(); ctx.setLineDash([]);
+    etiquetas.forEach(function (e) { etiqueta(num(e[0], D.dec), plotW, e[1], cDib, "#111"); });
     etiqueta(num(ult[4], D.dec), plotW, uy, cUlt, "#fff");
     // paneles inferiores
     var top0 = mainH;
@@ -245,6 +350,15 @@
         linea(CALC.macd, base, paso, yy, color("--accent"), 1.3); linea(CALC.senal, base, paso, yy, color("--warn"), 1.2);
       });
     }
+    if (IND.estoc) {
+      panel("Estocástico " + PAR.ek + " " + PAR.ed, CALC.estK, 0, 100, function (yy) {
+        ctx.fillStyle = color("--accent") + "10"; ctx.fillRect(0, yy(80), plotW, yy(20) - yy(80));
+        ctx.setLineDash([2, 3]); ctx.strokeStyle = cMuted;
+        [20, 80].forEach(function (l) { ctx.beginPath(); ctx.moveTo(0, yy(l)); ctx.lineTo(plotW, yy(l)); ctx.stroke(); ctx.fillStyle = cMuted; ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.fillText(String(l), plotW + 6, yy(l)); });
+        ctx.setLineDash([]);
+        linea(CALC.estK, base, paso, yy, color("--accent"), 1.3); linea(CALC.estD, base, paso, yy, color("--warn"), 1.2);
+      });
+    }
     if (G.hover >= 0 && G.hover < v.length) {
       var hx = G.hover * paso.w + paso.w / 2;
       ctx.strokeStyle = cMuted; ctx.setLineDash([4, 4]);
@@ -274,6 +388,13 @@
     if (IND.ma && CALC.ma7 && CALC.ma7[idx] != null) partes.push(["MA" + PAR.ma1, num(CALC.ma7[idx], D.dec)]);
     if (IND.ma && CALC.ma25 && CALC.ma25[idx] != null) partes.push(["MA" + PAR.ma2, num(CALC.ma25[idx], D.dec)]);
     if (IND.ema && CALC.ema20 && CALC.ema20[idx] != null) partes.push(["EMA" + PAR.ema, num(CALC.ema20[idx], D.dec)]);
+    if (IND.vwap && G.vol && CALC.vwap && CALC.vwap[idx] != null) partes.push(["VWAP", num(CALC.vwap[idx], D.dec)]);
+    var jv = idx - G.inicio;
+    if (G.cmpS && G.cmpJ0 >= 0 && jv >= G.cmpJ0 && G.cmpS[jv] != null) {
+      var pc = (G.cmpS[jv] / G.cmpS[G.cmpJ0] - 1) * 100, pm = (c[4] / G.velas[G.inicio + G.cmpJ0][4] - 1) * 100;
+      partes.push([D.activo, (pm >= 0 ? "+" : "") + num(pm, 2) + " %"]);
+      partes.push([G.cmp.codigo, (pc >= 0 ? "+" : "") + num(pc, 2) + " %"]);
+    }
     partes.forEach(function (p, j) {
       var s = document.createElement("span");
       if (p[0]) { var b = document.createElement("b"); b.textContent = p[0] + " "; s.appendChild(b); }
@@ -295,7 +416,7 @@
     }
   });
   function soltar(e) { delete punteros[e.pointerId]; if (Object.keys(punteros).length < 2) pellizco = null; arrastre = null; canvas.classList.remove("arrastrando"); }
-  canvas.addEventListener("pointerup", soltar);
+  canvas.addEventListener("pointerup", function (e) { if (G.modo && arrastre && !arrastre.movio) clicDibujo(e); soltar(e); });
   canvas.addEventListener("pointercancel", soltar);
   canvas.addEventListener("pointermove", function (e) {
     var r = canvas.getBoundingClientRect();
@@ -341,10 +462,107 @@
         PAR[k] = isFinite(x) ? Math.max(mn, Math.min(mx, x)) : CLASICOS[k];
       }
       if (PAR.ms <= PAR.mf) PAR.ms = PAR.mf + 1;
-      try { localStorage.setItem("fc-ind-param", JSON.stringify(PAR)); } catch (e) { /* sin almacenamiento */ }
+      guardarConfig();
       pintarParametros(); dibujar();
     });
   }
+
+  // ---------- herramientas de dibujo ----------
+  var dibAyuda = document.getElementById("dib-ayuda");
+  function avisoDib(t) { if (!dibAyuda) return; dibAyuda.hidden = !t; dibAyuda.querySelector("span").textContent = t || ""; }
+  function modoDibujo(m) {
+    G.modo = m && G.modo !== m ? m : null; G.punto1 = null;
+    document.querySelectorAll("[data-dib]").forEach(function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-dib") === G.modo ? "true" : "false"); });
+    canvas.classList.toggle("dibujando", !!G.modo);
+    avisoDib({ nivel: "Toca el gráfico a la altura del precio donde quieres la línea.", tendencia: "Toca el primer punto de la línea y después el segundo.",
+               borrar: G.dib.length ? "Toca la línea que quieres borrar." : "No tienes dibujos en esta moneda." }[G.modo] || "");
+    var todos = document.getElementById("dib-todos"); if (todos) todos.hidden = G.modo !== "borrar" || !G.dib.length;
+    dibujar();
+  }
+  function puntoDe(e) {
+    var r = canvas.getBoundingClientRect(), x = e.clientX - r.left, yy = e.clientY - r.top, s = G.esc;
+    if (!s || yy > s.mainH || x > s.plotW || !G.velas.length) return null;
+    var idx = Math.max(0, Math.min(G.velas.length - 1 - s.base, Math.round((x - s.pasoW / 2) / s.pasoW)));
+    return { x: x, y: yy, t: G.velas[s.base + idx][0], p: s.hi - (yy - 8) / s.alto * (s.hi - s.lo) };
+  }
+  function enviarDibujo(cuerpo) {
+    return fetch("/trading/" + D.activo + "/dibujos", { method: "POST", credentials: "same-origin", body: JSON.stringify(cuerpo),
+      headers: { "Content-Type": "application/json", "X-CSRF-Token": D.csrf } })
+      .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || "No se pudo guardar."); return j; }); })
+      .then(function (j) { G.dib = j.dibujos; dibujar(); })
+      .catch(function (err) { avisoDib(err.message || "No se pudo guardar el dibujo."); });
+  }
+  function clicDibujo(e) {
+    var pt = puntoDe(e), s = G.esc;
+    if (!pt) return;
+    if (G.modo === "nivel") { modoDibujo(null); enviarDibujo({ tipo: "nivel", precio: pt.p }); }
+    else if (G.modo === "tendencia") {
+      if (!G.punto1) { G.punto1 = pt; avisoDib("Ahora toca el segundo punto."); dibujar(); return; }
+      if (pt.t === G.punto1.t) return;
+      var p1 = G.punto1; modoDibujo(null);
+      enviarDibujo({ tipo: "tendencia", t1: p1.t, p1: p1.p, t2: pt.t, p2: pt.p });
+    } else if (G.modo === "borrar") {
+      var yDe = function (p) { return 8 + (s.hi - p) / (s.hi - s.lo) * s.alto; }, t0 = G.velas[s.base][0];
+      var xDe = function (t) { return (t - t0) / (G.seg * 1000) * s.pasoW + s.pasoW / 2; }, mejor = null, dist = 16;
+      G.dib.forEach(function (d) {
+        var dd;
+        if (d.tipo === "nivel") dd = Math.abs(yDe(d.precio) - pt.y);
+        else { var x1 = xDe(d.t1), y1 = yDe(d.p1), x2 = xDe(d.t2), y2 = yDe(d.p2); dd = Math.abs((y2 - y1) * pt.x - (x2 - x1) * pt.y + x2 * y1 - y2 * x1) / Math.hypot(y2 - y1, x2 - x1); }
+        if (dd < dist) { dist = dd; mejor = d; }
+      });
+      if (mejor) { modoDibujo(null); enviarDibujo({ accion: "borrar", id: mejor.id }); }
+    }
+  }
+  document.querySelectorAll("[data-dib]").forEach(function (b) { b.addEventListener("click", function () { modoDibujo(b.getAttribute("data-dib")); }); });
+  var botonTodos = document.getElementById("dib-todos");
+  if (botonTodos) botonTodos.addEventListener("click", function () { modoDibujo(null); enviarDibujo({ accion: "borrar" }); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && G.modo) modoDibujo(null); });
+
+  // ---------- comparar con otra moneda ----------
+  var selCmp = document.getElementById("comparar");
+  function cargarCmp(cod, guardar) {
+    G.cmpCod = cod && cod !== D.activo ? cod : "";
+    if (guardar) guardarConfig();
+    if (!G.cmpCod) { G.cmp = null; dibujar(); return; }
+    fetch("/mercado/" + G.cmpCod + "/velas.json?i=" + G.i, { credentials: "same-origin" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (!j || G.cmpCod !== cod) return;
+        var mapa = {}; j.v.forEach(function (c) { mapa[c[0]] = c[4]; });
+        G.cmp = { codigo: cod, mapa: mapa }; dibujar();
+      })
+      .catch(function () { /* se reintenta al cambiar de período */ });
+  }
+  G.cmpCod = GC.comparar && GC.comparar !== D.activo ? GC.comparar : "";
+  if (selCmp) { selCmp.value = G.cmpCod; selCmp.addEventListener("change", function () { cargarCmp(selCmp.value, true); }); }
+
+  // ---------- plantillas de indicadores ----------
+  var plEl = document.getElementById("plantillas"), plError = document.getElementById("pl-error");
+  function errorPl(t) { if (plError) { plError.hidden = !t; plError.textContent = t || ""; } }
+  function pintarPlantillas() {
+    if (!plEl) return;
+    plEl.innerHTML = "";
+    var lista = GC.plantillas || [];
+    if (!lista.length) { var p0 = document.createElement("p"); p0.className = "xs muted"; p0.textContent = "Todavía no guardaste plantillas."; plEl.appendChild(p0); }
+    lista.forEach(function (p, i) {
+      var fila = document.createElement("div"), n = document.createElement("span"); fila.className = "pl-item"; n.className = "grow"; n.textContent = p.nombre; fila.appendChild(n);
+      [["Usar", "", function () {
+        tomarConfig(p.ind, p.par); sincronizarChips(); pintarParametros(); alturaPaneles(); medida(); guardarConfig(); if (dInd.open) dInd.close();
+      }], ["Borrar", " ghost", function () { enviarConfig({ borrar_plantilla: i }).then(pintarPlantillas).catch(function (e) { errorPl(e.message); }); }]].forEach(function (x) {
+        var b = document.createElement("button"); b.type = "button"; b.className = "btn sm" + x[1]; b.textContent = x[0];
+        b.setAttribute("aria-label", x[0] + " la plantilla " + p.nombre); b.addEventListener("click", x[2]); fila.appendChild(b);
+      });
+      plEl.appendChild(fila);
+    });
+  }
+  var plGuardar = document.getElementById("pl-guardar"), plNombre = document.getElementById("pl-nombre");
+  if (plGuardar) plGuardar.addEventListener("click", function () {
+    var nombre = plNombre.value.trim();
+    if (!nombre) { errorPl("Ponle un nombre a la plantilla."); plNombre.focus(); return; }
+    errorPl("");
+    enviarConfig({ plantilla: nombre }).then(function () { plNombre.value = ""; pintarPlantillas(); }).catch(function (e) { errorPl(e.message); });
+  });
+  pintarPlantillas();
 
   var pedido = 0;
   function cargarVelas(mostrarCarga) {
@@ -356,8 +574,13 @@
         if (mio !== pedido) return;
         if (!j || !j.v.length) { estado.hidden = false; estado.textContent = "Todavía no hay datos para este período."; return; }
         G.velas = j.v; G.vol = j.vol; G.seg = j.seg; D.dec = j.dec; estado.hidden = true;
+        document.querySelectorAll("[data-ind=vwap], [data-ind=vol]").forEach(function (b) {
+          if (!b.hasAttribute("data-titulo")) b.setAttribute("data-titulo", b.title);
+          b.disabled = !j.vol; b.title = j.vol ? b.getAttribute("data-titulo") : "Esta fuente de precios no informa volumen";
+        });
         var f = document.getElementById("graf-fuente");
         if (f) f.textContent = j.simulado ? "Velas armadas con el historial de precios" : "Velas de Binance";
+        if (mostrarCarga && G.cmpCod) cargarCmp(G.cmpCod, false);
         dibujar();
       })
       .catch(function () { if (mio === pedido) { estado.hidden = false; estado.textContent = "Sin conexión. Reintentando…"; } });
@@ -428,6 +651,29 @@
       liq.querySelector("[data-liq-venta]").textContent = usd(dv);
       liq.querySelector(".liq-barra i").style.width = (dc / tot * 100).toFixed(1) + "%";
     }
+    dibujarProfundidad(j);
+  }
+  var prof = document.getElementById("prof");
+  function dibujarProfundidad(j) {
+    if (!prof || !j.compras.length || !j.ventas.length) return;
+    var W = prof.clientWidth, H = prof.clientHeight, dpr = window.devicePixelRatio || 1;
+    if (!W || !H) return;
+    prof.width = Math.round(W * dpr); prof.height = Math.round(H * dpr);
+    var c = prof.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, W, H);
+    var acum = function (lista) { var s = 0; return lista.map(function (x) { s += x[0] * x[1]; return [x[0], s]; }); };
+    var cb = acum(j.compras), cv = acum(j.ventas), medio = (cb[0][0] + cv[0][0]) / 2;
+    var vmax = Math.max(cb[cb.length - 1][1], cv[cv.length - 1][1]) || 1;
+    var ancho = Math.max(medio - cb[cb.length - 1][0], cv[cv.length - 1][0] - medio) || 1;
+    var X = function (p) { return (p - medio + ancho) / (2 * ancho) * W; }, Y = function (v) { return H - 1 - v / vmax * (H - 4); };
+    [[cb, color("--up")], [cv, color("--down")]].forEach(function (par) {
+      var ser = par[0], borde = ser === cb ? 0 : W;
+      c.beginPath(); c.moveTo(X(ser[0][0]), H);
+      ser.forEach(function (pt, i) { c.lineTo(X(pt[0]), Y(i ? ser[i - 1][1] : 0)); c.lineTo(X(pt[0]), Y(pt[1])); });
+      c.lineTo(borde, Y(ser[ser.length - 1][1])); c.lineTo(borde, H); c.closePath();
+      c.globalAlpha = 0.2; c.fillStyle = par[1]; c.fill(); c.globalAlpha = 1; c.strokeStyle = par[1]; c.lineWidth = 1.3; c.stroke();
+    });
+    c.strokeStyle = color("--muted"); c.setLineDash([2, 3]); c.beginPath(); c.moveTo(W / 2, 0); c.lineTo(W / 2, H); c.stroke(); c.setLineDash([]);
+    prof.setAttribute("aria-label", "Profundidad del libro: " + usd(cb[cb.length - 1][1]) + " en compras y " + usd(cv[cv.length - 1][1]) + " en ventas en los niveles visibles");
   }
   function cargarLibro() {
     if (document.hidden) return;

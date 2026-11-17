@@ -33,6 +33,17 @@ Personalización e identidad. Los servicios financieros reales siguen deshabilit
 - **Vistas guardadas:** hasta 5 configuraciones con nombre (módulos, orden, accesos y período) que se aplican con un toque. Todo queda en la cuenta, no en el dispositivo.
 - Acceso directo al Centro de actividad desde el módulo de actividad reciente.
 
+### Módulo 4 · Trading
+- **Configuración del gráfico en la cuenta:** indicadores, parámetros y moneda de comparación se guardan en el servidor y se ven igual en cualquier dispositivo (antes vivían en el navegador; se migran solos la primera vez).
+- **Indicadores nuevos:** VWAP (se desactiva si la fuente no informa volumen), oscilador estocástico %K/%D con parámetros, y **soportes y resistencias** detectados en las velas visibles (dos de cada lado, con la cantidad de toques).
+- **Plantillas:** hasta 6 combinaciones de indicadores y parámetros con nombre, para aplicar con un toque.
+- **Dibujos:** líneas horizontales de precio y líneas de tendencia entre dos velas (con prolongación), guardadas por moneda en la cuenta; se borran de a una o todas. Validadas en el servidor (precio, fechas, límites por moneda).
+- **Comparar con otra moneda:** la segunda serie se dibuja escalada al precio de la primera vela visible y la leyenda muestra la variación de ambas.
+- **Profundidad del libro:** gráfico de compras y ventas acumuladas bajo el libro de órdenes.
+- **Anotaciones (historial de análisis):** notas por moneda con el precio del momento —lo pone el servidor, no el navegador— y la variación desde entonces. Solo las ve su autor.
+- **Estadísticas de operaciones:** resultado acumulado de las ventas (costo promedio), porcentaje de ventas positivas, resultado promedio, mejor y peor venta, volumen, comisiones de operación y de gestión, rendimiento por moneda y períodos de 30 días, 90 días, 1 año o todo. **Si las órdenes salieron del simulador, la pantalla lo dice en cada cifra: no son ganancias ni pérdidas reales.**
+- Acceso a alertas de precio desde la cabecera del par.
+
 ## [0.20.0] - 2026-11-16
 
 Evolución completa de la plataforma, trabajada por módulos. Los servicios financieros reales siguen deshabilitados.

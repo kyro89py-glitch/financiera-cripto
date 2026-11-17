@@ -86,6 +86,7 @@ ACTIVO = {  # qué rutas marcan cada pestaña como activa
     "cuenta.inicio": ("cuenta.inicio", "cuenta.datos", "cuenta.personalizar", "cuenta.solicitudes", "cuenta.actividad", "cuenta.publico",
                       "cliente.perfil", "auth.seguridad", "auth.clave", "auth.sesiones", "auth.centro_seguridad", "auth.avisos"),
     "auth.academia": ("auth.academia", "auth.leccion"),
+    "auth.trading": ("auth.trading", "cliente.estadisticas"),
     "cliente.ayuda": ("cliente.ayuda", "cliente.consulta"),
     "equipo.soporte": ("equipo.soporte", "equipo.soporte_consulta"),
     "equipo.operaciones": ("equipo.operaciones", "equipo.operacion"),

@@ -560,11 +560,16 @@ def trading(codigo):
         if p:
             ctx["tengo_usd"] = valor_cent(codigo, ctx["disp_u"], p["precio"])
             ctx["expo"] = analisis.exposicion(cli["id"], codigo, vig)
+    from . import graficos_usuario
+    dibujos_g, notas_g = graficos_usuario.de(g.usuario["id"], codigo)
+    ctx["notas"] = notas_g
     datos = {"activo": codigo, "intervalo": intervalo, "dec": decimales_precio(p["precio"]) if p else 2,
              "precio": float(p["precio"]) if p else None, "disp_usd": ctx["disp_usd"], "disp_u": ctx["disp_u"],
              "comision": float(operaciones.comision_operacion_pct()), "maximo": current_app.config["ORDEN_MAXIMA_USD"] * 100,
              "cliente": bool(cli) and cli["kyc_estado"] == "verificado",
-             "simulador": exchange.modo() != "binance",
+             "simulador": exchange.modo() != "binance", "csrf": seguridad.csrf_token(),
+             "grafico": graficos_usuario.leer(g.usuario["id"]), "dibujos": dibujos_g,
+             "grafico_nuevo": not (db.uno("SELECT datos FROM preferencias WHERE usuario_id = ?", (g.usuario["id"],)) or {"datos": ""})["datos"].count('"grafico"'),
              "expo": {"valor": ctx["expo"]["valor"], "total": ctx["expo"]["total"]} if ctx["expo"] else None}
     resp = current_app.make_response(render_template(
         "trading.html", a=a, vig=p, pares=pares, intervalo=intervalo, intervalos=velas.INTERVALOS, cli=cli, datos=datos,
@@ -731,6 +736,57 @@ def historial_csv(codigo):
     resp = current_app.response_class("\ufeff" + buf.getvalue(), mimetype="text/csv; charset=utf-8")
     resp.headers["Content-Disposition"] = f'attachment; filename="cotizaciones-{a["codigo"]}.csv"'
     return resp
+
+
+@bp.post("/trading/config")
+def trading_config():
+    """Guarda en la cuenta la configuración del gráfico (indicadores, parámetros, comparación y plantillas)."""
+    r = seguridad.exigir_sesion()
+    if r:
+        return {"error": "sesion"}, 401
+    limites.api()
+    from . import graficos_usuario
+    cuerpo = request.get_json(silent=True)
+    if not isinstance(cuerpo, dict):
+        return {"error": "Datos inválidos."}, 400
+    try:
+        return {"ok": True, "grafico": graficos_usuario.guardar(g.usuario["id"], cuerpo)}
+    except graficos_usuario.ErrorGrafico as e:
+        return {"error": str(e)}, 400
+
+
+@bp.post("/trading/<codigo>/dibujos")
+def trading_dibujos(codigo):
+    """Agrega o borra niveles, líneas de tendencia y anotaciones. JSON desde el gráfico o formulario para las anotaciones."""
+    r = seguridad.exigir_sesion()
+    if r:
+        return ({"error": "sesion"}, 401) if request.is_json else r
+    limites.api()
+    from . import graficos_usuario as gu
+    from . import precios as precios_mod
+    codigo = codigo.upper()
+    uid = g.usuario["id"]
+    cuerpo = request.get_json(silent=True) if request.is_json else request.form.to_dict()
+    if not isinstance(cuerpo, dict):
+        return {"error": "Datos inválidos."}, 400
+    if not request.is_json:  # anotación desde el formulario: el precio lo pone el servidor, nunca el navegador
+        cuerpo.pop("precio", None)
+        vig = precios_mod.vigentes().get(codigo)
+        if cuerpo.get("con_precio") and vig:
+            cuerpo["precio"] = float(vig["precio"])
+    error = None
+    try:
+        if cuerpo.get("accion") == "borrar":
+            gu.borrar(uid, did=int(cuerpo.get("id") or 0)) if cuerpo.get("id") else gu.borrar(uid, activo=codigo)
+        else:
+            gu.agregar(uid, codigo, cuerpo.get("tipo"), cuerpo)
+    except (gu.ErrorGrafico, ValueError, TypeError) as e:
+        error = str(e) if isinstance(e, gu.ErrorGrafico) else "Datos inválidos."
+    if request.is_json:
+        return ({"error": error}, 400) if error else {"ok": True, "dibujos": gu.de(uid, codigo)[0]}
+    if error:
+        flash(error, "error")
+    return redirect(url_for("auth.trading", codigo=codigo) + "#anotaciones")
 
 
 @bp.post("/mercado/<codigo>/favorito")

@@ -250,6 +250,41 @@ def cumplimiento():
                            pendientes=pendientes)
 
 
+@bp.route("/noticias", methods=["GET", "POST"])
+@seguridad.requiere("contenido.publicar")
+def noticias():
+    """Noticias y acontecimientos: carga manual con fuente y fecha, importación de canales RSS/Atom y revisión antes de publicar."""
+    from . import noticias as nm
+    if request.method == "POST":
+        f = request.form
+        try:
+            if f.get("accion") == "crear":
+                nm.crear(f.to_dict() | {"activos": f.getlist("activos")}, g.usuario)
+                flash("Publicada. Ya la ven los clientes en Mercados.", "ok")
+            elif f.get("accion") == "estado":
+                nm.cambiar_estado(f.get("id", type=int), f.get("estado"), g.usuario)
+                flash("Estado actualizado.", "ok")
+            elif f.get("accion") == "importar":
+                fuente = " ".join((f.get("fuente") or "").split())
+                if len(fuente) < 2:
+                    raise nm.ErrorNoticia("Indica el nombre del medio.")
+                try:
+                    datos = nm.descargar(f.get("url"))
+                except nm.ErrorNoticia:
+                    raise
+                except Exception as e:  # noqa: BLE001  red, certificado, tiempo de espera
+                    raise nm.ErrorNoticia(f"No se pudo descargar el canal ({type(e).__name__}). Revisa la dirección o la conexión del servidor.") from None
+                nuevos, omitidos = nm.importar(datos, fuente, g.usuario)
+                flash(f"{nuevos} noticias nuevas quedaron en revisión ({omitidos} omitidas por repetidas o incompletas).", "ok")
+        except nm.ErrorNoticia as e:
+            flash(str(e), "error")
+        return redirect(url_for("equipo.noticias", estado=request.args.get("estado")))
+    estado = request.args.get("estado") if request.args.get("estado") in nm.ESTADOS else None
+    conteo = {r["estado"]: r["n"] for r in db.todos("SELECT estado, COUNT(*) AS n FROM noticias GROUP BY estado")}
+    return render_template("equipo/noticias.html", lista=nm.todas(estado), estado=estado, estados=nm.ESTADOS, tipos=nm.TIPOS,
+                           importancia=nm.IMPORTANCIA, conteo=conteo, activos=db.todos("SELECT codigo FROM activos WHERE habilitado = 1 ORDER BY codigo"))
+
+
 @bp.route("/solicitudes", methods=["GET", "POST"])
 @seguridad.requiere("cuenta.solicitudes")
 def solicitudes():

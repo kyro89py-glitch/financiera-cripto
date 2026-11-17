@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph, pill, vacio with context %}
+{% block titulo %}Noticias y acontecimientos{% endblock %}
+{% block clase_app %} ancha{% endblock %}
+{% block contenido %}
+{{ ph("Noticias y acontecimientos", "Lo que ven los clientes en Mercados. Toda noticia necesita fuente, enlace y fecha; lo importado espera revisión.") }}
+<div class="g2 eq-noticias">
+  <section class="panel">
+    <header><h3>Cargar a mano</h3></header>
+    <form method="post" class="col">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="crear">
+      <div class="radio-chips" role="radiogroup" aria-label="Tipo">{% for k, t in tipos.items() %}<label><input type="radio" name="tipo" value="{{ k }}" {{ 'checked' if loop.first }}>{{ t }}</label>{% endfor %}</div>
+      <label class="field" for="n-titulo">Título<input id="n-titulo" name="titulo" required minlength="5" maxlength="200"></label>
+      <label class="field" for="n-resumen">Resumen propio <span class="xs muted">(opcional; no copies el texto del medio)</span><textarea id="n-resumen" name="resumen" rows="3" maxlength="600"></textarea></label>
+      <div class="g2 g2-igual">
+        <label class="field" for="n-fuente">Fuente<input id="n-fuente" name="fuente" required maxlength="80" placeholder="Medio u organización"></label>
+        <label class="field" for="n-url">Enlace a la fuente<input id="n-url" name="url" type="url" required placeholder="https://"></label>
+        <label class="field" for="n-fecha">Fecha de publicación o del acontecimiento<input id="n-fecha" name="fecha" type="datetime-local" required></label>
+        <label class="field" for="n-imp">Importancia (acontecimientos)<select id="n-imp" name="importancia">{% for k, t in importancia.items() %}<option value="{{ k }}"{% if k == 'media' %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+      </div>
+      <fieldset class="monedas-sel"><legend class="small">Monedas relacionadas</legend>{% for a in activos %}<label class="check xs"><input type="checkbox" name="activos" value="{{ a.codigo }}">{{ a.codigo }}</label>{% endfor %}</fieldset>
+      <button class="btn primary" type="submit" style="align-self:flex-start">Publicar</button>
+      <p class="xs muted">La hora se toma en la zona horaria de la plataforma. Una noticia no puede tener fecha futura.</p>
+    </form>
+  </section>
+  <section class="panel" style="align-self:start">
+    <header><h3>Importar de un canal RSS o Atom</h3></header>
+    <form method="post" class="col">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="importar">
+      <label class="field" for="r-url">Dirección del canal<input id="r-url" name="url" type="url" required placeholder="https://medio.com/rss"></label>
+      <label class="field" for="r-fuente">Nombre del medio<input id="r-fuente" name="fuente" required maxlength="80"></label>
+      <button class="btn" type="submit" style="align-self:flex-start">Importar</button>
+    </form>
+    <ul class="xs muted lista-simple">
+      <li>Se guardan el título, el enlace y la fecha de cada artículo; el texto del medio no se copia.</li>
+      <li>Todo lo importado queda <b>en revisión</b> hasta que alguien lo publique.</li>
+      <li>Se puede automatizar con <code>flask noticias-importar URL --fuente "Medio"</code>.</li>
+    </ul>
+  </section>
+</div>
+<nav class="chips fila-scroll" aria-label="Estado" style="margin:16px 0 10px">
+  <a href="{{ url_for('equipo.noticias') }}" aria-current="{{ 'true' if not estado else 'false' }}">Todas</a>
+  {% for k, (c, t) in estados.items() %}<a href="{{ url_for('equipo.noticias', estado=k) }}" aria-current="{{ 'true' if estado == k else 'false' }}">{{ t }} <span class="num muted">{{ conteo.get(k, 0) }}</span></a>{% endfor %}
+</nav>
+<section class="panel">
+  {% for n in lista %}
+  <div class="eq-nota">
+    <div class="grow"><div class="xs muted">{{ tipos[n.tipo] }} · {{ n.fuente }} · {{ n.fecha|fecha }} · {{ 'importada' if n.origen == 'rss' else 'cargada por ' ~ (n.autor or 'el equipo') }}</div>
+      <a href="{{ n.url }}" target="_blank" rel="noopener noreferrer nofollow"><b>{{ n.titulo }}</b></a>{% if n.lista_activos %} <span class="xs muted">· {{ n.lista_activos|join(', ') }}</span>{% endif %}</div>
+    {{ pill(estados[n.estado][0], estados[n.estado][1]) }}
+    <form method="post" class="row" style="gap:6px"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="estado"><input type="hidden" name="id" value="{{ n.id }}">
+      {% if n.estado != 'publicada' %}<button class="btn sm primary" name="estado" value="publicada" type="submit">Publicar</button>{% endif %}
+      {% if n.estado != 'oculta' %}<button class="btn sm ghost" name="estado" value="oculta" type="submit">Ocultar</button>{% endif %}</form>
+  </div>
+  {% else %}{{ vacio('documento', 'No hay noticias en este estado.') }}{% endfor %}
+</section>
+{% endblock %}

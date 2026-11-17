@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import escena3d, linea, velas as velas_svg, ph, pill, vacio with context %}
+{% from "macros.html" import noticia, escena3d, linea, velas as velas_svg, ph, pill, vacio with context %}
 {% block titulo %}{{ a.nombre }} ({{ a.codigo }}){% endblock %}
 {% block cabeza %}<script src="{{ url_for('static', filename='js/escena3d.js') }}?v={{ VERSION }}" defer></script>{% endblock %}
 {% block contenido %}
@@ -90,6 +90,15 @@
     <a class="btn" href="{{ url_for('equipo.operaciones', ver='todas') }}">Ver operaciones</a></section>
   {% endif %}
 </div>
+
+{% if noticias or eventos %}
+<div class="noticias-mercado">
+  {% if noticias %}<section class="panel"><header><h3>Noticias de {{ a.nombre }}</h3><a class="small" href="{{ url_for('auth.noticias', activo=a.codigo) }}">Ver todas</a></header>
+    {% for n in noticias %}{{ noticia(n, compacta=true) }}{% endfor %}</section>{% endif %}
+  {% if eventos %}<section class="panel"><header><h3>Próximos acontecimientos</h3><a class="small" href="{{ url_for('auth.noticias', ver='eventos', activo=a.codigo) }}">Calendario</a></header>
+    {% for n in eventos %}{{ noticia(n, compacta=true) }}{% endfor %}</section>{% endif %}
+</div>
+{% endif %}
 
 {% if cli %}
 <section class="card col" id="programadas">

@@ -115,3 +115,16 @@
 {% macro avatar(u, clase="") -%}
 {% if u.foto %}<img class="avatar {{ clase }}" src="{{ url_for('cuenta.foto', uid=u.id, v=u.foto_ts) }}" alt="" loading="lazy" decoding="async">{% else %}<span class="avatar av-{{ u.avatar or 0 }} {{ clase }}" aria-hidden="true">{{ iniciales(u.nombre_publico or u.nombre) }}</span>{% endif %}
 {%- endmacro %}
+
+
+{% macro noticia(n, compacta=false) -%}
+<article class="nota{{ ' compacta' if compacta }}">
+  {% if n.tipo == 'evento' %}{% set dm = n.fecha|diames %}<div class="nota-dia{{ ' alta' if n.importancia == 'alta' }}" aria-hidden="true"><b class="num">{{ dm[0] }}</b><span>{{ dm[1] }}</span></div>{% endif %}
+  <div class="grow">
+    <div class="nota-meta xs"><b>{{ n.fuente }}</b> · <time datetime="{{ n.fecha }}">{{ n.fecha|fecha }}</time>{% if n.tipo == 'evento' and n.importancia == 'alta' %} · <span class="warn-txt">importancia alta</span>{% endif %}</div>
+    <h4><a href="{{ n.url }}" target="_blank" rel="noopener noreferrer nofollow">{{ n.titulo }}</a></h4>
+    {% if n.resumen and not compacta %}<p class="small">{{ n.resumen }}</p>{% endif %}
+    <div class="nota-pie xs">{% for c in n.lista_activos %}<a class="chip-mini" href="{{ url_for('auth.moneda', codigo=c) }}">{{ c }}</a>{% endfor %}<a class="nota-fuente" href="{{ n.url }}" target="_blank" rel="noopener noreferrer nofollow">Leer en {{ n.dominio }} ↗</a></div>
+  </div>
+</article>
+{%- endmacro %}

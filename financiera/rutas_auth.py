@@ -427,7 +427,12 @@ def mercado():
     resumen = {"cap": cap_total, "volumen": sum(m["volumen"] or 0 for m in todas),
                "dominancia": (next((m["cap"] for m in todas if m["codigo"] == "BTC"), 0) or 0) / cap_total * 100 if cap_total else None,
                "suben": sum(1 for m in con_px if m["cambio"] > 0), "bajan": sum(1 for m in con_px if m["cambio"] < 0)}
-    peso = lambda m: (m["cap"] or m["volumen"] or 1e8) ** 0.5  # noqa: E731  escala comprimida para que se lean las chicas
+    from . import noticias as noticias_mod
+    peso_mapa = "vol" if request.args.get("peso") == "vol" else "cap"
+    if peso_mapa == "vol":
+        peso = lambda m: (m["volumen"] or 1e6) ** 0.5  # noqa: E731
+    else:
+        peso = lambda m: (m["cap"] or m["volumen"] or 1e8) ** 0.5  # noqa: E731  escala comprimida para que se lean las chicas
     periodo_mapa = "7d" if request.args.get("mapa") == "7d" else "24h"
     for m in todas:
         v = m["var"] if periodo_mapa == "7d" else m["cambio"]
@@ -438,7 +443,8 @@ def mercado():
                                            "col": p["color"]} for p in pos if p["valor"] > 0]}
     return render_template("mercado.html", filas=filas, tengo=tengo, datos3d=datos, fuente=precios.fuente(), favs=favs,
                            ver=ver, orden=orden, cat=cat, q=q, var_f=var_f, tam=tam, categorias=precios.CATEGORIAS, destacados=destacados,
-                           resumen=resumen, mapa=mapa, total=len(todas), vivo=precios.vivo(), periodo_mapa=periodo_mapa, actualizado=ult)
+                           resumen=resumen, mapa=mapa, total=len(todas), vivo=precios.vivo(), periodo_mapa=periodo_mapa, actualizado=ult,
+                           peso_mapa=peso_mapa, noticias=noticias_mod.publicadas("noticia", None, 4), eventos=noticias_mod.proximos_eventos(None, 4))
 
 
 @bp.get("/mercado/precios.json")
@@ -665,9 +671,32 @@ def moneda(codigo):
                     "mejor_compra": compras[0][0] if compras else None, "mejor_venta": ventas[0][0] if ventas else None,
                     "libro_sim": libro_sim, "trades": trades, "trades_sim": trades_sim, "fuente": vig["fuente"] if vig else None,
                     "ts": vig["ts"] if vig else None, "categorias": precios.CATEGORIAS}
+    from . import noticias as noticias_mod
+    ctx["noticias"] = noticias_mod.publicadas("noticia", codigo, 5)
+    ctx["eventos"] = noticias_mod.proximos_eventos(codigo, 4)
     return render_template("moneda.html", a=a, vig=vig, graf=graf, stats=stats, velas=velas, modo=modo, rango=rango, rangos=RANGOS, cli=cli,
                            favorito=codigo in _favoritos(), datos3d={"titulo": a["nombre"], "grupos": ctx["grupos"]},
                            maximo=current_app.config["ORDEN_MAXIMA_USD"], **ctx)
+
+
+@bp.get("/mercado/noticias")
+def noticias():
+    r = seguridad.exigir_sesion()
+    if r:
+        return r
+    from . import noticias as nm
+    ver = request.args.get("ver") if request.args.get("ver") in ("eventos", "pasados") else "noticias"
+    activo = (request.args.get("activo") or "").upper()
+    activo = activo if db.uno("SELECT 1 FROM activos WHERE codigo = ?", (activo,)) else ""
+    hoy = iso(ahora_dt().replace(hour=0, minute=0, second=0, microsecond=0))
+    if ver == "eventos":
+        lista = nm.publicadas("evento", activo or None, 60, desde=hoy)
+    elif ver == "pasados":
+        lista = nm.publicadas("evento", activo or None, 60, hasta=hoy)
+    else:
+        lista = nm.publicadas("noticia", activo or None, 60)
+    return render_template("noticias.html", lista=lista, ver=ver, activo=activo, importancia=nm.IMPORTANCIA,
+                           activos=db.todos("SELECT codigo, nombre FROM activos WHERE habilitado = 1 ORDER BY codigo"))
 
 
 @bp.get("/mercado/comparar")

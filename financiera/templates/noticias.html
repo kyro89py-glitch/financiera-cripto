@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph, vacio, noticia with context %}
+{% block titulo %}Noticias y acontecimientos{% endblock %}
+{% block contenido %}
+{{ ph("Noticias y acontecimientos", "Lo que pasa en el mercado, con la fuente y la fecha de cada dato para que puedas verificarlo.") }}
+<div class="row spread noticias-barra">
+  <nav class="chips fila-scroll" aria-label="Qué mostrar">
+    {% for k, t in [('noticias', 'Noticias'), ('eventos', 'Próximos acontecimientos'), ('pasados', 'Acontecimientos pasados')] %}<a href="{{ url_for('auth.noticias', ver=k if k != 'noticias' else none, activo=activo or none) }}" aria-current="{{ 'true' if ver == k else 'false' }}">{{ t }}</a>{% endfor %}
+  </nav>
+  <form method="get" class="row" style="gap:6px">{% if ver != 'noticias' %}<input type="hidden" name="ver" value="{{ ver }}">{% endif %}
+    <label class="sr-only" for="n-activo">Moneda</label><select id="n-activo" name="activo"><option value="">Todas las monedas</option>{% for x in activos %}<option value="{{ x.codigo }}"{% if activo == x.codigo %} selected{% endif %}>{{ x.codigo }} · {{ x.nombre }}</option>{% endfor %}</select>
+    <button class="btn sm" type="submit">Filtrar</button></form>
+</div>
+<section class="panel notas-lista">
+  {% for n in lista %}{{ noticia(n) }}
+  {% else %}{{ vacio('documento', ('Todavía no hay noticias publicadas' if ver == 'noticias' else 'No hay acontecimientos ' ~ ('próximos' if ver == 'eventos' else 'anteriores') ~ ' cargados') ~ (' sobre ' ~ activo if activo else '') ~ '.') }}{% endfor %}
+</section>
+<p class="note">Cada noticia enlaza al medio que la publicó: el texto completo y la responsabilidad por su contenido son de esa fuente. {{ config.NOMBRE }} selecciona qué mostrar, pero no redacta las noticias ni las usa como recomendación de compra o venta. Las fechas de los acontecimientos son las anunciadas por sus organizadores y pueden cambiar.</p>
+{% endblock %}

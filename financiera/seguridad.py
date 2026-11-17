@@ -26,6 +26,7 @@ DESCRIPCION_PERMISOS = {
     "usuarios.gestionar": "Gestionar usuarios del equipo", "antilavado.resolver": "Resolver alertas antilavado",
     "respaldos.gestionar": "Crear y probar respaldos", "limites.editar": "Cambiar límites de operación",
     "soporte.atender": "Responder consultas de clientes", "cuenta.solicitudes": "Resolver correcciones de datos y cierres de cuenta", "panel.ver": "Ver el panel de administración",
+    "contenido.publicar": "Cargar, revisar y publicar noticias y acontecimientos",
 }
 
 PERMISOS = {
@@ -52,6 +53,7 @@ PERMISOS = {
     "limites.editar": {"admin"},
     "soporte.atender": {"operador", "cumplimiento", "admin"},
     "panel.ver": {"cumplimiento", "admin"},
+    "contenido.publicar": {"cumplimiento", "admin"},
 }
 
 # Versión vigente de las condiciones y la información de riesgos que acepta cada cliente.

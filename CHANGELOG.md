@@ -44,6 +44,12 @@ Personalización e identidad. Los servicios financieros reales siguen deshabilit
 - **Estadísticas de operaciones:** resultado acumulado de las ventas (costo promedio), porcentaje de ventas positivas, resultado promedio, mejor y peor venta, volumen, comisiones de operación y de gestión, rendimiento por moneda y períodos de 30 días, 90 días, 1 año o todo. **Si las órdenes salieron del simulador, la pantalla lo dice en cada cifra: no son ganancias ni pérdidas reales.**
 - Acceso a alertas de precio desde la cabecera del par.
 
+### Módulo 5 · Mercados
+- **Noticias y acontecimientos** (`/mercado/noticias`, en Mercados y en la ficha de cada moneda): cada registro muestra la fuente, la fecha y el enlace al medio, y se filtra por moneda. Los acontecimientos (próximos y pasados) se ven como calendario con su importancia.
+- **Carga y revisión por el equipo** (Equipo › Noticias, permiso `contenido.publicar`): carga manual con validación de enlace, fuente y fecha (una noticia no puede tener fecha futura) y **importación de canales RSS/Atom** (botón o `flask noticias-importar`), que guarda solo título, enlace y fecha —no copia el texto del medio— y deja todo **en revisión** hasta que una persona lo publica. XML protegido contra entidades maliciosas; solo canales https. Cada alta y cambio de estado queda en la bitácora.
+- **No hay noticias de ejemplo:** la plataforma no inventa contenido; la sección aparece cuando el equipo publica.
+- **Mapa de calor interactivo:** tamaño por capitalización o por volumen y panel de detalle (precio, 24 h, 7 días, capitalización, volumen, accesos al gráfico y a la ficha) al pasar el cursor o enfocar; en el teléfono el primer toque muestra el detalle y el segundo abre el gráfico.
+
 ## [0.20.0] - 2026-11-16
 
 Evolución completa de la plataforma, trabajada por módulos. Los servicios financieros reales siguen deshabilitados.

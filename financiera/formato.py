@@ -77,10 +77,11 @@ NAV = {
                ("equipo.clientes", "Clientes", "clientes", None),
                ("equipo.soporte", "Soporte", "campana", "soporte.atender"),
                ("equipo.cumplimiento", "Cumplimiento", "cumplimiento", "cumplimiento.ver"),
+               ("equipo.noticias", "Noticias", "documento", "contenido.publicar"),
                ("admin.panel", "Administración", "ajustes", "panel.ver")],
 }
 ACTIVO = {  # qué rutas marcan cada pestaña como activa
-    "auth.mercado": ("auth.mercado", "auth.moneda"),
+    "auth.mercado": ("auth.mercado", "auth.moneda", "auth.noticias", "auth.comparar"),
     "cliente.cartera": ("cliente.cartera", "cliente.invertir", "cliente.convertir", "cliente.enviar", "cliente.movimientos",
                         "cliente.estado_mensual", "cliente.movimiento", "cliente.envio", "cliente.retirar"),
     "cuenta.inicio": ("cuenta.inicio", "cuenta.datos", "cuenta.personalizar", "cuenta.solicitudes", "cuenta.actividad", "cuenta.publico",
@@ -244,6 +245,8 @@ def init_app(app):
     from . import guarani
     app.jinja_env.filters["gs"] = guarani.fmt
     app.jinja_env.filters["compacto"] = compacto
+    app.jinja_env.filters["diames"] = lambda t: (lambda d: (d.day, ("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")[d.month - 1]))(
+        tiempo.leer(t).astimezone(zona()))
     app.jinja_env.filters["hora"] = lambda t: tiempo.leer(t).astimezone(zona()).strftime("%H:%M")
 
     def detalle_txt(d):

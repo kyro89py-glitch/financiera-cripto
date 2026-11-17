@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% from "macros.html" import escena3d, chispa, ph, vacio with context %}
+{% from "macros.html" import escena3d, chispa, ph, vacio, noticia with context %}
 {% block titulo %}Mercados{% endblock %}
 {% block clase_app %} ancha{% endblock %}
-{% block cabeza %}<script src="{{ url_for('static', filename='js/escena3d.js') }}?v={{ VERSION }}" defer></script>{% endblock %}
+{% block cabeza %}<script src="{{ url_for('static', filename='js/escena3d.js') }}?v={{ VERSION }}" defer></script><script src="{{ url_for('static', filename='js/mercado.js') }}?v={{ VERSION }}" defer></script>{% endblock %}
 {% block contenido %}
 {% call ph("Mercados", total ~ " criptomonedas contra el dólar. Precios de " ~ fuente ~ " que se actualizan solos cada pocos segundos.") %}
   <span class="vivo" data-vivo><i></i><span>{% if vivo[0] %}En vivo · {{ vivo[2] }}{% else %}Conectando…{% endif %}</span></span>
@@ -42,20 +42,36 @@
   {% endfor %}
 </div>
 
+{% if noticias or eventos %}
+<div class="noticias-mercado">
+  <section class="panel">
+    <header><h3>Noticias</h3><a class="small" href="{{ url_for('auth.noticias') }}">Ver todas</a></header>
+    {% for n in noticias %}{{ noticia(n, compacta=true) }}{% else %}<p class="small muted">Sin noticias publicadas.</p>{% endfor %}
+  </section>
+  <section class="panel">
+    <header><h3>Próximos acontecimientos</h3><a class="small" href="{{ url_for('auth.noticias', ver='eventos') }}">Calendario</a></header>
+    {% for n in eventos %}{{ noticia(n, compacta=true) }}{% else %}<p class="small muted">No hay acontecimientos próximos cargados.</p>{% endfor %}
+  </section>
+</div>
+{% elif g.usuario.rol != 'cliente' %}<p class="small muted">Las noticias y acontecimientos aparecen aquí cuando el equipo los publica. <a href="{{ url_for('equipo.noticias') }}">Cargar noticias</a></p>{% endif %}
+
 {% if mapa %}
 <section class="card mapa-card" id="mapa">
   <div class="ch"><h3>Mapa de calor</h3>
-    <div class="row" style="gap:10px"><span class="meta">tamaño según capitalización · color según variación</span>
-      <div class="segmentos" role="group" aria-label="Período del mapa">{% for k, t in [('24h', '24 h'), ('7d', '7 días')] %}<a href="{{ url_for('auth.mercado', ver=ver, orden=orden or none, cat=cat or none, q=q or none, var=var_f or none, tam=tam or none, mapa=k if k != '24h' else none) }}#mapa" aria-pressed="{{ 'true' if periodo_mapa == k else 'false' }}" role="button">{{ t }}</a>{% endfor %}</div></div></div>
+    <div class="row mapa-ctl"><span class="meta">tamaño según {{ 'volumen' if peso_mapa == 'vol' else 'capitalización' }} · color según variación</span>
+      <div class="segmentos" role="group" aria-label="Tamaño de cada moneda">{% for k, t in [('cap', 'Capitalización'), ('vol', 'Volumen')] %}<a href="{{ url_for('auth.mercado', ver=ver, orden=orden or none, cat=cat or none, q=q or none, var=var_f or none, tam=tam or none, mapa=periodo_mapa if periodo_mapa != '24h' else none, peso=k if k != 'cap' else none) }}#mapa" aria-pressed="{{ 'true' if peso_mapa == k else 'false' }}" role="button">{{ t }}</a>{% endfor %}</div>
+      <div class="segmentos" role="group" aria-label="Período del mapa">{% for k, t in [('24h', '24 h'), ('7d', '7 días')] %}<a href="{{ url_for('auth.mercado', ver=ver, orden=orden or none, cat=cat or none, q=q or none, var=var_f or none, tam=tam or none, mapa=k if k != '24h' else none, peso=peso_mapa if peso_mapa != 'cap' else none) }}#mapa" aria-pressed="{{ 'true' if periodo_mapa == k else 'false' }}" role="button">{{ t }}</a>{% endfor %}</div></div></div>
   <div class="mapa" role="list">
     {% for x, y, w, h, m in mapa %}{% set c = (m.mapa_var or 0)|float %}
     <a role="listitem" class="tile {{ 'up' if c >= 0 else 'down' }}{{ ' chico' if w * h < 60 }}{{ ' mini' if w * h < 22 }}{{ ' angosto' if w < 9 }}" data-mapa="{{ m.codigo }}"
+       data-det='{{ {"codigo": m.codigo, "nombre": m.nombre, "precio": m.precio|precio if m.precio else "—", "d24": m.cambio|pct if m.cambio is not none else "—", "s24": (m.cambio or 0) >= 0, "d7": m.var|pct if m.var is not none else "—", "s7": (m.var or 0) >= 0, "cap": m.cap|compacto if m.cap else "—", "vol": m.volumen|compacto if m.volumen else "—", "ficha": url_for("auth.moneda", codigo=m.codigo)}|tojson|forceescape }}' 
        href="{{ url_for('auth.trading', codigo=m.codigo) }}" style="left:{{ x|round(3) }}%;top:{{ (y / 56 * 100)|round(3) }}%;width:{{ w|round(3) }}%;height:{{ (h / 56 * 100)|round(3) }}%;--a:{{ [1, 0.25 + (c|abs) / 6]|min }}"
        aria-label="{{ m.nombre }}: {{ m.mapa_var|pct if m.mapa_var is not none else 'sin dato' }}" title="{{ m.nombre }} · {{ m.precio|precio if m.precio else '' }} · {{ m.mapa_var|pct if m.mapa_var is not none else '' }} · cap. {{ m.cap|compacto if m.cap else '—' }}">
       <b>{{ m.codigo }}</b><span class="pc num">{{ m.mapa_var|pct if m.mapa_var is not none else "" }}</span>
     </a>
     {% endfor %}
   </div>
+  <div class="mapa-det" id="mapa-det" aria-live="polite"><span class="muted small">Pasa el cursor o toca una moneda para ver su detalle. En el teléfono, un segundo toque abre el gráfico.</span></div>
   <div class="mapa-leyenda" aria-hidden="true"><span>−6 % o más</span><i></i><span>0</span><i class="sube"></i><span>+6 % o más</span></div>
 </section>
 {% endif %}

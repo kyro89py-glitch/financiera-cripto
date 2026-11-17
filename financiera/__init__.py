@@ -132,11 +132,11 @@ def create_app(config=None):
     for bp in (bp_auth, bp_cliente, bp_equipo, bp_admin, bp_documentos, bp_cuenta):
         app.register_blueprint(bp)
 
-    from . import antilavado, cifrado, comisiones, demo, notificaciones, observabilidad, planes, respaldos
+    from . import antilavado, cifrado, comisiones, demo, noticias, notificaciones, observabilidad, planes, respaldos
     observabilidad.init_app(app)
     for cmd in (cuentas.cmd_crear_admin, precios.cmd_actualizar, precios.cmd_vivo, auditoria.cmd_verificar, demo.cmd_sembrar,
                 comisiones.cmd_cobrar, notificaciones.cmd_enviar, planes.cmd_ejecutar, cifrado.cmd_cifrado,
-                respaldos.cmd_respaldo, antilavado.cmd_antilavado, observabilidad.cmd_recuperar):
+                respaldos.cmd_respaldo, antilavado.cmd_antilavado, observabilidad.cmd_recuperar, noticias.cmd_importar):
         app.cli.add_command(cmd)
 
     with app.app_context():

@@ -2,7 +2,7 @@
 
 Este proyecto sigue [versionado semántico](https://semver.org/lang/es/). Las fechas son de Paraguay.
 
-## [0.30.0] - en curso
+## [0.30.0] - 2026-11-17
 
 Personalización e identidad. Los servicios financieros reales siguen deshabilitados; lo que se ejecuta en simulador se indica como tal.
 

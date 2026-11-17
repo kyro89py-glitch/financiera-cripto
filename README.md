@@ -12,13 +12,16 @@ Plataforma de inversión en criptomonedas para operar con clientes reales, con d
 - **Inicio inteligente (v0.20):** panel personalizable, rendimiento por período frente a Bitcoin y al Top 10, riesgo, alertas y observaciones informativas, centro de avisos por categoría.
 - **Más herramientas (v0.20):** comparación de monedas, alertas por variación, comprobantes verificables, historial exportable, vista en guaraníes, centro de seguridad, niveles y límites, ayuda con consultas, Academia, Earn informativo y análisis de cartera.
 - **Seguridad reforzada (v0.20):** límites de tasa, cifrado de datos sensibles, respaldos cifrados con prueba de restauración, monitoreo antilavado con listas de sanciones, recuperación de contraseña, idempotencia, `/salud` y `/metricas`.
+- **Identidad y personalización (v0.30):** «Mi cuenta» con foto recortable, nombre de usuario único, identificador de cuenta, perfil público opcional sin datos financieros, correo con verificación, correcciones de datos verificados y cierre de cuenta con revisión, preferencias guardadas en la cuenta y centro de actividad.
+- **Más control para el cliente (v0.30):** notificaciones por tipo y canal, inicio con favoritos, accesos rápidos y vistas guardadas, gráfico de trading con dibujos, comparación, plantillas y anotaciones, estadísticas de operaciones (marcadas como simuladas cuando lo son), centro de transferencias con revisión previa, noticias y acontecimientos con fuente verificable y herramientas con simulador histórico.
+- **Administración con control dual (v0.30):** las acciones críticas las aprueba otra persona, incidencias con seguimiento, perfil completo del cliente con datos sensibles enmascarados y consulta registrada, y reporte de indicadores.
 - **Hecho para Paraguay:** depósitos y retiros en guaraníes con el tipo de cambio de la casa, compras automáticas para ahorrar de a poco, alertas de precio y un resumen anual de criptoactivos por cliente.
 - **Panel del equipo:** aprobación de operaciones con controles de cumplimiento y doble firma, fichas de clientes con legajo, revisión de documentos, conciliación de custodia, comisiones de gestión, bitácora inalterable, precios y usuarios.
 - **Ejecución en Binance:** al aprobar, las compras y ventas se envían como órdenes de mercado a Binance (o a su red de pruebas) y el libro se asienta con las cantidades, precios y comisiones reales. Sin Binance configurado, un simulador ejecuta al precio vigente.
 
 Es un sistema propio e independiente: corre en tu servidor y guarda todo en tu base de datos. Los únicos servicios externos son opcionales: Binance para ejecutar y cotizar, CoinGecko para los precios cuando no se usa Binance (también se cargan a mano) y un servidor de correo para los avisos por email.
 
-> **Estado:** versión 0.20, lista para pruebas internas con el equipo y para operar en la red de pruebas de Binance. Antes de recibir dinero de clientes lee [Antes de operar con dinero real](#antes-de-operar-con-dinero-real).
+> **Estado:** versión 0.30, lista para pruebas internas con el equipo y para operar en la red de pruebas de Binance. Las transferencias a otras entidades y las notificaciones push están en modo demostración o pendientes de integración. Antes de recibir dinero de clientes lee [Antes de operar con dinero real](#antes-de-operar-con-dinero-real).
 
 ---
 
@@ -199,6 +202,7 @@ Programa este comando todos los días y copia el archivo fuera del servidor (otr
 | `flask --app financiera enviar-correos` | Envía los avisos por correo pendientes |
 | `flask --app financiera verificar-bitacora` | Comprueba que nadie alteró la bitácora |
 | `flask --app financiera respaldar destino.db` | Copia consistente de la base en caliente |
+| `flask --app financiera noticias-importar URL --fuente "Medio"` | Importa en revisión los artículos de un canal RSS o Atom |
 
 ### Conectar Binance
 
@@ -235,6 +239,9 @@ Todas las opciones están comentadas en `.env.example`. Las principales:
 | `SMTP_HOST`, `SMTP_USUARIO`, `SMTP_CLAVE`, `SMTP_REMITENTE` | Servidor de correo para los avisos. Sin `SMTP_HOST` los avisos solo se ven en el portal. |
 | `URL_PUBLICA` | Dirección del sistema, para los enlaces de los correos y el pie de los estados de cuenta. |
 | `DOCUMENTO_MAX_MB` | Tamaño máximo de cada documento del legajo. |
+| `FOTOS_DIR` | Carpeta privada donde se guardan las fotos de perfil (fuera de la carpeta pública). |
+| `CONTROL_DUAL` | `1` (por defecto): límites, altas y bajas del equipo y cobro de comisiones necesitan la aprobación de otra persona. |
+| `TRANSFERENCIAS_REALES` | `0` (por defecto): las transferencias a bancos y billeteras externas son solo una demostración. Se activa únicamente con un proveedor de pagos autorizado. |
 
 ### Pruebas
 

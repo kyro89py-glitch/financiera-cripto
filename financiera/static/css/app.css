@@ -1271,3 +1271,18 @@ canvas.prof{display:block;width:100%;height:64px;margin-top:8px}
 .si-dl{max-width:620px}
 canvas.si-graf{width:100%;height:200px;display:block}
 .herr-mas{margin-bottom:14px}
+.input-sm{height:32px;padding:0 10px;font-size:13px;width:150px;min-width:0}
+/* Autorizaciones e incidencias */
+.aut.pendiente{border-color:color-mix(in srgb,var(--gold) 45%,var(--line))}
+.aut-t{font-size:16px;margin-top:2px}
+.inc-item{position:relative;padding-left:22px!important}
+.inc-barra{position:absolute;left:8px;top:12px;bottom:12px;width:3px;border-radius:2px;background:var(--line-strong)}
+.sev-media .inc-barra{background:var(--accent)}.sev-alta .inc-barra{background:var(--warn)}.sev-critica .inc-barra{background:var(--down)}
+.inc-item .pill{flex:none}
+.inc-desc{white-space:pre-wrap;margin:0;overflow-wrap:anywhere}
+.inc-linea{list-style:none;margin:0;padding:0;position:relative}
+.inc-linea::before{content:"";position:absolute;left:4px;top:8px;bottom:8px;width:1px;background:var(--line)}
+.inc-linea li{display:flex;gap:12px;padding:8px 0}.inc-linea p{margin:0 0 2px;font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere}
+.inc-dlg{width:min(620px,94vw)}
+@media (max-width:600px){.inc-item .pill:first-of-type{display:none}}
+@media (min-width:900px){.menu a.solo-movil{display:none}}

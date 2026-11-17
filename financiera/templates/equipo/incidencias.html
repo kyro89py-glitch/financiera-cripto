@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph, pill, vacio with context %}
+{% block titulo %}Incidencias{% endblock %}
+{% block clase_app %} ancha{% endblock %}
+{% block contenido %}
+{% call ph("Incidencias", "Problemas técnicos, de seguridad, de operaciones, de cumplimiento o de un cliente, con responsable y seguimiento.") %}
+  <a class="btn primary" href="#nueva" data-abrir="d-incidencia">{{ icono('campana') }}Registrar incidencia</a>
+{% endcall %}
+<nav class="chips fila-scroll" aria-label="Estado" style="margin-bottom:8px">
+  {% for k, t in [('activas', 'Activas'), ('abierta', 'Abiertas'), ('en_curso', 'En curso'), ('resuelta', 'Resueltas'), ('cerrada', 'Cerradas'), ('todas', 'Todas')] %}
+  <a href="{{ url_for('equipo.incidencias', estado=k, sev=sev) }}" aria-current="{{ 'true' if estado == k else 'false' }}">{{ t }}{% if k in conteo %} <span class="num muted">{{ conteo[k] }}</span>{% elif k == 'activas' %} <span class="num muted">{{ conteo.get('abierta', 0) + conteo.get('en_curso', 0) }}</span>{% endif %}</a>{% endfor %}
+</nav>
+<nav class="chips fila-scroll" aria-label="Severidad" style="margin-bottom:12px">
+  <a href="{{ url_for('equipo.incidencias', estado=estado) }}" aria-current="{{ 'true' if not sev else 'false' }}">Toda severidad</a>
+  {% for k, (c, t) in severidades.items() %}<a href="{{ url_for('equipo.incidencias', estado=estado, sev=k) }}" aria-current="{{ 'true' if sev == k else 'false' }}">{{ t }}</a>{% endfor %}
+</nav>
+<section class="card flush">
+  <div class="list">{% for i in lista %}
+    <a class="item inc-item sev-{{ i.severidad }}" href="{{ url_for('equipo.incidencia', iid=i.id) }}">
+      <span class="inc-barra" aria-hidden="true"></span>
+      <div class="grow"><div class="t">{{ i.titulo }}</div><div class="d">#{{ i.id }} · {{ categorias[i.categoria] }}{% if i.cliente %} · {{ i.cliente }}{% endif %} · {{ 'asignada a ' ~ i.asignado if i.asignado else 'sin asignar' }} · actualizada {{ i.actualizada|hace }}{% if i.notas > 1 %} · {{ i.notas }} notas{% endif %}</div></div>
+      {{ pill(severidades[i.severidad][0], severidades[i.severidad][1]) }}{{ pill(estados[i.estado][0], estados[i.estado][1]) }}</a>
+  {% else %}{{ vacio('campana', 'No hay incidencias con esos filtros.') }}{% endfor %}</div>
+</section>
+<dialog class="confirmar inc-dlg" id="d-incidencia" aria-labelledby="d-inc-t"{% if request.args.get('nueva') %} data-abrir-al-cargar{% endif %}>
+  <h3 id="d-inc-t">Registrar incidencia</h3>
+  <form method="post" class="col" id="nueva">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <label class="field" for="i-titulo">Título<input id="i-titulo" name="titulo" required minlength="5" maxlength="140"></label>
+    <label class="field" for="i-desc">Qué pasó<textarea id="i-desc" name="descripcion" rows="4" required minlength="10" maxlength="4000" placeholder="Qué se observó, desde cuándo, a quién afecta y qué se hizo hasta ahora"></textarea></label>
+    <div class="g2 g2-igual">
+      <label class="field" for="i-cat">Categoría<select id="i-cat" name="categoria">{% for k, t in categorias.items() %}<option value="{{ k }}">{{ t }}</option>{% endfor %}</select></label>
+      <label class="field" for="i-sev">Severidad<select id="i-sev" name="severidad">{% for k, (c, t) in severidades.items() %}<option value="{{ k }}"{{ ' selected' if k == 'media' }}>{{ t }}</option>{% endfor %}</select></label>
+      <label class="field" for="i-cli">Cliente <span class="xs muted">(opcional)</span><input id="i-cli" name="cliente" value="{{ cliente_pre }}" placeholder="Correo, cédula, @usuario o ID"></label>
+      <label class="field" for="i-asig">Asignar a<select id="i-asig" name="asignada_a"><option value="">Sin asignar</option>{% for u in equipo %}<option value="{{ u.id }}"{{ ' selected' if u.id == g.usuario.id }}>{{ u.nombre }} · {{ ROLES[u.rol] }}</option>{% endfor %}</select></label>
+    </div>
+    <p class="xs muted">Las incidencias altas y críticas avisan a Administración y Cumplimiento.</p>
+    <div class="row"><button class="btn" type="button" data-cerrar>Cancelar</button><button class="btn primary" type="submit">Registrar</button></div>
+  </form>
+</dialog>
+{% endblock %}

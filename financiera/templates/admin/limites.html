@@ -4,12 +4,15 @@
 {% block contenido %}
 {{ ph("Límites de operación", "Valen para todos los clientes desde el momento en que los guardas. Cada cambio queda en la bitácora.") }}
 {% include "admin/_subnav.html" %}
-<form class="panel" method="post" data-confirmar="¿Guardar los límites? Se aplican de inmediato a todos los clientes.">
+{% if dual %}<div class="flash info">Control dual: al guardar se crea un pedido; los límites cambian cuando otra persona de Administración o Cumplimiento lo autorice en <a href="{{ url_for('equipo.autorizaciones') }}">Autorizaciones</a>.</div>{% endif %}
+{% for p in pendientes %}<div class="flash warn">Pendiente de autorización: {{ p.resumen }} · <a href="{{ url_for('equipo.autorizaciones') }}">ver</a></div>{% endfor %}
+<form class="panel" method="post" data-confirmar="{{ '¿Pedir autorización para estos límites?' if dual else '¿Guardar los límites? Se aplican de inmediato a todos los clientes.' }}">
   <input type="hidden" name="csrf" value="{{ csrf_token() }}">
   {% for clave, titulo, desc, vigente, defecto, mn, mx in filas %}
   <div class="pref"><div class="grow"><label for="{{ clave }}"><b>{{ titulo }}</b></label><span class="small muted">{{ desc }} Valor de la configuración: {{ (defecto * 100)|usd(0) }}.{% if vigente != defecto %} <b class="warn-txt">Modificado.</b>{% endif %}</span></div>
     <label class="field" style="width:170px">US$<input id="{{ clave }}" name="{{ clave }}" inputmode="numeric" value="{{ vigente }}" required></label></div>
   {% endfor %}
-  <button class="btn primary" type="submit" style="align-self:flex-start">Guardar límites</button>
+  {% if dual %}<label class="field" for="lim-motivo">Motivo del cambio<input id="lim-motivo" name="motivo" required minlength="5" maxlength="300" placeholder="Lo lee quien autoriza y queda en la bitácora"></label>{% endif %}
+  <button class="btn primary" type="submit" style="align-self:flex-start">{{ 'Pedir autorización' if dual else 'Guardar límites' }}</button>
 </form>
 {% endblock %}

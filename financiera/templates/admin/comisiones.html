@@ -8,10 +8,11 @@
   <section class="card col" style="align-self:start">
     <h3>Cobrar un mes</h3>
     <p class="small muted">Se calcula con los precios vigentes al momento de cobrar. Es seguro repetirlo: un cliente nunca paga dos veces el mismo mes. Cada cobro se registra como operación liquidada, aparece en el estado de cuenta del cliente y le llega un aviso.</p>
-    <form class="row" method="post" action="{{ url_for('admin.comisiones') }}" style="align-items:flex-end" data-confirmar="¿Cobrar la comisión del mes indicado a todos los clientes con saldo?">
+    <form class="row" method="post" action="{{ url_for('admin.comisiones') }}" style="align-items:flex-end" data-confirmar="¿Pedir autorización para cobrar la comisión del mes indicado? Se cobra cuando otra persona lo apruebe.">
       <input type="hidden" name="csrf" value="{{ csrf_token() }}">
       <label class="field" for="periodo" style="flex:1;min-width:160px">Mes (AAAA-MM)<input id="periodo" name="periodo" value="{{ sugerido }}" pattern="\d{4}-\d{2}" required></label>
-      <button class="btn primary" type="submit">Cobrar {{ nombre_periodo(sugerido) }}</button>
+      <label class="field" for="com-motivo" style="flex:2;min-width:200px">Motivo<input id="com-motivo" name="motivo" required minlength="5" maxlength="300" value="Cobro mensual de la comisión de gestión"></label>
+      <button class="btn primary" type="submit">Pedir autorización</button>
     </form>
     <p class="note">En producción se programa <span class="mono">flask cobrar-comisiones</span> el día 1 de cada mes; cobra el mes anterior.</p>
   </section>

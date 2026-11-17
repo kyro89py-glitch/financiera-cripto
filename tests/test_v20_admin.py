@@ -26,7 +26,10 @@ def test_permisos_diferenciados_por_rol(nav, ctx):
 
 def test_admin_cambia_limites_desde_la_pantalla(nav, ctx):
     n = nav("admin@x.com")
-    assert n.post("/admin/limites", {"ORDEN_MAXIMA_USD": "10.000", "ENVIO_MAX_DIA_USD": "abc"}).status_code == 302
+    assert n.post("/admin/limites", {"ORDEN_MAXIMA_USD": "10.000", "ENVIO_MAX_DIA_USD": "abc", "motivo": "Ajuste de prueba"}).status_code == 302
+    assert niveles.valor("ORDEN_MAXIMA_USD") == ctx.config["ORDEN_MAXIMA_USD"]     # 0.30: control dual, todavía no cambió
+    aid = db.uno("SELECT id FROM autorizaciones WHERE accion = 'limites'")["id"]
+    nav("cum@x.com").post("/equipo/autorizaciones", {"id": aid, "decision": "aprobar"})
     assert niveles.valor("ORDEN_MAXIMA_USD") == 10000
     assert niveles.valor("ENVIO_MAX_DIA_USD") == ctx.config["ENVIO_MAX_DIA_USD"]
     assert db.uno("SELECT COUNT(*) AS n FROM bitacora WHERE accion = 'limite.cambiado'")["n"] == 1

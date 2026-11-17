@@ -226,7 +226,8 @@
     if (/[?&]lado=venta/.test(location.search)) elegir("venta"); else pintar();
   })();
 
-  // ---- diálogos genéricos: [data-abrir="id"] abre, [data-cerrar] cierra ----
+  // ---- diálogos genéricos: [data-abrir="id"] abre, [data-cerrar] cierra; [data-abrir-al-cargar] se abre solo ----
+  document.querySelectorAll("dialog[data-abrir-al-cargar]").forEach(function (d) { if (d.showModal && !d.open) d.showModal(); });
   document.addEventListener("click", function (e) {
     var a = e.target.closest("[data-abrir]");
     if (a) { var d = document.getElementById(a.getAttribute("data-abrir")); if (d && d.showModal && !d.open) d.showModal(); return; }

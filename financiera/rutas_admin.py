@@ -1,5 +1,8 @@
 """Administración: precios, comisiones, ejecución en el exchange y usuarios del equipo."""
-from flask import Blueprint, abort, current_app, flash, g, redirect, render_template, request, url_for
+import csv
+import io
+
+from flask import Blueprint, Response, abort, current_app, flash, g, redirect, render_template, request, url_for
 
 from . import auditoria, cartera, comisiones, conciliacion, cuentas, db, ejecucion, exchange, precios, seguridad
 from .dinero import leer_precio
@@ -14,7 +17,7 @@ def _guardia():
         return r
     if request.endpoint == "admin.ejecucion" and seguridad.puede("ejecucion.ver"):
         return None  # Cumplimiento también puede ver la ejecución y activar la pausa de emergencia
-    if request.endpoint in ("admin.panel", "admin.permisos") and seguridad.puede("panel.ver"):
+    if request.endpoint in ("admin.panel", "admin.permisos", "admin.reporte") and seguridad.puede("panel.ver"):
         return None  # Cumplimiento ve el panel y la matriz de permisos, sin poder cambiar ajustes
     if g.usuario["rol"] != "admin":
         abort(403)
@@ -93,6 +96,14 @@ def usuario_estado(uid):
     if u["id"] == g.usuario["id"]:
         flash("No puedes desactivar tu propio usuario.", "error")
         return redirect(url_for("admin.usuarios"))
+    from . import autorizaciones as aut
+    if aut.activo():
+        try:
+            aut.solicitar("usuario_estado", {"uid": uid}, request.form.get("motivo"), g.usuario)
+            flash("Pedido registrado: lo tiene que autorizar otra persona del equipo (Administración o Cumplimiento).", "ok")
+        except aut.ErrorAutorizacion as e:
+            flash(str(e), "error")
+        return redirect(url_for("admin.usuarios"))
     nuevo = 0 if u["activo"] else 1
     with db.transaccion() as c:
         c.execute("UPDATE usuarios SET activo = ?, sesion_ver = sesion_ver + 1 WHERE id = ?", (nuevo, uid))
@@ -123,6 +134,14 @@ def comisiones_ver():
     sugerido = comisiones.periodo_anterior()
     if request.method == "POST":
         periodo = (request.form.get("periodo") or sugerido).strip()
+        from . import autorizaciones as aut
+        if aut.activo():
+            try:
+                aut.solicitar("comision", {"periodo": periodo}, request.form.get("motivo"), g.usuario)
+                flash("Pedido registrado: el cobro se hace cuando otra persona lo autorice.", "ok")
+            except aut.ErrorAutorizacion as e:
+                flash(str(e), "error")
+            return redirect(url_for("admin.comisiones"))
         try:
             r = comisiones.cobrar(periodo, g.usuario)
             flash(f"Comisión de {comisiones.nombre_periodo(periodo)}: se cobró a {r['cobradas']} clientes"
@@ -250,6 +269,13 @@ def panel():
     bloqueadas = uno("SELECT COUNT(*) AS n FROM usuarios WHERE bloqueado_hasta IS NOT NULL AND bloqueado_hasta > ?", iso(ahora_dt()))
     if bloqueadas:
         riesgos.append(("warn", f"{bloqueadas} cuenta(s) bloqueadas por intentos fallidos.", None))
+    from . import autorizaciones
+    pend = autorizaciones.pendientes()
+    if pend:
+        riesgos.append(("warn", f"{pend} acción(es) crítica(s) esperando autorización.", url_for("equipo.autorizaciones")))
+    inc = uno("SELECT COUNT(*) AS n FROM incidencias WHERE estado IN ('abierta', 'en_curso') AND severidad IN ('alta', 'critica')")
+    if inc:
+        riesgos.append(("bad", f"{inc} incidencia(s) alta(s) o crítica(s) sin resolver.", url_for("equipo.incidencias")))
     consultas = uno("SELECT COUNT(*) AS n FROM consultas WHERE estado = 'abierta'")
     if consultas:
         riesgos.append(("info", f"{consultas} consulta(s) de clientes esperando respuesta.", url_for("equipo.soporte")))
@@ -265,6 +291,24 @@ def panel():
 @seguridad.requiere("limites.editar")
 def limites():
     from . import niveles
+    from . import autorizaciones as aut
+    if request.method == "POST" and aut.activo():
+        pedido, malos = {}, []
+        for clave in niveles.LIMITES:
+            texto = (request.form.get(clave) or "").replace(".", "").replace(",", "").strip()
+            if texto:
+                if texto.isdigit():
+                    pedido[clave] = int(texto)
+                else:
+                    malos.append(f"{niveles.LIMITES[clave][0]}: escribe un número entero de dólares.")
+        for e in malos:
+            flash(e, "error")
+        try:
+            aut.solicitar("limites", {"cambios": pedido}, request.form.get("motivo"), g.usuario)
+            flash("Pedido registrado: los límites cambian cuando otra persona lo autorice.", "ok")
+        except aut.ErrorAutorizacion as e:
+            flash(str(e), "error")
+        return redirect(url_for("admin.limites"))
     if request.method == "POST":
         cambios, errores = 0, []
         for clave in niveles.LIMITES:
@@ -281,7 +325,8 @@ def limites():
             flash(f"{cambios} límite(s) actualizados. El cambio quedó en la bitácora.", "ok")
         return redirect(url_for("admin.limites"))
     filas = [(k, t, d, niveles.valor(k), current_app.config[k], mn, mx) for k, (t, d, mn, mx) in niveles.LIMITES.items()]
-    return render_template("admin/limites.html", filas=filas)
+    return render_template("admin/limites.html", filas=filas, dual=aut.activo(),
+                           pendientes=db.todos("SELECT * FROM autorizaciones WHERE accion = 'limites' AND estado = 'pendiente'"))
 
 
 @bp.get("/permisos")
@@ -291,3 +336,42 @@ def permisos():
                       " WHERE rol != 'cliente' ORDER BY rol, nombre")
     return render_template("admin/permisos.html", permisos=seguridad.PERMISOS, descripcion=seguridad.DESCRIPCION_PERMISOS,
                            roles=seguridad.ROLES_EQUIPO, equipo=equipo)
+
+
+@bp.get("/panel/reporte.csv", endpoint="reporte")
+@seguridad.requiere("reportes.exportar")
+def reporte():
+    """Indicadores agregados de un período (sin datos personales) para reportes internos o regulatorios."""
+    from datetime import timedelta
+
+    from .tiempo import ahora_dt, iso
+    try:
+        dias = max(1, min(366, int(request.args.get("dias") or 30)))
+    except ValueError:
+        dias = 30
+    desde = iso(ahora_dt() - timedelta(days=dias))
+    uno = lambda sql, *a: db.uno(sql, a)  # noqa: E731
+    filas = [
+        ("Clientes nuevos", uno("SELECT COUNT(*) AS n FROM clientes WHERE creado >= ?", desde)["n"], ""),
+        ("Identidades verificadas (total)", uno("SELECT COUNT(*) AS n FROM clientes WHERE kyc_estado = 'verificado'")["n"], ""),
+        ("Órdenes de compra y venta", uno("SELECT COUNT(*) AS n FROM ordenes WHERE ts >= ?", desde)["n"], ""),
+        ("Volumen operado (USD)", uno("SELECT COALESCE(SUM(importe_cent), 0) AS n FROM ordenes WHERE ts >= ?", desde)["n"] / 100, ""),
+        ("Órdenes ejecutadas en el simulador", uno("SELECT COUNT(*) AS n FROM ordenes WHERE ts >= ? AND venue != 'binance'", desde)["n"], "no son operaciones reales"),
+        ("Depósitos acreditados (USD)", uno("SELECT COALESCE(SUM(liquidado_cent), 0) AS n FROM operaciones WHERE tipo = 'aporte' AND estado = 'liquidada' AND resuelto_ts >= ?", desde)["n"] / 100, ""),
+        ("Retiros pagados (USD)", uno("SELECT COALESCE(SUM(liquidado_cent), 0) AS n FROM operaciones WHERE tipo = 'retiro' AND estado = 'liquidada' AND resuelto_ts >= ?", desde)["n"] / 100, ""),
+        ("Transferencias internas", uno("SELECT COUNT(*) AS n FROM transferencias WHERE ts >= ?", desde)["n"], ""),
+        ("Valor transferido internamente (USD)", uno("SELECT COALESCE(SUM(valor_cent), 0) AS n FROM transferencias WHERE ts >= ?", desde)["n"] / 100, ""),
+        ("Comisiones de gestión cobradas (USD)", uno("SELECT COALESCE(SUM(liquidado_cent), 0) AS n FROM operaciones WHERE tipo = 'comision' AND estado = 'liquidada' AND resuelto_ts >= ?", desde)["n"] / 100, ""),
+        ("Alertas antilavado generadas", uno("SELECT COUNT(*) AS n FROM alertas_aml WHERE creada >= ?", desde)["n"], ""),
+        ("Incidencias registradas", uno("SELECT COUNT(*) AS n FROM incidencias WHERE creada >= ?", desde)["n"], ""),
+        ("Acciones críticas autorizadas", uno("SELECT COUNT(*) AS n FROM autorizaciones WHERE estado = 'ejecutada' AND resuelta >= ?", desde)["n"], ""),
+    ]
+    buf = io.StringIO()
+    w = csv.writer(buf, delimiter=";")
+    w.writerow(["indicador", "valor", "nota"])
+    w.writerow(["periodo", f"últimos {dias} días hasta {iso(ahora_dt())}", ""])
+    for f in filas:
+        w.writerow([f[0], str(f[1]).replace(".", ","), f[2]])
+    auditoria.registrar("reporte.exportado", None, {"texto": f"Exportó el resumen de indicadores de los últimos {dias} días."})
+    return Response("\ufeff" + buf.getvalue(), mimetype="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="indicadores-{dias}d.csv"'})

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph, pill, vacio with context %}
+{% block titulo %}Autorizaciones{% endblock %}
+{% block contenido %}
+{{ ph("Autorizaciones", "Control dual: estas acciones solo se ejecutan cuando otra persona del equipo las aprueba. Los pedidos vencen a las " ~ vigencia ~ " horas.") }}
+<div class="col">
+{% for a in lista %}
+<article class="card col aut{{ ' pendiente' if a.estado == 'pendiente' }}">
+  <div class="row spread" style="gap:8px;flex-wrap:wrap"><div><span class="xs muted">{{ acciones[a.accion][0] }} · #{{ a.id }}</span><h3 class="aut-t">{{ a.resumen }}</h3></div>{{ pill(estados[a.estado][0], estados[a.estado][1]) }}</div>
+  <dl class="ficha-datos">
+    <div><dt>Pedido por</dt><dd>{{ a.solicitante }} · {{ a.solicitada|fecha }}</dd></div>
+    <div><dt>Motivo</dt><dd>{{ a.motivo }}</dd></div>
+    {% if a.estado == 'pendiente' %}<div><dt>Vence</dt><dd>{{ a.vence|fecha }}</dd></div>{% endif %}
+    {% if a.revisor %}<div><dt>{{ 'Autorizó' if a.estado in ('ejecutada', 'fallida') else 'Resolvió' }}</dt><dd>{{ a.revisor }} · {{ a.resuelta|fecha }}{% if a.nota %} · «{{ a.nota }}»{% endif %}</dd></div>{% endif %}
+    {% if a.resultado %}<div><dt>Resultado</dt><dd>{{ a.resultado }}</dd></div>{% endif %}
+  </dl>
+  {% if a.estado == 'pendiente' %}
+    {% if a.solicitada_por == g.usuario.id %}
+    <form method="post" class="row spread" style="gap:8px;flex-wrap:wrap"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ a.id }}">
+      <span class="small muted">Es tu pedido: lo tiene que autorizar otra persona.</span><button class="btn sm ghost" name="decision" value="cancelar" type="submit">Cancelar pedido</button></form>
+    {% elif puede_resolver %}
+    <form method="post" class="col" style="gap:8px"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ a.id }}">
+      <label class="field" for="nota-{{ a.id }}">Nota <span class="xs muted">(obligatoria si rechazas)</span><input id="nota-{{ a.id }}" name="nota" maxlength="300"></label>
+      <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn primary" name="decision" value="aprobar" type="submit" data-confirmar="¿Autorizar y ejecutar ahora: {{ a.resumen }}?">Autorizar y ejecutar</button>
+        <button class="btn" name="decision" value="rechazar" type="submit">Rechazar</button></div></form>
+    {% else %}<p class="small muted">Esperando a una persona de Administración o Cumplimiento.</p>{% endif %}
+  {% endif %}
+</article>
+{% else %}<section class="panel">{{ vacio('escudo', 'No hay pedidos de autorización.') }}</section>{% endfor %}
+</div>
+{% endblock %}

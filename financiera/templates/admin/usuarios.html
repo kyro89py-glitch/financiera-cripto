@@ -19,8 +19,9 @@
         <form method="post" action="{{ url_for('admin.usuario_clave', uid=u.id) }}" data-confirmar="¿Restablecer el acceso de {{ u.nombre }}? Se le pedirá una contraseña nueva y volver a activar la verificación en dos pasos.">
           <input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn sm" type="submit">Restablecer acceso</button>
         </form>
-        <form method="post" action="{{ url_for('admin.usuario_estado', uid=u.id) }}" data-confirmar="¿{{ 'Desactivar' if u.activo else 'Reactivar' }} a {{ u.nombre }}?">
-          <input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn sm {{ 'danger' if u.activo }}" type="submit">{{ "Desactivar" if u.activo else "Reactivar" }}</button>
+        <form method="post" action="{{ url_for('admin.usuario_estado', uid=u.id) }}" class="row" style="gap:6px" data-confirmar="¿Pedir autorización para {{ 'desactivar' if u.activo else 'reactivar' }} a {{ u.nombre }}?">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input name="motivo" required minlength="5" maxlength="300" placeholder="Motivo" aria-label="Motivo para {{ 'desactivar' if u.activo else 'reactivar' }} a {{ u.nombre }}" class="input-sm">
+          <button class="btn sm {{ 'danger' if u.activo }}" type="submit">{{ "Desactivar" if u.activo else "Reactivar" }}</button>
         </form>
       </div>
       {% endif %}

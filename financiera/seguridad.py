@@ -27,6 +27,8 @@ DESCRIPCION_PERMISOS = {
     "respaldos.gestionar": "Crear y probar respaldos", "limites.editar": "Cambiar límites de operación",
     "soporte.atender": "Responder consultas de clientes", "cuenta.solicitudes": "Resolver correcciones de datos y cierres de cuenta", "panel.ver": "Ver el panel de administración",
     "contenido.publicar": "Cargar, revisar y publicar noticias y acontecimientos",
+    "autorizaciones.resolver": "Autorizar o rechazar acciones críticas pedidas por otra persona",
+    "incidencias.gestionar": "Registrar y seguir incidencias", "clientes.datos_sensibles": "Ver datos personales completos de un cliente (queda registrado)",
 }
 
 PERMISOS = {
@@ -54,6 +56,9 @@ PERMISOS = {
     "soporte.atender": {"operador", "cumplimiento", "admin"},
     "panel.ver": {"cumplimiento", "admin"},
     "contenido.publicar": {"cumplimiento", "admin"},
+    "autorizaciones.resolver": {"cumplimiento", "admin"},
+    "incidencias.gestionar": {"operador", "cumplimiento", "admin"},
+    "clientes.datos_sensibles": {"cumplimiento", "admin"},
 }
 
 # Versión vigente de las condiciones y la información de riesgos que acepta cada cliente.

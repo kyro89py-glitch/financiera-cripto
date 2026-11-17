@@ -188,16 +188,107 @@ def cliente_nuevo():
     return render_template("equipo/cliente_nuevo.html", form=form, error=error, modelos=cartera.modelos())
 
 
+@bp.route("/autorizaciones", methods=["GET", "POST"])
+def autorizaciones():
+    """Acciones críticas pedidas por el equipo: las aprueba o rechaza otra persona con permiso; quien pidió puede cancelar."""
+    from . import autorizaciones as aut
+    if request.method == "POST":
+        f = request.form
+        try:
+            if f.get("decision") == "cancelar":
+                aut.cancelar(f.get("id", type=int), g.usuario)
+                flash("Pedido cancelado.", "ok")
+            else:
+                r = aut.resolver(f.get("id", type=int), f.get("decision") == "aprobar", f.get("nota"), g.usuario)
+                flash(("Autorizado. " + r) if r else "Rechazado. Se avisó a quien lo pidió.", "ok")
+        except aut.ErrorAutorizacion as e:
+            flash(str(e), "error")
+        return redirect(url_for("equipo.autorizaciones"))
+    import json as _json
+    lista = [dict(a) | {"det": _json.loads(a["detalle"])} for a in aut.lista()]
+    return render_template("equipo/autorizaciones.html", lista=lista, estados=aut.ESTADOS, acciones=aut.ACCIONES,
+                           puede_resolver=seguridad.puede("autorizaciones.resolver"), vigencia=aut.VIGENCIA_H)
+
+
+@bp.route("/incidencias", methods=["GET", "POST"])
+@seguridad.requiere("incidencias.gestionar")
+def incidencias():
+    from . import incidencias as inc
+    if request.method == "POST":
+        try:
+            iid = inc.crear(request.form.to_dict(), g.usuario)
+            flash("Incidencia registrada.", "ok")
+            return redirect(url_for("equipo.incidencia", iid=iid))
+        except inc.ErrorIncidencia as e:
+            flash(str(e), "error")
+            return redirect(url_for("equipo.incidencias", nueva=1))
+    estado = request.args.get("estado") if request.args.get("estado") in (*inc.ESTADOS, "activas", "todas") else "activas"
+    sev = request.args.get("sev") if request.args.get("sev") in inc.SEVERIDADES else None
+    conteo = {r["estado"]: r["n"] for r in db.todos("SELECT estado, COUNT(*) AS n FROM incidencias GROUP BY estado")}
+    return render_template("equipo/incidencias.html", lista=inc.listar(None if estado == "todas" else estado, sev), estado=estado, sev=sev,
+                           conteo=conteo, categorias=inc.CATEGORIAS, severidades=inc.SEVERIDADES, estados=inc.ESTADOS,
+                           equipo=db.todos("SELECT id, nombre, rol FROM usuarios WHERE rol != 'cliente' AND activo = 1 ORDER BY nombre"),
+                           cliente_pre=request.args.get("cliente") or "")
+
+
+@bp.route("/incidencias/<int:iid>", methods=["GET", "POST"])
+@seguridad.requiere("incidencias.gestionar")
+def incidencia(iid):
+    from . import incidencias as inc
+    if request.method == "POST":
+        try:
+            inc.actualizar(iid, request.form.to_dict(), g.usuario)
+            flash("Incidencia actualizada.", "ok")
+        except inc.ErrorIncidencia as e:
+            flash(str(e), "error")
+        return redirect(url_for("equipo.incidencia", iid=iid))
+    i, notas = inc.detalle(iid)
+    if not i:
+        abort(404)
+    return render_template("equipo/incidencia.html", i=i, notas=notas, categorias=inc.CATEGORIAS, severidades=inc.SEVERIDADES, estados=inc.ESTADOS,
+                           equipo=db.todos("SELECT id, nombre, rol FROM usuarios WHERE rol != 'cliente' AND activo = 1 ORDER BY nombre"))
+
+
+@bp.post("/clientes/<int:cid>/datos-sensibles")
+@seguridad.requiere("clientes.datos_sensibles")
+def cliente_datos_sensibles(cid):
+    """Muestra una vez los datos personales completos y deja registrado quién los vio, cuándo y por qué."""
+    motivo = " ".join((request.form.get("motivo") or "").split())[:200]
+    if len(motivo) < 5:
+        flash("Indica el motivo de la consulta: queda en la bitácora.", "error")
+        return redirect(url_for("equipo.cliente", cid=cid) + "#identidad")
+    cli = _cliente_o_404(cid)
+    auditoria.registrar("cliente.datos_vistos", f"cliente:{cid}", {"texto": f"Consultó los datos personales completos de {cli['nombre']}. Motivo: {motivo}"})
+    return cliente(cid, revelar=True)
+
+
 @bp.get("/clientes/<int:cid>")
-def cliente(cid):
+def cliente(cid, revelar=False):
     cli = _cliente_o_404(cid)
     filas, total = cartera.posiciones(cid)
     ops = db.todos("SELECT * FROM operaciones WHERE cliente_id = ? ORDER BY creado DESC LIMIT 50", (cid,))
     usuarios = {u["id"]: u for u in db.todos("SELECT id, nombre FROM usuarios")}
     modelo = db.uno("SELECT * FROM modelos WHERE codigo = ?", (cli["modelo"],))
     acepto = db.uno("SELECT terminos_version, terminos_ts FROM usuarios WHERE id = ?", (cli["usuario_id"],)) if cli["usuario_id"] else None
+    from . import cuenta as cuenta_mod
+    from . import incidencias as inc
+    from . import niveles
     from .transferencias import del_cliente as envios
+    u = db.uno("SELECT * FROM usuarios WHERE id = ?", (cli["usuario_id"],)) if cli["usuario_id"] else None
+    ident = None
+    if u:
+        enmascarar = (lambda t: t) if revelar else (lambda t: (t[:2] + "•" * max(0, len(t) - 4) + t[-2:]) if t and len(t) > 4 else ("••••" if t else None))
+        ident = {"codigo": cuenta_mod.codigo(u["id"]), "usuario": u["usuario"], "estado": u["estado_cuenta"], "dos_pasos": bool(u["totp_secreto"]),
+                 "ultimo": u["ultimo_ingreso"], "alta": u["creado"], "telefono": enmascarar(u["telefono"]), "direccion": enmascarar(u["direccion"]),
+                 "ciudad": u["ciudad"], "pais": u["pais"], "nacimiento": u["nacimiento"] if revelar else ("••••-••-••" if u["nacimiento"] else None),
+                 "sesiones": db.uno("SELECT COUNT(*) AS n FROM sesiones WHERE usuario_id = ? AND cerrada IS NULL", (u["id"],))["n"],
+                 "nivel": niveles.nivel(cli, u) if hasattr(niveles, "nivel") else None}
+    actividad = db.todos("SELECT ts, accion, detalle, ip, actor FROM bitacora WHERE usuario_id = ? OR objeto IN (?, ?) ORDER BY id DESC LIMIT 25",
+                         (cli["usuario_id"] or -1, f"cliente:{cid}", f"usuario:{cli['usuario_id']}"))
+    solicitudes = db.todos("SELECT * FROM solicitudes_cuenta WHERE usuario_id = ? ORDER BY id DESC LIMIT 10", (cli["usuario_id"] or -1,))
     return render_template("equipo/cliente.html", cli=cli, filas=filas, total=total, ops=ops, usuarios=usuarios, envios=envios(cid, 30),
+                           ident=ident, revelar=revelar, actividad=actividad, solicitudes=solicitudes,
+                           incidencias_cli=inc.listar(None, None, cid, 10), estados_inc=inc.ESTADOS, sev_inc=inc.SEVERIDADES,
                            modelo=modelo, aportado=cartera.aportado_neto(cid), legajo=documentos.legajo(cli),
                            tipos=documentos.TIPOS[cli["tipo"]], estados_doc=documentos.ESTADOS, acepto=acepto,
                            faltan=documentos.faltantes(cli), periodos=cartera.periodos_cliente(cli))

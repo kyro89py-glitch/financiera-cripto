@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph, pill with context %}
+{% block titulo %}Incidencia #{{ i.id }}{% endblock %}
+{% block contenido %}
+{% call ph(i.titulo, "#" ~ i.id ~ " · " ~ categorias[i.categoria] ~ " · registrada por " ~ i.autor ~ " el " ~ (i.creada|fecha), volver=url_for('equipo.incidencias'), volver_txt="Incidencias") %}
+  {{ pill(severidades[i.severidad][0], severidades[i.severidad][1]) }}{{ pill(estados[i.estado][0], estados[i.estado][1]) }}
+{% endcall %}
+<div class="g2 ancho-izq">
+  <div class="col">
+    <section class="card col"><h3>Descripción</h3><p class="inc-desc">{{ i.descripcion }}</p>
+      {% if i.cliente %}<p class="small">Cliente: <a href="{{ url_for('equipo.cliente', cid=i.cliente_id) }}">{{ i.cliente }}</a></p>{% endif %}</section>
+    <section class="card col">
+      <h3>Seguimiento</h3>
+      <ol class="inc-linea">{% for n in notas %}<li><span class="act-punto" aria-hidden="true"></span><div><p>{{ n.texto }}</p><span class="xs muted">{{ n.nombre or 'Sistema' }} · {{ n.ts|fecha }}</span></div></li>{% endfor %}</ol>
+    </section>
+  </div>
+  <section class="card col" style="align-self:start">
+    <h3>Actualizar</h3>
+    {% if i.estado == 'cerrada' %}<p class="small muted">Cerrada el {{ i.resuelta|fecha }}. Si el problema volvió, registra una nueva incidencia.</p>{% else %}
+    <form method="post" class="col">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <label class="field" for="u-estado">Estado<select id="u-estado" name="estado">{% for k, (c, t) in estados.items() %}<option value="{{ k }}"{{ ' selected' if k == i.estado }}>{{ t }}</option>{% endfor %}</select></label>
+      <label class="field" for="u-sev">Severidad<select id="u-sev" name="severidad">{% for k, (c, t) in severidades.items() %}<option value="{{ k }}"{{ ' selected' if k == i.severidad }}>{{ t }}</option>{% endfor %}</select></label>
+      <label class="field" for="u-asig">Responsable<select id="u-asig" name="asignada_a"><option value="">Sin asignar</option>{% for u in equipo %}<option value="{{ u.id }}"{{ ' selected' if u.id == i.asignada_a }}>{{ u.nombre }}</option>{% endfor %}</select></label>
+      <label class="field" for="u-nota">Nota<textarea id="u-nota" name="nota" rows="3" maxlength="2000" placeholder="Qué se hizo o qué falta"></textarea></label>
+      <button class="btn primary" type="submit">Guardar</button>
+      <p class="xs muted">Para resolver o cerrar hace falta una nota con lo que se hizo. Cada cambio queda en la bitácora.</p>
+    </form>{% endif %}
+  </section>
+</div>
+{% endblock %}

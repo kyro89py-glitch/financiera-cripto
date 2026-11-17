@@ -32,6 +32,7 @@
       <summary aria-label="Mi cuenta">{{ avatar(usuario) }}</summary>
       <div class="menu">
         <div class="who"><b>{{ usuario.nombre_publico or usuario.nombre }}</b><span class="small muted">{{ ('@' ~ usuario.usuario) if usuario.usuario else usuario.email }}</span><span class="xs muted">{{ ROLES[usuario.rol] }}</span></div>
+        {% if usuario.rol != 'cliente' %}{% for item in navegacion() if item.sec %}<a class="solo-movil" href="{{ item.url }}">{{ icono(item.icono) }}{{ item.texto }}{% if item.cuenta %} <span class="badge-in">{{ item.cuenta }}</span>{% endif %}</a>{% endfor %}{% endif %}
         <a href="{{ url_for('cuenta.inicio') }}">{{ icono('perfil') }}Mi cuenta</a>
         <a href="{{ url_for('cuenta.personalizar') }}">{{ icono('ajustes') }}Preferencias</a>
         <a href="{{ url_for('auth.sesiones') }}">{{ icono('dispositivo') }}Dispositivos y seguridad</a>

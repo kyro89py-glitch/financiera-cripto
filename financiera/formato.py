@@ -78,7 +78,9 @@ NAV = {
                ("equipo.clientes", "Clientes", "clientes", None),
                ("equipo.soporte", "Soporte", "campana", "soporte.atender"),
                ("equipo.cumplimiento", "Cumplimiento", "cumplimiento", "cumplimiento.ver"),
-               ("equipo.noticias", "Noticias", "documento", "contenido.publicar"),
+               ("equipo.incidencias", "Incidencias", "campana", "sec:incidencias.gestionar"),
+               ("equipo.autorizaciones", "Autorizaciones", "escudo", "sec:autorizaciones.resolver"),
+               ("equipo.noticias", "Noticias", "documento", "sec:contenido.publicar"),
                ("admin.panel", "Administración", "ajustes", "panel.ver")],
 }
 ACTIVO = {  # qué rutas marcan cada pestaña como activa
@@ -194,8 +196,10 @@ def navegacion():
     grupo = "cliente" if u["rol"] == "cliente" else "equipo"
     out = []
     for ep, texto, ico, permiso in NAV[grupo]:
-        sec = permiso == "sec"  # secundaria: se ve en la barra lateral de escritorio y en «Más» del perfil en el celular
-        if permiso and not sec and not seguridad.puede(permiso):
+        # secundaria («sec» o «sec:permiso»): se ve en la barra lateral de escritorio; en el celular, en «Más» o en el menú de la cuenta
+        sec = permiso == "sec" or (permiso or "").startswith("sec:")
+        requerido = permiso[4:] if (permiso or "").startswith("sec:") else (None if sec else permiso)
+        if requerido and not seguridad.puede(requerido):
             continue
         activo = request.endpoint in ACTIVO.get(ep, (ep,))
         cuenta = 0
@@ -205,6 +209,13 @@ def navegacion():
         if ep == "equipo.soporte":
             from . import db
             cuenta = db.uno("SELECT COUNT(*) AS n FROM consultas WHERE estado = 'abierta'")["n"]
+        if ep == "equipo.autorizaciones":
+            from . import db
+            cuenta = db.uno("SELECT COUNT(*) AS n FROM autorizaciones WHERE estado = 'pendiente' AND solicitada_por != ? AND vence > ?",
+                            (u["id"], tiempo.ahora()))["n"]
+        if ep == "equipo.incidencias":
+            from . import db
+            cuenta = db.uno("SELECT COUNT(*) AS n FROM incidencias WHERE estado IN ('abierta', 'en_curso') AND severidad IN ('alta', 'critica')")["n"]
         out.append({"url": url_for(ep), "texto": texto, "icono": ico, "activo": activo, "cuenta": cuenta, "sec": sec})
     return out
 
@@ -268,6 +279,8 @@ def init_app(app):
         ref = guarani.referencia()
         return guarani.fmt(guarani.de_usd_cent(cent or 0, ref)) if ref else None
     from .transferencias import ocultar
+    from . import seguridad as _seg
+    app.jinja_env.globals["puede"] = _seg.puede
     app.jinja_env.globals.update(en_gs=en_gs, cambios_pyg=guarani.cambios, ocultar=ocultar,
                                  ahora_local=lambda: datetime.now(zona()), idem=_idem, tema_actual=tema_actual)
     app.jinja_env.globals.update(ROLES=ROLES, ESTADOS=ESTADOS, KYC=KYC, PERFILES=PERFILES, TIPOS_OP=TIPOS_OP,

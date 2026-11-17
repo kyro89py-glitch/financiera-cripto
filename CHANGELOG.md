@@ -61,6 +61,13 @@ Personalización e identidad. Los servicios financieros reales siguen deshabilit
 - **Simulador con precios históricos:** compras periódicas (semanal, quincenal o mensual) desde hace 3, 6 o 12 meses, cada una al precio real registrado en esa fecha; muestra invertido, valor hoy, resultado, precio promedio, comparación con invertir todo el primer día y gráfico. Si no hay historial suficiente lo dice; nunca rellena datos. Rendimientos pasados no garantizan futuros.
 - **Calendario de acontecimientos** con los eventos publicados por el equipo (módulo 5) y accesos al comparador, análisis de cartera, estadísticas y academia.
 
+### Módulo 8 · Administración
+- **Control dual de acciones críticas** (`CONTROL_DUAL`, encendido por defecto): cambiar límites de operación, dar de baja o reactivar a un usuario del equipo y cobrar la comisión de gestión ya no se ejecutan al pedirlo. Se crea un pedido con motivo obligatorio que otra persona de Administración o Cumplimiento aprueba (y entonces se ejecuta) o rechaza con nota. Quien pide no puede aprobar, los pedidos vencen a las 48 horas, no se aceptan duplicados y cada paso queda en la bitácora y se notifica (Equipo › Autorizaciones).
+- **Incidencias** (Equipo › Incidencias): registro con categoría, severidad, cliente relacionado y responsable; línea de tiempo de notas; cambios de estado, severidad y responsable; para resolver o cerrar hace falta una nota. Las altas y críticas avisan a Administración y Cumplimiento y aparecen en las alertas del panel.
+- **Perfil completo del cliente** para el equipo: identidad y cuenta (identificador, @usuario, alta, último ingreso, sesiones, dos pasos, nivel), solicitudes, incidencias y actividad de la cuenta. Teléfono, dirección y nacimiento se muestran **enmascarados**; solo Cumplimiento y Administración pueden verlos completos indicando un motivo, y esa consulta queda registrada con nombre y motivo.
+- **Reporte de indicadores** (CSV agregado sin datos personales: clientes, volumen, órdenes del simulador marcadas como tales, depósitos, retiros, transferencias, comisiones, alertas, incidencias y autorizaciones), con su exportación registrada.
+- Nuevos permisos: `autorizaciones.resolver`, `incidencias.gestionar`, `clientes.datos_sensibles`. En el celular, las secciones secundarias del equipo están en el menú de la cuenta, con contador.
+
 ## [0.20.0] - 2026-11-16
 
 Evolución completa de la plataforma, trabajada por módulos. Los servicios financieros reales siguen deshabilitados.

@@ -50,6 +50,8 @@ def create_app(config=None):
         ENVIO_MAX_DIA_USD=int(_env("ENVIO_MAX_DIA_USD", "5000")),
         # Transferencias a otras entidades: solo con un proveedor autorizado. Mientras tanto el flujo externo es una demostración.
         TRANSFERENCIAS_REALES=_env("TRANSFERENCIAS_REALES", "0") == "1",
+        # Control dual: límites, altas y bajas del equipo y cobro de comisiones necesitan la aprobación de otra persona.
+        CONTROL_DUAL=_env("CONTROL_DUAL", "1") == "1",
         RETIRO_MAX_DIA_USD=int(_env("RETIRO_MAX_DIA_USD", "50000")),
         OFICINA_DIRECCION=_env("OFICINA_DIRECCION", ""),
         DEPOSITO_USDT_DIRECCION=_env("DEPOSITO_USDT_DIRECCION", ""),

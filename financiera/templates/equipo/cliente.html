@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "macros.html" import kyc, estado, barra, check, ph, pill, tipo_op, signo, riesgo, vacio with context %}
+{% block clase_app %} ancha{% endblock %}
 {% block titulo %}{{ cli.nombre }}{% endblock %}
 {% block contenido %}
 {% call ph(cli.nombre, cli.documento ~ " · " ~ ("Empresa" if cli.tipo == 'empresa' else "Persona") ~ " · cliente desde " ~ (cli.creado|dia) ~ (" · cuenta abierta en línea" if cli.origen == 'web' else ""), volver=url_for('equipo.clientes'), volver_txt="Clientes") %}{{ kyc(cli) }}{% endcall %}
@@ -40,6 +41,12 @@
       {% endfor %}</div>
     </section>
     {% endif %}
+    <section class="card flush">
+      <div class="ch"><h3>Actividad de la cuenta</h3><span class="meta">últimos 25 registros de la bitácora</span></div>
+      <div class="list">{% for b in actividad %}<div class="item"><div class="grow"><div class="t">{{ b.detalle|detalle_txt or b.accion }}</div><div class="d">{{ b.ts|fecha }} · {{ b.actor }}{% if b.ip %} · IP {{ b.ip }}{% endif %}</div></div><span class="xs muted mono oc">{{ b.accion }}</span></div>
+      {% else %}{{ vacio('documento', 'Sin actividad registrada.') }}{% endfor %}</div>
+    </section>
+
     <section class="card">
       <div class="ch"><h3>Estados de cuenta</h3></div>
       <div class="chips">{% for p in periodos[:12] %}<a href="{{ url_for('equipo.estado_mensual', cid=cli.id, periodo=p) }}">{{ p|periodo }}</a>{% endfor %}</div>
@@ -47,6 +54,44 @@
   </div>
 
   <div class="col">
+    {% if ident %}
+    <section class="card col" id="identidad">
+      <div class="ch" style="margin:0"><h3>Identidad y cuenta</h3>{{ pill('ok' if (ident.estado or 'activa') == 'activa' else 'warn', {'activa': 'Activa', 'cierre_solicitado': 'Cierre solicitado', 'cerrada': 'Cerrada'}[ident.estado or 'activa']) }}</div>
+      <dl class="ficha-datos">
+        <div><dt>Identificador</dt><dd class="num">{{ ident.codigo }}</dd></div>
+        <div><dt>Usuario</dt><dd>{{ ('@' ~ ident.usuario) if ident.usuario else 'Sin nombre de usuario' }}</dd></div>
+        <div><dt>Alta</dt><dd>{{ ident.alta|fecha if ident.alta else '—' }}</dd></div>
+        <div><dt>Último ingreso</dt><dd>{{ ident.ultimo|fecha if ident.ultimo else 'Nunca' }}</dd></div>
+        <div><dt>Sesiones abiertas</dt><dd class="num">{{ ident.sesiones }}</dd></div>
+        <div><dt>Verificación en dos pasos</dt><dd>{{ 'Activa' if ident.dos_pasos else 'No activada' }}</dd></div>
+        {% if ident.nivel %}<div><dt>Nivel</dt><dd>{{ ident.nivel.n }} · {{ ident.nivel.nombre }}</dd></div>{% endif %}
+        <div><dt>Teléfono</dt><dd class="num">{{ ident.telefono or '—' }}</dd></div>
+        <div><dt>Dirección</dt><dd>{{ ident.direccion or '—' }}</dd></div>
+        <div><dt>Ciudad y país</dt><dd>{{ [ident.ciudad, ident.pais]|select|join(', ') or '—' }}</dd></div>
+        <div><dt>Nacimiento</dt><dd class="num">{{ ident.nacimiento or '—' }}</dd></div>
+      </dl>
+      {% if revelar %}<p class="xs warn-txt">Datos completos visibles por esta consulta. Quedó registrada en la bitácora con tu nombre y el motivo.</p>
+      {% elif puede('clientes.datos_sensibles') %}
+      <form method="post" action="{{ url_for('equipo.cliente_datos_sensibles', cid=cli.id) }}" class="row" style="gap:6px;flex-wrap:wrap">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input name="motivo" class="input-sm grow" required minlength="5" maxlength="200" placeholder="Motivo de la consulta" aria-label="Motivo para ver los datos completos">
+        <button class="btn sm" type="submit">{{ icono('ojo') }}Ver datos completos</button></form>
+      <p class="xs muted">Los datos personales se muestran enmascarados. Verlos completos queda registrado.</p>
+      {% else %}<p class="xs muted">Datos personales enmascarados: solo Cumplimiento y Administración pueden verlos completos.</p>{% endif %}
+    </section>
+    {% endif %}
+    {% if solicitudes %}
+    <section class="card col">
+      <div class="ch" style="margin:0"><h3>Solicitudes de cuenta</h3><a class="small" href="{{ url_for('equipo.solicitudes') }}">Gestionar</a></div>
+      {% for s in solicitudes %}<div class="item" style="padding:8px 0"><div class="grow"><div class="t">{{ 'Corrección de datos' if s.tipo == 'correccion' else 'Cierre de cuenta' }}</div><div class="d">{{ s.creada|fecha }}</div></div>{{ pill('warn' if s.estado == 'abierta' else ('ok' if s.estado == 'aprobada' else ''), s.estado|capitalize) }}</div>{% endfor %}
+    </section>
+    {% endif %}
+    {% if puede('incidencias.gestionar') %}
+    <section class="card col">
+      <div class="ch" style="margin:0"><h3>Incidencias</h3><a class="small" href="{{ url_for('equipo.incidencias', nueva=1, cliente=ident.codigo if ident else cli.documento) }}#nueva">Registrar</a></div>
+      {% for x in incidencias_cli %}<a class="item" style="padding:8px 0" href="{{ url_for('equipo.incidencia', iid=x.id) }}"><div class="grow"><div class="t">{{ x.titulo }}</div><div class="d">{{ x.creada|fecha }}</div></div>{{ pill(sev_inc[x.severidad][0], sev_inc[x.severidad][1]) }}{{ pill(estados_inc[x.estado][0], estados_inc[x.estado][1]) }}</a>
+      {% else %}<p class="small muted">Sin incidencias registradas.</p>{% endfor %}
+    </section>
+    {% endif %}
     <section class="card col">
       <h3>Debida diligencia</h3>
       <ul class="checks">

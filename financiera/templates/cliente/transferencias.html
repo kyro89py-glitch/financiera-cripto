@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph, pill, vacio with context %}
+{% block titulo %}Transferencias{% endblock %}
+{% block clase_app %} ancha{% endblock %}
+{% block contenido %}
+{% call ph("Transferencias", "Envía y recibe entre cuentas de la plataforma. Cada envío tiene estado y comprobante.", volver=url_for('cliente.cartera'), volver_txt="Billetera") %}
+  <a class="btn primary" href="{{ url_for('cliente.enviar') }}">{{ icono('enviar') }}Nueva transferencia</a>
+{% endcall %}
+<div class="trf-cab">
+  <section class="card trf-limite">
+    <span class="lab">Hoy enviaste</span>
+    <div class="num trf-cifra">{{ hoy|usd }} <span class="small muted">de {{ limite|usd(0) }}</span></div>
+    <div class="barra-lim" role="img" aria-label="Usaste {{ (hoy / limite * 100)|round|int if limite else 0 }} % del límite diario"><i style="width:{{ [hoy / limite * 100 if limite else 0, 100]|min }}%"></i></div>
+    <span class="xs muted">El límite se reinicia a medianoche (hora de Paraguay).</span>
+  </section>
+  <section class="card trf-mes"><span class="lab">Este mes</span>
+    <dl class="mini-kpis"><div><dt>Enviado</dt><dd class="num down">{{ enviado|usd }}</dd></div><div><dt>Recibido</dt><dd class="num up">{{ recibido|usd }}</dd></div></dl></section>
+  <section class="card trf-tipos">
+    <a class="trf-op" href="{{ url_for('cliente.enviar') }}"><span>{{ icono('enviar') }}</span><div><b>A otra cuenta de la plataforma</b><small>Al instante y sin comisión</small></div></a>
+    <a class="trf-op demo" href="{{ url_for('cliente.transferencia_externa') }}"><span>{{ icono('retiro') }}</span><div><b>A un banco o billetera externa</b><small>Demostración: todavía no habilitado</small></div></a>
+  </section>
+</div>
+{% if contactos %}
+<section class="panel">
+  <header><h3>Envías seguido a</h3></header>
+  <div class="contactos">{% for k in contactos %}
+    <a class="contacto" href="{{ url_for('cliente.enviar', a=k.a) if k.a else url_for('cliente.enviar') }}"><span class="avatar av-{{ loop.index0 % 6 }}" aria-hidden="true">{{ k.nombre[:1] }}</span>
+      <b>{{ k.nombre }}</b><span class="xs muted">{{ ('@' ~ k.usuario) if k.usuario else (k.n ~ ' envío' ~ ('s' if k.n != 1 else '')) }}</span></a>{% endfor %}</div>
+</section>
+{% endif %}
+<nav class="chips fila-scroll" aria-label="Filtrar" style="margin:14px 0 10px">{% for k, t in [('todas', 'Todas'), ('enviadas', 'Enviadas'), ('recibidas', 'Recibidas')] %}<a href="{{ url_for('cliente.transferencias', ver=k if k != 'todas' else none) }}" aria-current="{{ 'true' if ver == k else 'false' }}">{{ t }}</a>{% endfor %}</nav>
+<section class="card flush">
+  <div class="list">{% for t in lista %}{% set sale = t.de_cliente == g.cliente.id %}
+    <a class="item" href="{{ url_for('cliente.envio', tid=t.id) }}"><span class="moneda-ico" style="--c:{{ 'var(--down)' if sale else 'var(--up)' }}">{{ '↑' if sale else '↓' }}</span>
+      <div class="grow"><div class="t">{{ "Enviaste a " ~ ocultar(t.a_nombre) if sale else "Recibiste de " ~ ocultar(t.de_nombre) }}</div>
+        <div class="d">{{ t.ts|fecha }} · {{ "EN-%06d"|format(t.id) }}{% if t.nota %} · «{{ t.nota }}»{% endif %}</div></div>
+      {{ pill('ok', 'Completada') }}
+      <div class="amt num {{ 'down' if sale else 'up' }}">{{ '−' if sale else '+' }}{{ t.valor_cent|usd }}{% if t.activo != 'USD' %}<span class="muted">{{ t.cantidad|unidades(t.activo) }}</span>{% endif %}</div></a>
+  {% else %}{{ vacio('billetera', 'Todavía no hay transferencias' ~ (' ' ~ ver if ver != 'todas' else '') ~ '.') }}{% endfor %}</div>
+</section>
+{% if demo %}<p class="note">Las transferencias internas mueven saldo entre cuentas en el libro contable de la plataforma y son inmediatas. Las transferencias a bancos y billeteras de otras entidades se habilitarán solo con un proveedor de pagos autorizado; mientras tanto puedes recorrer ese flujo en modo demostración, sin que se mueva dinero.</p>{% endif %}
+{% endblock %}

@@ -50,6 +50,12 @@ Personalización e identidad. Los servicios financieros reales siguen deshabilit
 - **No hay noticias de ejemplo:** la plataforma no inventa contenido; la sección aparece cuando el equipo publica.
 - **Mapa de calor interactivo:** tamaño por capitalización o por volumen y panel de detalle (precio, 24 h, 7 días, capitalización, volumen, accesos al gráfico y a la ficha) al pasar el cursor o enfocar; en el teléfono el primer toque muestra el detalle y el segundo abre el gráfico.
 
+### Módulo 6 · Centro de transferencias
+- **Centro de transferencias** (`/cliente/transferencias`): uso del límite diario, enviado y recibido en el mes, personas a las que envías seguido (con acceso a «enviar de nuevo»), historial filtrable con estado y código EN-, y acceso a cada comprobante.
+- **Envío en tres pasos:** datos → **revisión** (destinatario con nombre abreviado, @usuario e identificador de cuenta, importe, moneda, cantidad, concepto, comisión, lo que se descuenta y lo que queda del límite) → confirmación con contraseña y código de dos pasos. Nada se mueve antes de confirmar; el envío se vuelve a validar al confirmar y no se duplica si el formulario se reenvía.
+- **Transferencias a bancos o billeteras externas en modo demostración:** se recorre el formulario y el resumen, pero no se descuenta saldo, no se envía dinero y no se registra ningún movimiento; el resultado lo dice expresamente («No enviada»). Se habilitará solo con un proveedor de pagos autorizado (`TRANSFERENCIAS_REALES`, apagado por defecto).
+- El detalle de cada envío muestra tipo, estado y concepto.
+
 ## [0.20.0] - 2026-11-16
 
 Evolución completa de la plataforma, trabajada por módulos. Los servicios financieros reales siguen deshabilitados.

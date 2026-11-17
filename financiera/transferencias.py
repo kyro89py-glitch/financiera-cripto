@@ -32,7 +32,7 @@ def buscar(texto, excepto_cliente=None):
     if not t:
         return None
     base = "SELECT c.* FROM clientes c JOIN usuarios u ON u.id = c.usuario_id WHERE u.activo = 1 AND "
-    uid, c = cuenta.leer_codigo(t), None
+    uid, c = cuenta.leer_codigo(t.lstrip("@")), None
     if uid:
         c = db.uno(base + "u.id = ?", (uid,))
     elif "@" in t[1:]:
@@ -63,16 +63,9 @@ def limite_dia():
     return niveles.cent("ENVIO_MAX_DIA_USD")
 
 
-def enviar(cliente, destino_texto, activo, monto_cent, usuario, clave, codigo=None, nota=None, todo=False, ts=None):
-    """Envía `monto_cent` (valor en dólares) de `activo` a otro cliente. Devuelve el id de la transferencia."""
-    u = db.uno("SELECT * FROM usuarios WHERE id = ?", (usuario["id"],))
-    if not seguridad.verificar_clave(u["clave_hash"], clave or ""):
-        raise ErrorEnvio("La contraseña no es correcta.")
-    contador = None
-    if u["totp_secreto"]:
-        contador = seguridad.totp_verificar(u["totp_secreto"], codigo or "", u["totp_ultimo"])
-        if contador is None:
-            raise ErrorEnvio("El código de verificación no es correcto.")
+def preparar(cliente, destino_texto, activo, monto_cent, todo=False):
+    """Valida un envío sin ejecutarlo: destinatario, moneda, saldo, mínimo y límite diario. Devuelve el resumen que se muestra
+    para confirmar. `enviar` lo vuelve a calcular al confirmar, con el saldo y el precio de ese momento."""
     if cliente["kyc_estado"] != "verificado":
         raise ErrorEnvio("Para enviar primero tenemos que verificar tu identidad.")
     from . import antilavado
@@ -80,7 +73,7 @@ def enviar(cliente, destino_texto, activo, monto_cent, usuario, clave, codigo=No
         raise ErrorEnvio("Tu cuenta está en revisión de cumplimiento. Escríbenos desde Ayuda si necesitas más información.")
     destino = buscar(destino_texto, cliente["id"])
     if not destino:
-        raise ErrorEnvio("No encontramos a ningún otro cliente con ese correo o documento.")
+        raise ErrorEnvio("No encontramos a ningún otro cliente con ese @usuario, identificador, correo o documento.")
     if destino["kyc_estado"] != "verificado":
         raise ErrorEnvio("Esa persona todavía no tiene la identidad verificada y no puede recibir envíos.")
     activo = (activo or "").upper()
@@ -111,6 +104,25 @@ def enviar(cliente, destino_texto, activo, monto_cent, usuario, clave, codigo=No
     if enviado_hoy(cliente["id"]) + valor > limite_dia():
         disponible = max(0, limite_dia() - enviado_hoy(cliente["id"]))
         raise ErrorEnvio(f"Superas el límite diario de envíos de {fmt_usd(limite_dia(), 0)}. Hoy puedes enviar hasta {fmt_usd(disponible)}.")
+    from . import cuenta
+    du = db.uno("SELECT usuario FROM usuarios WHERE id = ?", (destino["usuario_id"],)) if destino["usuario_id"] else None
+    return {"destino": destino, "activo": activo, "cantidad": cantidad, "valor": valor, "comision": 0,
+            "usuario": du["usuario"] if du else None, "codigo": cuenta.codigo(destino["usuario_id"]) if destino["usuario_id"] else None,
+            "nombre": ocultar(destino["nombre"]), "queda_hoy": max(0, limite_dia() - enviado_hoy(cliente["id"]) - valor)}
+
+
+def enviar(cliente, destino_texto, activo, monto_cent, usuario, clave, codigo=None, nota=None, todo=False, ts=None):
+    """Envía `monto_cent` (valor en dólares) de `activo` a otro cliente. Devuelve el id de la transferencia."""
+    u = db.uno("SELECT * FROM usuarios WHERE id = ?", (usuario["id"],))
+    if not seguridad.verificar_clave(u["clave_hash"], clave or ""):
+        raise ErrorEnvio("La contraseña no es correcta.")
+    contador = None
+    if u["totp_secreto"]:
+        contador = seguridad.totp_verificar(u["totp_secreto"], codigo or "", u["totp_ultimo"])
+        if contador is None:
+            raise ErrorEnvio("El código de verificación no es correcto.")
+    r = preparar(cliente, destino_texto, activo, monto_cent, todo)
+    destino, activo, cantidad, valor = r["destino"], r["activo"], r["cantidad"], r["valor"]
     ts = ts or ahora()
     nota = (nota or "").strip()[:120] or None
     with db.transaccion() as c:

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph with context %}
+{% block titulo %}Revisar envío{% endblock %}
+{% block contenido %}
+{{ ph("Revisa y confirma", "Comprueba a quién envías y cuánto. Después de confirmar, el envío no se puede revertir.") }}
+<div class="revisar-env">
+  <section class="card col">
+    <ol class="pasos-env" aria-label="Pasos"><li class="ok">Datos</li><li class="on">Revisar y confirmar</li><li>Comprobante</li></ol>
+    <div class="env-destino">
+      <span class="avatar lg av-{{ r.destino.id % 6 }}" aria-hidden="true">{{ r.nombre[:1] }}</span>
+      <div><b>{{ r.nombre }}</b><div class="small muted">{% if r.usuario %}@{{ r.usuario }} · {% endif %}{{ r.codigo or 'cuenta sin identificador' }}</div></div>
+    </div>
+    <div class="env-monto num">{{ r.valor|usd }}</div>
+    <dl class="detalle">
+      <div><dt>Moneda</dt><dd>{{ 'Dólares (USD)' if r.activo == 'USD' else r.activo }}</dd></div>
+      {% if r.activo != 'USD' %}<div><dt>Cantidad</dt><dd class="num">{{ r.cantidad|unidades(r.activo) }}</dd></div>{% endif %}
+      <div><dt>Concepto</dt><dd>{{ ('«' ~ nota ~ '»') if nota else 'Sin concepto' }}</dd></div>
+      <div><dt>Comisión</dt><dd>Sin comisión</dd></div>
+      <div><dt>Se descuenta de tu saldo</dt><dd class="num"><b>{{ r.cantidad|unidades(r.activo) if r.activo != 'USD' else r.valor|usd }}</b></dd></div>
+      <div><dt>Llega</dt><dd>Al instante, a su billetera</dd></div>
+      <div><dt>Te quedará para enviar hoy</dt><dd class="num">{{ r.queda_hoy|usd }}</dd></div>
+    </dl>
+    {% if r.activo != 'USD' %}<p class="xs muted">El valor en dólares es una referencia al precio actual; al confirmar se envía la cantidad indicada valuada al precio de ese momento.</p>{% endif %}
+    <form method="post" action="{{ url_for('cliente.enviar') }}" class="col" autocomplete="off">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      {% for k in ('idem', 'destino', 'activo', 'monto', 'nota', 'todo') %}<input type="hidden" name="{{ k }}" value="{{ form[k] or '' }}">{% endfor %}
+      <div class="form" style="grid-template-columns:{{ '1fr 1fr' if dos_pasos else '1fr' }}">
+        <label class="field" for="env-clave">Tu contraseña<input id="env-clave" name="clave" type="password" autocomplete="current-password" required autofocus></label>
+        {% if dos_pasos %}<label class="field" for="env-codigo">Código de 6 dígitos<input id="env-codigo" name="codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required></label>{% endif %}
+      </div>
+      <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn primary grow" name="accion" value="confirmar" type="submit">Confirmar y enviar</button>
+        <button class="btn" name="accion" value="editar" type="submit" formnovalidate>Editar</button></div>
+    </form>
+  </section>
+  <aside class="col">
+    <div class="card col"><h3>Antes de confirmar</h3>
+      <ul class="small lista-simple"><li>Verifica el nombre y el @usuario o identificador: si te equivocas, solo la otra persona puede devolverlo.</li>
+        <li>Nunca envíes dinero a alguien que te lo pide por mensaje diciendo ser de la plataforma: nuestro equipo no pide envíos.</li></ul></div>
+    {% if demo %}<p class="note">Transferencia interna: mueve saldo entre dos cuentas en el libro contable de la plataforma. Las transferencias a bancos y billeteras de otras entidades todavía no están habilitadas.</p>{% endif %}
+  </aside>
+</div>
+{% endblock %}

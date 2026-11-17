@@ -38,7 +38,7 @@ CANALES = {"app": "En la plataforma", "correo": "Correo", "push": "Push"}
 # Accesos rápidos del inicio: clave -> (texto, ruta, icono). La persona elige cuáles y en qué orden.
 ACCESOS = {"depositar": ("Depositar", "cliente.invertir", "invertir"), "comprar": ("Comprar", "auth.trading", "trading"),
            "vender": ("Vender", "auth.trading", "mercado"), "convertir": ("Convertir", "cliente.convertir", "convertir"),
-           "enviar": ("Enviar", "cliente.enviar", "enviar"), "retirar": ("Retirar", "cliente.retirar", "retiro"),
+           "enviar": ("Enviar", "cliente.enviar", "enviar"), "transferencias": ("Transferencias", "cliente.transferencias", "enviar"), "retirar": ("Retirar", "cliente.retirar", "retiro"),
            "mercados": ("Mercados", "auth.mercado", "mercado"), "movimientos": ("Movimientos", "cliente.movimientos", "movimientos"),
            "analisis": ("Análisis", "cliente.analisis_cartera", "resumen"), "comparar": ("Comparar", "auth.comparar", "operaciones"),
            "estadisticas": ("Estadísticas", "cliente.estadisticas", "resumen"),

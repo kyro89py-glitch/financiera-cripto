@@ -252,6 +252,10 @@ def estadisticas():
                            periodo=periodo, simulador=exchange.modo() != "binance")
 
 
+class _Editar(Exception):
+    pass
+
+
 @bp.route("/enviar", methods=["GET", "POST"])
 @limites.idempotente("enviar")
 def enviar():
@@ -262,24 +266,84 @@ def enviar():
         form = request.form.to_dict()
         todo = form.get("todo") == "si"
         try:
+            if form.get("accion") == "editar":  # vuelve del resumen al formulario con los datos cargados
+                raise _Editar
             monto = 0 if todo else leer_monto(form.get("monto"))
-            tr.enviar(c, form.get("destino"), form.get("activo"), monto, g.usuario, form.get("clave"), form.get("codigo"),
-                      nota=form.get("nota"), todo=todo)
+            if form.get("accion") == "revisar":  # paso 1: se valida todo y se muestra el resumen; todavía no se mueve nada
+                r = tr.preparar(c, form.get("destino"), form.get("activo"), monto, todo)
+                return render_template("cliente/enviar_revisar.html", r=r, form=form, dos_pasos=bool(g.usuario["totp_secreto"]),
+                                       nota=(form.get("nota") or "").strip()[:120], demo=not current_app.config.get("TRANSFERENCIAS_REALES"))
+            tid = tr.enviar(c, form.get("destino"), form.get("activo"), monto, g.usuario, form.get("clave"), form.get("codigo"),
+                            nota=form.get("nota"), todo=todo)
             dest = tr.buscar(form.get("destino"), c["id"])
             flash(f"Envío hecho a {tr.ocultar(dest['nombre']).rstrip('.')}. Ya lo tiene en su billetera.", "ok")
-            return redirect(url_for("cliente.enviar"))
+            return redirect(url_for("cliente.envio", tid=tid) if form.get("accion") == "confirmar" else url_for("cliente.enviar"))
         except ValueError:
             error = "Escribe el monto en dólares, por ejemplo 50 o 50,25."
         except tr.ErrorEnvio as e:
             error = str(e)
+        except _Editar:
+            pass
         form.pop("clave", None)
         form.pop("codigo", None)
     if request.method == "GET" and request.args.get("a"):
-        form = {"destino": "@" + request.args["a"].lstrip("@")[:20]}
+        from . import cuenta as cuenta_mod
+        a = request.args["a"].lstrip("@")[:20]
+        form = {"destino": a.upper() if cuenta_mod.leer_codigo(a) else "@" + a}
     filas, _ = cartera.posiciones(c["id"])
-    return render_template("cliente/enviar.html", filas=filas, error=error, form=form, historial=tr.del_cliente(c["id"]),
+    return render_template("cliente/enviar.html", filas=filas, error=error, form=form, historial=tr.del_cliente(c["id"], 8),
+                           demo=not current_app.config.get("TRANSFERENCIAS_REALES"),
                            hoy=tr.enviado_hoy(c["id"]), limite=tr.limite_dia(), dos_pasos=bool(g.usuario["totp_secreto"]),
                            tengo={f["activo"]: f["valor"] for f in filas})
+
+
+@bp.get("/transferencias")
+def transferencias():
+    """Centro de transferencias: límites, contactos frecuentes e historial de envíos internos con su estado y comprobante."""
+    from . import cuenta
+    from . import transferencias as tr
+    from .formato import zona_plataforma
+    from .tiempo import ahora_dt, iso
+    c = g.cliente
+    ver = request.args.get("ver") if request.args.get("ver") in ("enviadas", "recibidas") else "todas"
+    lista = tr.del_cliente(c["id"], 200)
+    if ver == "enviadas":
+        lista = [t for t in lista if t["de_cliente"] == c["id"]]
+    elif ver == "recibidas":
+        lista = [t for t in lista if t["a_cliente"] == c["id"]]
+    mes = iso(ahora_dt().astimezone(zona_plataforma()).replace(day=1, hour=0, minute=0, second=0, microsecond=0))
+    recibido, enviado = tr.en_periodo(c["id"], mes, iso(ahora_dt()))
+    contactos = []
+    for f in db.todos("SELECT t.a_cliente, MAX(t.ts) AS ult, COUNT(*) AS n, cl.nombre, cl.usuario_id, u.usuario FROM transferencias t"
+                      " JOIN clientes cl ON cl.id = t.a_cliente LEFT JOIN usuarios u ON u.id = cl.usuario_id"
+                      " WHERE t.de_cliente = ? GROUP BY t.a_cliente ORDER BY ult DESC LIMIT 6", (c["id"],)):
+        contactos.append({"nombre": tr.ocultar(f["nombre"]), "usuario": f["usuario"], "n": f["n"], "ult": f["ult"],
+                          "a": f["usuario"] or (cuenta.codigo(f["usuario_id"]) if f["usuario_id"] else None)})
+    return render_template("cliente/transferencias.html", lista=lista, ver=ver, hoy=tr.enviado_hoy(c["id"]), limite=tr.limite_dia(),
+                           recibido=recibido, enviado=enviado, contactos=contactos, ocultar=tr.ocultar,
+                           demo=not current_app.config.get("TRANSFERENCIAS_REALES"))
+
+
+@bp.route("/transferencias/externa", methods=["GET", "POST"])
+def transferencia_externa():
+    """Transferencia a una cuenta de otra entidad (banco o billetera externa) en MODO DEMOSTRACIÓN: recorre el formulario y el
+    resumen, pero no envía dinero, no descuenta saldo ni registra movimientos. Se habilita solo con un proveedor autorizado."""
+    paso, form, error = "formulario", {}, None
+    if request.method == "POST":
+        form = {k: " ".join((v or "").split())[:80] for k, v in request.form.items() if k not in ("csrf",)}
+        try:
+            monto = leer_monto(form.get("monto"))
+            if monto < 100:
+                raise ValueError
+            faltan = [n for k, n in (("titular", "titular"), ("entidad", "entidad"), ("cuenta", "número de cuenta o dirección")) if not form.get(k)]
+            if faltan:
+                error = "Completa: " + ", ".join(faltan) + "."
+            else:
+                form["monto_cent"] = monto
+                paso = "fin" if form.get("accion") == "confirmar" else "revisar"
+        except ValueError:
+            error = "Escribe un monto válido, de al menos US$ 1."
+    return render_template("cliente/transferencia_externa.html", paso=paso, form=form, error=error)
 
 
 @bp.get("/enviar/destinatario")

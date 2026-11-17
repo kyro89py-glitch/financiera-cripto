@@ -7,11 +7,13 @@
 <section class="card col privado" style="max-width:640px">
   <div class="detalle-monto num {{ 'down' if sale else 'up' }}">{{ '−' if sale else '+' }}{{ t.valor_cent|usd }}</div>
   <dl class="detalle">
-    <div><dt>Número</dt><dd class="num">E{{ t.id }}</dd></div>
+    <div><dt>Número</dt><dd class="num">{{ "EN-%06d"|format(t.id) }}</dd></div>
+    <div><dt>Tipo</dt><dd>Transferencia interna</dd></div>
+    <div><dt>Estado</dt><dd>Completada · acreditada al instante</dd></div>
     <div><dt>{{ "Para" if sale else "De" }}</dt><dd>{{ ocultar(t.a_nombre if sale else t.de_nombre) }}</dd></div>
     <div><dt>Qué se envió</dt><dd class="num">{{ t.cantidad|unidades(t.activo) }}</dd></div>
     <div><dt>Valor al enviar</dt><dd class="num">{{ t.valor_cent|usd }}</dd></div>
-    {% if t.nota %}<div><dt>Nota</dt><dd>«{{ t.nota }}»</dd></div>{% endif %}
+    {% if t.nota %}<div><dt>Concepto</dt><dd>«{{ t.nota }}»</dd></div>{% endif %}
     <div><dt>Comisión</dt><dd>Sin comisión</dd></div>
   </dl>
   <p class="small muted">Los envíos entre clientes son inmediatos y no se pueden revertir. Si hubo un error, contacta a la otra persona o a nuestro equipo.</p>

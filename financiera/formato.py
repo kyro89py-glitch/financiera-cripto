@@ -83,7 +83,8 @@ NAV = {
 ACTIVO = {  # qué rutas marcan cada pestaña como activa
     "auth.mercado": ("auth.mercado", "auth.moneda", "auth.noticias", "auth.comparar"),
     "cliente.cartera": ("cliente.cartera", "cliente.invertir", "cliente.convertir", "cliente.enviar", "cliente.movimientos",
-                        "cliente.estado_mensual", "cliente.movimiento", "cliente.envio", "cliente.retirar"),
+                        "cliente.estado_mensual", "cliente.movimiento", "cliente.envio", "cliente.retirar",
+                        "cliente.transferencias", "cliente.transferencia_externa"),
     "cuenta.inicio": ("cuenta.inicio", "cuenta.datos", "cuenta.personalizar", "cuenta.solicitudes", "cuenta.actividad", "cuenta.publico",
                       "cliente.perfil", "auth.seguridad", "auth.clave", "auth.sesiones", "auth.centro_seguridad", "auth.avisos"),
     "auth.academia": ("auth.academia", "auth.leccion"),

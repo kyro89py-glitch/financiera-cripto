@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph with context %}
+{% block titulo %}Transferencia externa · demostración{% endblock %}
+{% block contenido %}
+{{ ph("A un banco o billetera externa", "Así funcionará cuando esté habilitado. Hoy es una demostración: no se envía dinero.", volver=url_for('cliente.transferencias'), volver_txt="Transferencias") }}
+<div class="aviso-demo"><b>Modo demostración.</b> Las transferencias a otras entidades necesitan un proveedor de pagos autorizado que la plataforma todavía no tiene. Puedes recorrer el formulario y el resumen, pero <b>no se descuenta saldo, no se envía dinero y no se registra ningún movimiento.</b></div>
+{% if error %}<div class="flash error" role="alert">{{ error }}</div>{% endif %}
+<section class="card col" style="max-width:640px">
+  <ol class="pasos-env" aria-label="Pasos"><li class="{{ 'on' if paso == 'formulario' else 'ok' }}">Datos</li><li class="{{ 'on' if paso == 'revisar' else ('ok' if paso == 'fin' else '') }}">Revisar</li><li class="{{ 'on' if paso == 'fin' }}">Resultado</li></ol>
+  {% if paso == 'formulario' %}
+  <form method="post" class="col" autocomplete="off">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="revisar">
+    <div class="radio-chips" role="radiogroup" aria-label="Destino">{% for k, t in [('banco', 'Cuenta bancaria'), ('billetera', 'Billetera cripto externa')] %}<label><input type="radio" name="tipo" value="{{ k }}" {{ 'checked' if (form.tipo or 'banco') == k }}>{{ t }}</label>{% endfor %}</div>
+    <label class="field" for="x-titular">Titular<input id="x-titular" name="titular" value="{{ form.titular or '' }}" maxlength="80" required></label>
+    <div class="form" style="grid-template-columns:1fr 1fr">
+      <label class="field" for="x-entidad">Banco o red<input id="x-entidad" name="entidad" value="{{ form.entidad or '' }}" maxlength="80" required placeholder="Nombre del banco o red"></label>
+      <label class="field" for="x-cuenta">Número de cuenta o dirección<input id="x-cuenta" name="cuenta" value="{{ form.cuenta or '' }}" maxlength="80" required></label>
+      <label class="field" for="x-monto">Importe en dólares<input id="x-monto" name="monto" inputmode="decimal" value="{{ form.monto or '' }}" required placeholder="0,00"></label>
+      <label class="field" for="x-concepto">Concepto<input id="x-concepto" name="concepto" value="{{ form.concepto or '' }}" maxlength="80"></label>
+    </div>
+    <button class="btn primary" type="submit" style="align-self:flex-start">Revisar</button>
+  </form>
+  {% elif paso == 'revisar' %}
+  <dl class="detalle">
+    <div><dt>Destino</dt><dd>{{ 'Cuenta bancaria' if form.tipo != 'billetera' else 'Billetera cripto externa' }}</dd></div>
+    <div><dt>Titular</dt><dd>{{ form.titular }}</dd></div><div><dt>Banco o red</dt><dd>{{ form.entidad }}</dd></div>
+    <div><dt>Cuenta o dirección</dt><dd class="num">{{ form.cuenta }}</dd></div>
+    <div><dt>Importe</dt><dd class="num"><b>{{ form.monto_cent|usd }}</b></dd></div><div><dt>Concepto</dt><dd>{{ form.concepto or 'Sin concepto' }}</dd></div>
+    <div><dt>Comisión</dt><dd>La informará el proveedor cuando esté habilitado</dd></div>
+  </dl>
+  <form method="post" class="row" style="gap:8px;flex-wrap:wrap">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    {% for k in ('tipo', 'titular', 'entidad', 'cuenta', 'monto', 'concepto') %}<input type="hidden" name="{{ k }}" value="{{ form[k] or '' }}">{% endfor %}
+    <button class="btn primary" name="accion" value="confirmar" type="submit">Terminar la demostración</button>
+    <button class="btn" name="accion" value="editar" type="submit" formaction="{{ url_for('cliente.transferencia_externa') }}">Editar</button>
+  </form>
+  {% else %}
+  <div class="demo-fin"><span class="pill warn">No enviada</span>
+    <h3>Demostración terminada</h3>
+    <p class="small">No se envió dinero ni se descontó saldo de tu cuenta, y no quedó ningún movimiento registrado. Cuando la plataforma tenga un proveedor autorizado, este último paso pedirá tu contraseña y te dará un comprobante con el estado de la transferencia (en proceso, acreditada o rechazada).</p>
+    <div class="row" style="gap:8px"><a class="btn" href="{{ url_for('cliente.transferencias') }}">Volver a Transferencias</a><a class="btn ghost" href="{{ url_for('cliente.retirar') }}">Retirar a tu propia cuenta</a></div>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

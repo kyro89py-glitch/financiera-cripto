@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% from "macros.html" import ph, noticia with context %}
+{% block titulo %}Herramientas{% endblock %}
+{% block clase_app %} ancha{% endblock %}
+{% block cabeza %}<script src="{{ url_for('static', filename='js/herramientas.js') }}?v={{ VERSION }}" defer></script>{% endblock %}
+{% block contenido %}
+{{ ph("Herramientas", "Convierte, calcula comisiones, resultados y riesgo, y prueba qué habría pasado con una inversión en el pasado.") }}
+<p class="fuente-dato">Precios de <b>{{ fuente }}</b>{% if actualizado %} · {{ actualizado|fecha }} ({{ actualizado|hace }}){% endif %}. Comisión de compra o venta configurada: {{ '%.2f'|format(datos.comision_op)|replace('.', ',') }} %{{ ' (simulador)' if simulado }}. Todos los resultados son cálculos ilustrativos, no recomendaciones ni promesas.</p>
+<nav class="chips fila-scroll herr-nav" aria-label="Herramientas">
+  {% for k, t in [('conversor', 'Conversor'), ('comisiones', 'Comisiones'), ('rentabilidad', 'Rentabilidad'), ('riesgo', 'Riesgo'), ('simulador', 'Simulador'), ('calendario', 'Calendario')] %}<a href="#{{ k }}">{{ t }}</a>{% endfor %}
+</nav>
+<div class="herr-g">
+  <section class="card herr" id="conversor">
+    <header><h3>Conversor</h3><span class="xs muted">al precio de ahora</span></header>
+    <div class="herr-campos">
+      <label class="field">Monto<input data-h="cv-monto" inputmode="decimal" value="100"></label>
+      <label class="field">De<select data-h="cv-de"><option value="USD">USD · Dólar</option><option value="PYG"{{ ' disabled' if not datos.pyg }}>PYG · Guaraní</option>{% for a in activos %}<option value="{{ a.codigo }}">{{ a.codigo }} · {{ a.nombre }}</option>{% endfor %}</select></label>
+      <button class="iconbtn herr-invertir" type="button" data-h="cv-invertir" aria-label="Invertir monedas" title="Invertir">⇅</button>
+      <label class="field">A<select data-h="cv-a"><option value="USD">USD · Dólar</option><option value="PYG"{{ ' disabled' if not datos.pyg }}>PYG · Guaraní</option>{% for a in activos %}<option value="{{ a.codigo }}"{{ ' selected' if a.codigo == 'BTC' }}>{{ a.codigo }} · {{ a.nombre }}</option>{% endfor %}</select></label>
+    </div>
+    <output class="herr-res" data-h="cv-res" aria-live="polite">—</output>
+    <p class="xs muted" data-h="cv-tasa"></p>
+    {% if not datos.pyg %}<p class="xs muted">El guaraní se habilita cuando Administración carga el tipo de cambio.</p>{% else %}<p class="xs muted">Guaraní: promedio de los tipos de cambio de depósito y retiro de la plataforma.</p>{% endif %}
+  </section>
+
+  <section class="card herr" id="comisiones">
+    <header><h3>Comisiones</h3><span class="xs muted">las de esta plataforma</span></header>
+    <div class="herr-campos">
+      <label class="field">Monto en dólares<input data-h="co-monto" inputmode="decimal" value="500"></label>
+      <label class="field">Operación<select data-h="co-tipo"><option value="compra">Compra o venta</option><option value="conversion">Conversión entre monedas</option><option value="envio">Transferencia interna</option><option value="gestion">Gestión anual (planes administrados)</option></select></label>
+    </div>
+    <dl class="herr-dl" data-h="co-res"></dl>
+  </section>
+
+  <section class="card herr" id="rentabilidad">
+    <header><h3>Rentabilidad de una operación</h3></header>
+    <div class="herr-campos">
+      <label class="field">Moneda<select data-h="re-activo">{% for a in activos %}<option value="{{ a.codigo }}"{{ ' selected' if a.codigo == 'BTC' }}>{{ a.codigo }}</option>{% endfor %}</select></label>
+      <label class="field">Inviertes (US$)<input data-h="re-monto" inputmode="decimal" value="1000"></label>
+      <label class="field">Precio de compra<input data-h="re-pc" inputmode="decimal"></label>
+      <label class="field">Precio de venta<input data-h="re-pv" inputmode="decimal"></label>
+      <label class="field">Comisión por lado (%)<input data-h="re-com" inputmode="decimal" value="{{ '%g'|format(datos.comision_op)|replace('.', ',') }}"></label>
+    </div>
+    <dl class="herr-dl" data-h="re-res"></dl>
+  </section>
+
+  <section class="card herr" id="riesgo">
+    <header><h3>Riesgo y tamaño de posición</h3></header>
+    <div class="herr-campos">
+      <label class="field">Capital (US$)<input data-h="ri-capital" inputmode="decimal" value="5000"></label>
+      <label class="field">Riesgo que aceptas (%)<input data-h="ri-pct" inputmode="decimal" value="1"></label>
+      <label class="field">Precio de entrada<input data-h="ri-entrada" inputmode="decimal"></label>
+      <label class="field">Stop (salida si baja)<input data-h="ri-stop" inputmode="decimal"></label>
+      <label class="field">Objetivo (opcional)<input data-h="ri-obj" inputmode="decimal"></label>
+      <label class="field">Moneda<select data-h="ri-activo">{% for a in activos %}<option value="{{ a.codigo }}"{{ ' selected' if a.codigo == 'BTC' }}>{{ a.codigo }}</option>{% endfor %}</select></label>
+    </div>
+    <dl class="herr-dl" data-h="ri-res"></dl>
+    <p class="xs muted">El stop limita la pérdida solo si se ejecuta al precio previsto; en movimientos bruscos puede ejecutarse peor.</p>
+  </section>
+
+  <section class="card herr herr-ancha" id="simulador">
+    <header><h3>Simulador con precios históricos</h3><span class="xs muted">¿qué habría pasado si…?</span></header>
+    <form class="herr-campos" data-h="si-form">
+      <label class="field">Moneda<select name="activo">{% for a in activos %}<option value="{{ a.codigo }}"{{ ' selected' if a.codigo == 'BTC' }}>{{ a.codigo }} · {{ a.nombre }}</option>{% endfor %}</select></label>
+      <label class="field">Monto por compra (US$)<input name="monto" inputmode="decimal" value="100"></label>
+      <label class="field">Frecuencia<select name="frecuencia">{% for k, (t, d) in frecuencias.items() %}<option value="{{ k }}"{{ ' selected' if k == 'mensual' }}>{{ t }}</option>{% endfor %}</select></label>
+      <label class="field">Desde hace<select name="meses">{% for k, t in plazos.items() %}<option value="{{ k }}"{{ ' selected' if k == 12 }}>{{ t }}</option>{% endfor %}</select></label>
+      <button class="btn primary" type="submit">Simular</button>
+    </form>
+    <div class="si-res" data-h="si-res" aria-live="polite"><p class="small muted">Elige una moneda y un monto: calculamos cuánto tendrías hoy si hubieras comprado esa cantidad con esa frecuencia, a los precios reales de cada fecha.</p></div>
+    <canvas class="si-graf" data-h="si-graf" role="img" aria-label="Invertido y valor de la simulación en el tiempo" hidden></canvas>
+    <p class="xs muted">Simulación sobre el historial de precios guardado por la plataforma. Rendimientos pasados no garantizan rendimientos futuros: el precio puede bajar y puedes perder parte o todo lo invertido.</p>
+  </section>
+
+  <section class="card herr herr-ancha" id="calendario">
+    <header><h3>Calendario de acontecimientos</h3><a class="small" href="{{ url_for('auth.noticias', ver='eventos') }}">Ver todos</a></header>
+    {% for n in eventos %}{{ noticia(n, compacta=true) }}{% else %}<p class="small muted">No hay acontecimientos próximos cargados por el equipo. Cuando se publiquen (con su fuente y fecha), aparecen aquí.</p>{% endfor %}
+  </section>
+</div>
+<section class="panel herr-mas">
+  <header><h3>Más herramientas</h3></header>
+  <div class="accesos-cuenta">
+    <a href="{{ url_for('auth.comparar') }}"><span>{{ icono('mercado') }}</span><b>Comparador</b><small>Varias monedas en un mismo gráfico</small></a>
+    {% if g.usuario.rol == 'cliente' %}<a href="{{ url_for('cliente.analisis_cartera') }}"><span>{{ icono('resumen') }}</span><b>Análisis de tu cartera</b><small>Rendimiento, riesgo y concentración</small></a>
+    <a href="{{ url_for('cliente.estadisticas') }}"><span>{{ icono('trading') }}</span><b>Estadísticas</b><small>Resultado de tus operaciones</small></a>{% endif %}
+    <a href="{{ url_for('auth.academia') }}"><span>{{ icono('documento') }}</span><b>Academia</b><small>Lecciones cortas para empezar</small></a>
+  </div>
+</section>
+<script type="application/json" id="datos-herramientas">{{ datos|tojson }}</script>
+{% endblock %}

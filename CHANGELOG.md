@@ -56,6 +56,11 @@ Personalización e identidad. Los servicios financieros reales siguen deshabilit
 - **Transferencias a bancos o billeteras externas en modo demostración:** se recorre el formulario y el resumen, pero no se descuenta saldo, no se envía dinero y no se registra ningún movimiento; el resultado lo dice expresamente («No enviada»). Se habilitará solo con un proveedor de pagos autorizado (`TRANSFERENCIAS_REALES`, apagado por defecto).
 - El detalle de cada envío muestra tipo, estado y concepto.
 
+### Módulo 7 · Servicios financieros
+- **Herramientas** (`/herramientas`, en el menú): **conversor** entre dólar, guaraní (tipo de cambio de la plataforma, si está cargado) y cada moneda; **calculadora de comisiones** con las comisiones configuradas (compra o venta, conversión, envío interno, gestión anual); **rentabilidad de una operación** (cantidad, comisiones, resultado y precio para no perder); **riesgo y tamaño de posición** (pérdida máxima, cantidad a comprar según el stop, relación riesgo/beneficio y aviso si se necesita más capital).
+- **Simulador con precios históricos:** compras periódicas (semanal, quincenal o mensual) desde hace 3, 6 o 12 meses, cada una al precio real registrado en esa fecha; muestra invertido, valor hoy, resultado, precio promedio, comparación con invertir todo el primer día y gráfico. Si no hay historial suficiente lo dice; nunca rellena datos. Rendimientos pasados no garantizan futuros.
+- **Calendario de acontecimientos** con los eventos publicados por el equipo (módulo 5) y accesos al comparador, análisis de cartera, estadísticas y academia.
+
 ## [0.20.0] - 2026-11-16
 
 Evolución completa de la plataforma, trabajada por módulos. Los servicios financieros reales siguen deshabilitados.

@@ -70,6 +70,7 @@ NAV = {
                 ("auth.trading", "Trading", "trading", None), ("cliente.cartera", "Billetera", "billetera", None),
                 ("cuenta.inicio", "Cuenta", "perfil", None),
                 ("cliente.analisis_cartera", "Análisis", "resumen", "sec"), ("auth.academia", "Academia", "documento", "sec"),
+                ("auth.herramientas", "Herramientas", "convertir", "sec"),
                 ("cliente.earn", "Earn", "invertir", "sec"), ("cliente.ayuda", "Ayuda", "campana", "sec")],
     "equipo": [("equipo.resumen", "Resumen", "resumen", None), ("auth.mercado", "Mercados", "mercado", "sec"),
                ("auth.trading", "Trading", "trading", "sec"),

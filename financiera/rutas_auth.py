@@ -679,6 +679,46 @@ def moneda(codigo):
                            maximo=current_app.config["ORDEN_MAXIMA_USD"], **ctx)
 
 
+@bp.get("/herramientas")
+def herramientas():
+    """Servicios financieros: conversor, calculadoras de comisiones, rentabilidad y riesgo, simulador con precios históricos y
+    calendario de acontecimientos. Todo se calcula con los precios vigentes de la plataforma y sus comisiones configuradas."""
+    r = seguridad.exigir_sesion()
+    if r:
+        return r
+    from . import exchange, guarani, operaciones, precios, simulador
+    from . import noticias as nm
+    vig = precios.vigentes()
+    activos = db.todos("SELECT codigo, nombre FROM activos WHERE habilitado = 1 ORDER BY codigo")
+    ult = max((v["ts"] for v in vig.values()), default=None)
+    datos = {"precios": {a["codigo"]: float(vig[a["codigo"]]["precio"]) for a in activos if a["codigo"] in vig},
+             "nombres": {a["codigo"]: a["nombre"] for a in activos}, "pyg": guarani.referencia(),
+             "comision_op": float(operaciones.comision_operacion_pct()), "comision_anual": float(current_app.config["COMISION_ANUAL_PCT"])}
+    return render_template("herramientas.html", datos=datos, activos=activos, fuente=precios.fuente(), actualizado=ult,
+                           eventos=nm.proximos_eventos(None, 12), frecuencias=simulador.FRECUENCIAS, plazos=simulador.PLAZOS,
+                           simulado=exchange.modo() != "binance")
+
+
+@bp.get("/herramientas/simular.json")
+def herramientas_simular():
+    r = seguridad.exigir_sesion()
+    if r:
+        return {"error": "sesion"}, 401
+    limites.api()
+    from . import operaciones, simulador
+    from .dinero import leer_monto
+    try:
+        monto = leer_monto(request.args.get("monto"))
+        meses = int(request.args.get("meses") or 12)
+        res = simulador.dca((request.args.get("activo") or "").upper(), monto, request.args.get("frecuencia") or "mensual", meses,
+                            float(operaciones.comision_operacion_pct()))
+    except (ValueError, TypeError):
+        return {"error": "Revisa el monto y el plazo."}, 400
+    except simulador.ErrorSimulacion as e:
+        return {"error": str(e)}, 400
+    return res
+
+
 @bp.get("/mercado/noticias")
 def noticias():
     r = seguridad.exigir_sesion()
